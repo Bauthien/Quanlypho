@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Phở Nhà Mình{% endblock %}</title>
+    <style>
+        :root { color-scheme: light; --ink: #20291f; --muted: #69756a; --green: #176b45; --pale: #f1f5ed; --line: #e4e9e1; }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; color: var(--ink); background: #f7f8f4; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+        header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px max(24px, calc((100vw - 1120px) / 2)); background: #fff; border-bottom: 1px solid var(--line); }
+        .brand { color: var(--green); font-size: 19px; font-weight: 800; text-decoration: none; letter-spacing: -.4px; }
+        nav { display: flex; align-items: center; gap: 18px; }
+        nav a, .text-link { color: var(--green); font-weight: 650; text-decoration: none; }
+        nav form { margin: 0; }
+        main { width: min(1120px, calc(100% - 40px)); margin: 44px auto; }
+        .auth-wrap { width: min(480px, 100%); margin: 44px auto; }
+        .card { padding: 30px; background: #fff; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 12px 36px #2737230b; }
+        h1, h2, p { margin-top: 0; }
+        h1 { margin-bottom: 8px; font-size: clamp(25px, 4vw, 34px); line-height: 1.2; letter-spacing: -.8px; }
+        .muted, .helptext { color: var(--muted); }
+        .field { margin: 18px 0; }
+        label { display: block; margin-bottom: 7px; font-weight: 650; }
+        input, select { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #d7ded5; border-radius: 9px; background: #fff; color: var(--ink); font: inherit; }
+        input:focus, select:focus { outline: 3px solid #176b4520; border-color: var(--green); }
+        button, .button { display: inline-flex; justify-content: center; align-items: center; min-height: 42px; padding: 9px 16px; border: 0; border-radius: 9px; background: var(--green); color: #fff; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; }
+        button.secondary { background: #eef3ec; color: var(--green); }
+        .full { width: 100%; }
+        .messages { margin: 0 0 18px; padding: 0; list-style: none; }
+        .messages li, .errorlist, .error { padding: 10px 12px; border-radius: 9px; color: #8c342b; background: #fff1ee; }
+        .messages li.success { color: #176b45; background: #eaf5ed; }
+        .errorlist { margin: 5px 0; padding-left: 28px; }
+        .auth-foot { margin: 20px 0 0; text-align: center; }
+        .welcome { padding: clamp(30px, 8vw, 72px); text-align: center; background: linear-gradient(135deg, #eff6e9, #fff); border: 1px solid var(--line); border-radius: 24px; }
+        .welcome .emoji { font-size: 48px; }
+        .role-pill { display: inline-block; margin: 12px 0 20px; padding: 7px 13px; border-radius: 999px; background: #e6f2e8; color: var(--green); font-weight: 750; }
+        .stats { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 14px; margin: 24px 0; }
+        .stat { padding: 18px; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+        .stat strong { display: block; font-size: 26px; }
+        .table-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+        table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+        th, td { padding: 13px 15px; text-align: left; border-bottom: 1px solid var(--line); }
+        th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+        tr:last-child td { border-bottom: 0; }
+        .role-form { display: flex; align-items: center; gap: 8px; }
+        .role-form select { min-width: 150px; }
+        .role-form button { min-height: 38px; padding: 7px 11px; }
+        @media (max-width: 760px) { header { padding: 15px 20px; } .stats { grid-template-columns: repeat(2, 1fr); } main { margin: 28px auto; } .card { padding: 23px; } }
+    </style>
+</head>
+<body>
+<header>
+    <a class="brand" href="{% url 'pho_app:home' %}">🍜 Phở Nhà Mình</a>
+    <nav>
+        {% if request.user.is_authenticated %}
+            <a href="{% url 'pho_app:role_home' %}">Trang chủ</a>
+            {% if request.user.is_superuser or request.user.role == 'ADMIN' %}<a href="{% url 'pho_app:admin_dashboard' %}">Quản trị</a>{% endif %}
+            <form method="post" action="{% url 'pho_app:logout' %}">{% csrf_token %}<button class="secondary" type="submit">Đăng xuất</button></form>
+        {% else %}
+            <a href="{% url 'pho_app:login' %}">Đăng nhập</a>
+            <a class="button" href="{% url 'pho_app:register' %}">Tạo tài khoản</a>
+        {% endif %}
+    </nav>
+</header>
+<main>
+    {% if messages %}
+        <ul class="messages">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

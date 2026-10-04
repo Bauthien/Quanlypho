@@ -1,0 +1,43 @@
+{% extends 'pho_app/base.html' %}
+{% block title %}Quản trị · Phở Nhà Mình{% endblock %}
+{% block content %}
+<h1>Dashboard quản trị</h1>
+<p class="muted">Xin chào {{ request.user.full_name|default:request.user.username }}. Quản lý tài khoản và phân quyền tại đây.</p>
+<section class="stats">
+    <div class="stat"><span class="muted">Tổng tài khoản</span><strong>{{ total_users }}</strong></div>
+    <div class="stat"><span class="muted">Khách hàng</span><strong>{{ customer_count }}</strong></div>
+    <div class="stat"><span class="muted">Thu ngân</span><strong>{{ staff_count }}</strong></div>
+    <div class="stat"><span class="muted">Bếp</span><strong>{{ kitchen_count }}</strong></div>
+    <div class="stat"><span class="muted">Admin</span><strong>{{ admin_count }}</strong></div>
+</section>
+<section>
+    <h2>Tài khoản người dùng</h2>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Tài khoản</th><th>Họ tên</th><th>Số điện thoại</th><th>Ngày tạo</th><th>Vai trò</th><th>Thao tác</th></tr></thead>
+            <tbody>
+            {% for person in users %}
+                <tr>
+                    <td>{{ person.username }}</td>
+                    <td>{{ person.full_name|default:'—' }}</td>
+                    <td>{{ person.phone_number|default:'—' }}</td>
+                    <td>{{ person.date_joined|date:'d/m/Y H:i' }}</td>
+                    <td>{% if person.is_superuser %}Admin (superuser){% else %}{{ person.get_role_display }}{% endif %}</td>
+                    <td>
+                        <form class="role-form" method="post" action="{% url 'pho_app:update_user_role' person.id %}">
+                            {% csrf_token %}
+                            <select name="role" aria-label="Vai trò của {{ person.username }}">
+                                {% for value, label in role_choices %}<option value="{{ value }}" {% if value == person.role %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                            </select>
+                            <button type="submit">Lưu</button>
+                        </form>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6">Chưa có tài khoản.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

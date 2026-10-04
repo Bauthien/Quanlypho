@@ -9,9 +9,9 @@ from django.db import models
 class User(AbstractUser):
     class Role(models.TextChoices):
         CUSTOMER = 'CUSTOMER', 'Khách hàng'
-        STAFF = 'STAFF', 'Thu ngân / Điều phối'
+        STAFF = 'STAFF', 'Thu ngân'
         KITCHEN = 'KITCHEN', 'Bếp'
-        ADMIN = 'ADMIN', 'Quản lý'
+        ADMIN = 'ADMIN', 'Admin'
 
     full_name = models.CharField(max_length=255, verbose_name="Họ và tên", blank=True, null=True)
     phone_number = models.CharField(max_length=20, verbose_name="Số điện thoại", blank=True, null=True)
