@@ -36,3 +36,16 @@ Thumbs.db
 # Coverage
 .coverage
 htmlcov/
+
+# Node / Vite frontend
+node_modules/
+dist/
+build/
+.cache/
+.vite/
+vite.config.*.timestamp-*
+*.tsbuildinfo
+*-debug.log*
+/.figma/design-context/
+/.plugins/
+/.opencode-skills/
