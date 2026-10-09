@@ -562,7 +562,7 @@ function Modal({
 }
 
 export default function App() {
-  const [page, setPage] = useState("home")
+  const [page, setPage] = useState("login")
   const [role, setRole] = useState("Khách hàng")
   const [orders, setOrders] = useState(initialOrders)
   const [dishes, setDishes] = useState(initialDishes)
@@ -703,7 +703,16 @@ export default function App() {
     setCustomerOrder(id)
     setCart([])
     setCheckout(false)
-    notify("Đặt món thành công. Vui lòng hoàn tất thanh toán.")
+    
+    if (payment === "VietQR") {
+      notify("Đang chờ thanh toán VietQR...")
+      setTimeout(() => {
+        setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "Đang chế biến" } : o)))
+        notify(`[Webhook] VietQR báo thành công! Đơn ${id} đã tự động chuyển sang Bếp.`)
+      }, 5000)
+    } else {
+      notify("Đặt món thành công. Vui lòng thanh toán tiền mặt tại quầy.")
+    }
   }
   const activeCustomerOrder = orders.find((o) => o.id === customerOrder)
   const activeCustomerOrderItemCount = activeCustomerOrder
@@ -925,6 +934,71 @@ export default function App() {
     </section>
   )
 
+  if (page === "login") {
+    return (
+      <div className="min-h-screen bg-[#f5efe5] flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="text-[#9b3b2f] flex justify-center mb-4">
+              <svg width="60" height="60" viewBox="0 0 40 40" fill="none">
+                <path d="M7 21h26c-1 10-7 13-13 13S8 31 7 21Z" fill="currentColor" />
+                <path d="M5 21h30M12 36h16M15 6c-4 4 4 5 0 9m6-12c-4 4 4 5 0 10m6-8c-4 4 4 5 0 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-bold text-[#9b3b2f] tracking-tight">phở nhà.</h1>
+            <p className="text-xs text-[#a0917d] mt-2 tracking-widest font-semibold uppercase">Đăng nhập hệ thống</p>
+          </div>
+          
+          <div className="space-y-4">
+            <button 
+              onClick={() => { setRole("Khách hàng"); setPage("home"); }}
+              className="w-full flex items-center justify-between p-4 border-2 border-[#f0eee9] hover:border-[#9b3b2f] hover:bg-[#f7eae6] rounded-xl transition-colors text-left"
+            >
+              <div>
+                <strong className="block text-[#595447] font-semibold">Khách hàng</strong>
+                <span className="text-xs text-[#929089]">Quét QR, Đặt món, Xếp hàng</span>
+              </div>
+              <Icon name="arrow" size={20} className="text-[#9b3b2f]" />
+            </button>
+            
+            <button 
+              onClick={() => { setRole("Thu ngân"); setPage("orders"); }}
+              className="w-full flex items-center justify-between p-4 border-2 border-[#f0eee9] hover:border-[#9b3b2f] hover:bg-[#f7eae6] rounded-xl transition-colors text-left"
+            >
+              <div>
+                <strong className="block text-[#595447] font-semibold">Thu ngân / Điều phối</strong>
+                <span className="text-xs text-[#929089]">Xác nhận thanh toán, Gọi số, Giao hàng</span>
+              </div>
+              <Icon name="arrow" size={20} className="text-[#9b3b2f]" />
+            </button>
+
+            <button 
+              onClick={() => { setRole("Bếp"); setPage("kitchen"); }}
+              className="w-full flex items-center justify-between p-4 border-2 border-[#f0eee9] hover:border-[#9b3b2f] hover:bg-[#f7eae6] rounded-xl transition-colors text-left"
+            >
+              <div>
+                <strong className="block text-[#595447] font-semibold">Bếp / Trạm trụng phở</strong>
+                <span className="text-xs text-[#929089]">Xem ghi chú, Trả món, In tem</span>
+              </div>
+              <Icon name="arrow" size={20} className="text-[#9b3b2f]" />
+            </button>
+
+            <button 
+              onClick={() => { setRole("Admin"); setPage("dashboard"); }}
+              className="w-full flex items-center justify-between p-4 border-2 border-[#f0eee9] hover:border-[#9b3b2f] hover:bg-[#f7eae6] rounded-xl transition-colors text-left"
+            >
+              <div>
+                <strong className="block text-[#595447] font-semibold">Quản lý (Admin)</strong>
+                <span className="text-xs text-[#929089]">Dashboard, Menu, Cấu hình</span>
+              </div>
+              <Icon name="arrow" size={20} className="text-[#9b3b2f]" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={`app-shell ${role === "Khách hàng" ? "customer-shell" : ""} ${
@@ -1032,10 +1106,11 @@ export default function App() {
             </div>
             <button
               className="icon-btn"
-              aria-label="Thông tin phiên đăng nhập"
-              onClick={() =>
-                notify("Bạn đang sử dụng phiên trải nghiệm Phở Nhà.")
-              }
+              aria-label="Đăng xuất"
+              onClick={() => {
+                setPage("login")
+                notify("Đã đăng xuất thành công.")
+              }}
             >
               <Icon name="logout" size={18} />
             </button>
@@ -2412,9 +2487,9 @@ export default function App() {
                         ))}
                       </div>
                       {o.note && (
-                        <div className="kitchen-note">
-                          <span>LƯU Ý CHẾ BIẾN</span>
-                          <strong>{o.note}</strong>
+                        <div className="border-2 border-red-500 bg-red-50 rounded-lg p-4 my-4">
+                          <span className="block text-xs font-bold tracking-widest text-red-800 mb-2">LƯU Ý ĐẶC BIẾT</span>
+                          <strong className="block text-3xl md:text-4xl leading-tight font-black text-red-600 uppercase">{o.note}</strong>
                         </div>
                       )}
                       {o.type === "Giao hàng" && (
@@ -3033,12 +3108,23 @@ export default function App() {
           </p>
           {customDish.category !== "Nước uống" && (
             <>
-              <h3>Tùy chỉnh món</h3>
+              <h3>Tùy chỉnh bắt buộc</h3>
+              <div className="custom-options mb-4">
+                <label className="checkbox-label">
+                  <input type="radio" name="nuoc-dung" checked={!extras.includes("Nước béo")} onChange={() => setExtras(extras.filter(x => x !== "Nước béo"))} />
+                  Nước trong (Thanh vị)
+                </label>
+                <label className="checkbox-label">
+                  <input type="radio" name="nuoc-dung" checked={extras.includes("Nước béo")} onChange={() => setExtras([...extras.filter(x => x !== "Nước béo"), "Nước béo"])} />
+                  Nước béo (Đậm đà)
+                </label>
+              </div>
+
+              <h3>Rau & Topping thêm</h3>
               <div className="custom-options">
                 {[
                   "Không hành",
                   "Không giá",
-                  "Nước béo",
                   ...toppings.map((t) => t.name),
                 ].map((e) => (
                   <label className="checkbox-label" key={e}>

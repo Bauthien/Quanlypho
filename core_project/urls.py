@@ -14,10 +14,15 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 
 urlpatterns = [
-    path('', include('pho_app.urls')),
+    # API endpoints (nếu có sau này)
+    # path('api/', include('pho_app.urls')),
+    
+    # Catch-all để trả về file index.html của React
+    re_path(r'^.*$', TemplateView.as_view(template_name='index.html'), name='react_spa'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

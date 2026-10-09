@@ -52,6 +52,8 @@ class QueueTicket(models.Model):
         CANCELLED = 'CANCELLED', 'Đã hủy'
 
     customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Khách hàng")
+    customer_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Tên khách hàng")
+    people_count = models.IntegerField(default=1, verbose_name="Số lượng người")
     ticket_number = models.CharField(max_length=20, verbose_name="Số thứ tự (VD: P-015)")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING, verbose_name="Trạng thái hàng đợi")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian lấy số")
@@ -70,13 +72,11 @@ class QueueTicket(models.Model):
 # ==========================================
 class MenuItem(models.Model):
     name = models.CharField(max_length=255, verbose_name="Tên món (VD: Phở Tái)")
+    description = models.TextField(blank=True, null=True, verbose_name="Mô tả món ăn")
+    category = models.CharField(max_length=100, default='Phở bò', verbose_name="Danh mục")
     base_price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá gốc (VNĐ)")
     is_active = models.BooleanField(default=True, verbose_name="Còn kinh doanh")
-
-    # 3 Hình ảnh trực quan cho Món chính
-    image_primary = models.ImageField(upload_to='menu_items/', verbose_name="Ảnh đại diện chính")
-    image_detail_1 = models.ImageField(upload_to='menu_items/', blank=True, null=True, verbose_name="Ảnh chi tiết 1 (Cận cảnh)")
-    image_detail_2 = models.ImageField(upload_to='menu_items/', blank=True, null=True, verbose_name="Ảnh chi tiết 2 (Không gian/Góc rộng)")
+    image_primary = models.ImageField(upload_to='menu_items/', blank=True, null=True, verbose_name="Ảnh đại diện chính")
 
     class Meta:
         verbose_name = "Món ăn"
@@ -144,8 +144,10 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
 
     order_code = models.CharField(max_length=50, unique=True, verbose_name="Mã đơn hàng")
     customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Khách hàng")
+    customer_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="Tên khách (Khách lẻ)")
     order_type = models.CharField(max_length=20, choices=OrderType.choices, default=OrderType.DINE_IN, verbose_name="Loại đơn")
     table = models.ForeignKey(Table, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Bàn số")
+    note = models.TextField(blank=True, null=True, verbose_name="Ghi chú tổng thể")
 
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.VIETQR, verbose_name="Phương thức thanh toán")
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING, verbose_name="Trạng thái thanh toán")
