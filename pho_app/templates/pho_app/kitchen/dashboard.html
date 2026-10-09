@@ -1,0 +1,33 @@
+{% extends "pho_app/base.html" %}
+{% block title %}Bếp - Phở Gia Truyền{% endblock %}
+{% block content %}
+<section class="hero-banner">
+    <div class="hero-content">
+        <h1>Màn hình bếp</h1>
+        <p>Chỉ hiển thị món đã thanh toán. Ghi chú tùy chọn được in TO và RÕ.</p>
+    </div>
+</section>
+<div class="workspace">
+    {% for order in orders %}
+    <article class="kitchen-card">
+        <h2>{% if order.order_type == 'DELIVERY' %}<span class="delivery-label">DELIVERY</span>{% endif %} {{ order.order_code }} · {{ order.get_order_type_display }}</h2>
+        <p>{% if order.table %}BÀN {{ order.table.table_number }}{% endif %} · {{ order.customer.display_name|default:"Khách" }} · {{ order.get_order_status_display }}</p>
+        {% for item in order.items.all %}
+            <p style="font-size:1.25rem;font-weight:700;margin-top:10px;">{{ item.quantity }} × {{ item.menu_item.name }}</p>
+            {% for topping in item.toppings.all %}<div class="kitchen-note">THÊM {{ topping.topping.name|upper }} × {{ topping.quantity }}</div>{% endfor %}
+            {% for custom in item.customizations.all %}
+                <div class="kitchen-note">{{ custom.customization.name }}</div>
+            {% endfor %}
+            {% if item.note %}<div class="kitchen-note">{{ item.note }}</div>{% endif %}
+        {% endfor %}
+        {% if order.order_status == 'PENDING_KITCHEN' %}
+            <form method="post" action="{% url 'kitchen_start' order.id %}" style="margin-top:14px;">{% csrf_token %}<button class="checkout-btn" type="submit" style="max-width:240px;">Bắt đầu chế biến</button></form>
+        {% else %}
+            <form method="post" action="{% url 'kitchen_complete' order.id %}" style="margin-top:14px;">{% csrf_token %}<button class="checkout-btn" type="submit" style="max-width:240px;">Hoàn tất</button></form>
+        {% endif %}
+    </article>
+    {% empty %}
+    <p class="empty-state">Không có đơn đang chờ bếp.</p>
+    {% endfor %}
+</div>
+{% endblock %}

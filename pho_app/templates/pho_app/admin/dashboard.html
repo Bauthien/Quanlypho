@@ -1,0 +1,36 @@
+{% extends "pho_app/admin/shell.html" %}
+{% block title %}Quản lý - Phở Gia Truyền{% endblock %}
+{% block admin_content %}
+<div class="page-title">
+    <h1>Dashboard quản lý</h1>
+</div>
+<div class="stats-grid">
+    <div class="stat-card"><span>Doanh thu đã thanh toán</span><strong>{{ stats.revenue }}đ</strong></div>
+    <div class="stat-card"><span>Đơn tại bàn</span><strong>{{ stats.dine_in }}</strong></div>
+    <div class="stat-card"><span>Đơn giao hàng</span><strong>{{ stats.delivery }}</strong></div>
+    <div class="stat-card"><span>Khách đang xếp hàng</span><strong>{{ stats.waiting }}</strong></div>
+    <div class="stat-card"><span>Người dùng</span><strong>{{ stats.users }}</strong></div>
+    <div class="stat-card"><span>Món trên menu</span><strong>{{ stats.menu_items }}</strong></div>
+</div>
+<div class="panel">
+    <h2>Đơn gần đây</h2>
+    <table class="data-table">
+        <thead>
+            <tr><th>Mã</th><th>Loại</th><th>Thanh toán</th><th>Trạng thái</th><th>Tổng</th></tr>
+        </thead>
+        <tbody>
+            {% for order in recent_orders %}
+            <tr>
+                <td>{{ order.order_code }}</td>
+                <td>{{ order.get_order_type_display }}</td>
+                <td>{{ order.get_payment_status_display }}</td>
+                <td>{{ order.get_order_status_display }}</td>
+                <td>{{ order.total_amount }}đ</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="empty-state">Chưa có đơn hàng.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

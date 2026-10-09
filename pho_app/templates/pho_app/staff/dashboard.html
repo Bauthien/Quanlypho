@@ -1,0 +1,133 @@
+{% extends "pho_app/base.html" %}
+{% block title %}Thu ngân - Phở Gia Truyền{% endblock %}
+{% block content %}
+<section class="hero-banner">
+    <div class="hero-content">
+        <h1>Thu ngân / Điều phối</h1>
+        <p>Xác nhận tiền mặt, gọi số xếp hàng và bàn giao đơn giao tận nơi</p>
+    </div>
+</section>
+<div class="workspace">
+    <div class="panel">
+        <h2>Chờ xác nhận tiền mặt</h2>
+        {% if cash_orders %}
+        <table class="data-table">
+            <thead>
+                <tr><th>Mã đơn</th><th>Khách</th><th>Bàn</th><th>Tổng</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for order in cash_orders %}
+                <tr>
+                    <td>{{ order.order_code }}</td>
+                    <td>{{ order.customer.display_name|default:"Khách" }}</td>
+                    <td>{% if order.table %}Bàn {{ order.table.table_number }}{% else %}-{% endif %}</td>
+                    <td>{{ order.total_amount }}đ</td>
+                    <td>
+                        <form method="post" action="{% url 'confirm_cash' order.id %}">
+                            {% csrf_token %}
+                            <button class="ghost-btn primary" type="submit">Đã nhận tiền</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">Không có đơn tiền mặt đang chờ.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <div class="page-title" style="margin:0 0 14px;">
+            <h2>Hàng đợi</h2>
+            <form method="post" action="{% url 'call_next_queue' %}">
+                {% csrf_token %}
+                <select class="form-input" name="table_id" required>
+                    <option value="">Chọn bàn trống</option>
+                    {% for table in available_tables %}<option value="{{ table.id }}">Bàn {{ table.table_number }}</option>{% endfor %}
+                </select>
+                <button class="ghost-btn primary" type="submit" {% if not available_tables %}disabled{% endif %}>Gọi số tiếp theo</button>
+            </form>
+        </div>
+        {% if waiting_tickets %}
+        <table class="data-table">
+            <thead>
+                <tr><th>Số</th><th>Khách</th><th>Thời gian</th><th>Bàn</th></tr>
+            </thead>
+            <tbody>
+                {% for ticket in waiting_tickets %}
+                <tr>
+                    <td><strong>{{ ticket.ticket_number }}</strong></td>
+                    <td>{{ ticket.customer.display_name|default:"Khách" }}</td>
+                    <td>{{ ticket.created_at|date:"H:i d/m" }}</td>
+                    <td>{% if ticket.table %}{{ ticket.table.table_number }}{% else %}Chưa gọi{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">Không còn khách đang xếp hàng.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <h2>Món sẵn sàng bưng ra</h2>
+        {% if serving_ready %}
+        <ul>
+            {% for order in serving_ready %}
+            <li class="ready-order"><strong>{% if order.table %}Bàn {{ order.table.table_number }}{% else %}Tại chỗ{% endif %} - Đã xong</strong> ({{ order.order_code }})
+                <form method="post" action="{% url 'complete_dine_in' order.id %}">{% csrf_token %}<button class="ghost-btn primary" type="submit">Đã phục vụ</button></form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">Chưa có món chờ bưng.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <h2>Đơn giao hàng chờ bàn giao shipper</h2>
+        {% if delivery_ready %}
+        <table class="data-table">
+            <thead>
+                <tr><th>Mã đơn</th><th>Địa chỉ</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for order in delivery_ready %}
+                <tr>
+                    <td>{{ order.order_code }}</td>
+                    <td>{{ order.delivery_address }}</td>
+                    <td>
+                        <form method="post" action="{% url 'handover_delivery' order.id %}">
+                            {% csrf_token %}
+                            <button class="ghost-btn primary" type="submit">Bàn giao</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-state">Không có đơn giao hàng sẵn sàng.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <h2>Đơn đang giao</h2>
+        {% if delivery_in_transit %}
+        <table class="data-table"><thead><tr><th>Mã đơn</th><th>Khách</th><th>Địa chỉ</th><th></th></tr></thead><tbody>
+            {% for order in delivery_in_transit %}<tr><td>{{ order.order_code }}</td><td>{{ order.customer.display_name|default:"Khách" }}</td><td>{{ order.delivery_address }}</td><td>
+                <form method="post" action="{% url 'complete_delivery' order.id %}">{% csrf_token %}<button class="ghost-btn primary" type="submit">Giao xong</button></form>
+            </td></tr>{% endfor %}
+        </tbody></table>
+        {% else %}<p class="empty-state">Không có đơn đang giao.</p>{% endif %}
+    </div>
+
+    <div class="panel">
+        <h2>Bàn đang dọn</h2>
+        {% for table in tables %}{% if table.status == 'CLEANING' %}
+        <div class="table-clean-row"><strong>Bàn {{ table.table_number }}</strong><form method="post" action="{% url 'free_table' table.id %}">{% csrf_token %}<button class="ghost-btn primary" type="submit">Đã dọn xong</button></form></div>
+        {% endif %}{% empty %}<p class="empty-state">Chưa có bàn cần dọn.</p>{% endfor %}
+    </div>
+</div>
+{% endblock %}

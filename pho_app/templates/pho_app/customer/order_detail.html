@@ -1,0 +1,50 @@
+{% extends "pho_app/base.html" %}
+{% block title %}Đơn {{ order.order_code }} - Phở Gia Truyền{% endblock %}
+{% block content %}
+<section class="hero-banner">
+    <div class="hero-content">
+        <h1>Đơn hàng {{ order.order_code }}</h1>
+        <p>{{ order.get_order_type_display }} · {{ order.get_order_status_display }} · {{ order.get_payment_status_display }}</p>
+    </div>
+</section>
+<main class="workspace order-detail">
+    <section class="panel">
+        <h2>Chi tiết món</h2>
+        {% for item in order.items.all %}
+        <div class="order-line">
+            <div><strong>{{ item.quantity }} × {{ item.menu_item.name }}</strong>
+                {% for choice in item.customizations.all %}<span>{{ choice.customization.name }}</span>{% endfor %}
+                {% for topping in item.toppings.all %}<span>+ {{ topping.topping.name }}</span>{% endfor %}
+                {% if item.note %}<span>Ghi chú: {{ item.note }}</span>{% endif %}
+            </div>
+            <strong>{{ item.item_price }}đ × {{ item.quantity }}</strong>
+        </div>
+        {% endfor %}
+        {% if order.delivery_fee %}<div class="order-line"><span>Phí giao hàng</span><strong>{{ order.delivery_fee }}đ</strong></div>{% endif %}
+        <div class="order-line order-total"><span>Tổng thanh toán</span><strong>{{ grand_total }}đ</strong></div>
+    </section>
+
+    {% if order.payment_status == 'PENDING' and order.payment_method == 'VIETQR' %}
+    <section class="panel payment-panel">
+        <h2>Thanh toán VietQR</h2>
+        {% if vietqr_image_url %}
+            <img class="payment-qr" src="{{ vietqr_image_url }}" alt="Mã QR thanh toán đơn {{ order.order_code }}">
+            <p>Quét mã bằng ứng dụng ngân hàng, thanh toán chính xác <strong>{{ grand_total }}đ</strong> và giữ nguyên nội dung chuyển khoản <strong>{{ order.order_code }}</strong>.</p>
+            <p class="muted">Đơn chỉ được chuyển xuống bếp sau khi hệ thống nhận webhook xác nhận thanh toán.</p>
+        {% else %}
+            <p>Chưa cấu hình tài khoản nhận VietQR. Đơn vẫn đang chờ thanh toán; quản trị viên cần cấu hình mã ngân hàng và số tài khoản trước khi vận hành.</p>
+        {% endif %}
+    </section>
+    {% elif order.payment_status == 'PENDING' %}
+    <section class="panel"><h2>Chờ thu ngân</h2><p>Vui lòng thanh toán {{ grand_total }}đ tại quầy. Đơn sẽ được gửi xuống bếp sau khi thu ngân xác nhận.</p></section>
+    {% elif order.payment_status == 'PAID' %}
+    <section class="panel"><h2>Đã nhận thanh toán</h2><p>Đơn hiện ở trạng thái: <strong>{{ order.get_order_status_display }}</strong>. Tải lại trang để xem cập nhật mới nhất.</p><a class="ghost-btn primary" href="{% url 'order_detail' order.id %}">Cập nhật trạng thái</a></section>
+    {% else %}
+    <section class="panel"><h2>Thanh toán chưa thành công</h2><p>Đơn chưa được gửi xuống bếp. Vui lòng liên hệ thu ngân để được hỗ trợ.</p></section>
+    {% endif %}
+    <a class="nav-link" href="{% url 'menu' %}">Quay lại thực đơn</a>
+</main>
+{% endblock %}
+{% block extra_js %}
+{% if order.order_status != 'COMPLETED' and order.order_status != 'CANCELLED' %}<script>window.setTimeout(() => window.location.reload(), 12000);</script>{% endif %}
+{% endblock %}

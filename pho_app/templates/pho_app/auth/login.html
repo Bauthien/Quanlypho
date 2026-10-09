@@ -1,0 +1,32 @@
+{% extends "pho_app/base.html" %}
+{% block title %}Đăng nhập - Phở Gia Truyền{% endblock %}
+{% block content %}
+<section class="hero-banner">
+    <div class="hero-content">
+        <h1>Hương Vị Phở Việt Đậm Đà</h1>
+        <p>Đăng nhập để gọi món, lấy số xếp hàng hoặc vào khu vực làm việc</p>
+    </div>
+</section>
+<div class="auth-wrap">
+    <div class="auth-card">
+        <h1>Đăng nhập</h1>
+        <p class="lead">Tài khoản mới sau khi đăng ký mặc định là khách hàng.</p>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            <div class="form-group">
+                <label for="{{ form.username.id_for_label }}">Tên đăng nhập</label>
+                {{ form.username }}
+                {{ form.username.errors }}
+            </div>
+            <div class="form-group">
+                <label for="{{ form.password.id_for_label }}">Mật khẩu</label>
+                {{ form.password }}
+                {{ form.password.errors }}
+            </div>
+            <button class="checkout-btn" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Đăng nhập</button>
+        </form>
+        <p class="auth-switch">Chưa có tài khoản? <a href="{% url 'register' %}">Đăng ký ngay</a></p>
+    </div>
+</div>
+{% endblock %}

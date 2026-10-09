@@ -1,0 +1,23 @@
+{% extends "pho_app/base.html" %}
+{% block title %}Tem giao hàng {{ order.order_code }}{% endblock %}
+{% block content %}
+<main class="workspace label-page">
+    <div class="label-actions"><p>Hai tem được in tách riêng. Chọn máy in nhiệt trong hộp thoại in.</p><button class="ghost-btn primary" type="button" onclick="window.print()">In lại 2 tem</button><a class="nav-link" href="{% url 'kitchen_home' %}">Về màn hình bếp</a></div>
+    <section class="shipping-label">
+        <small>PHỞ GIA TRUYỀN · {{ order.order_code }}</small>
+        <h1>HỘP KHÔ</h1>
+        <h2>BÁNH PHỞ & THỊT</h2>
+        <p><strong>Khách:</strong> {{ order.customer.display_name|default:"Khách" }}</p>
+        {% for item in order.items.all %}<p class="label-item">{{ item.quantity }} × {{ item.menu_item.name }}{% for topping in item.toppings.all %} · {{ topping.topping.name }}{% endfor %}</p>{% endfor %}
+        <p class="label-note">Không cho nước lèo vào hộp này.</p>
+    </section>
+    <section class="shipping-label">
+        <small>PHỞ GIA TRUYỀN · {{ order.order_code }}</small>
+        <h1>TÚI NƯỚC LÈO</h1>
+        <h2>NƯỚC DÙNG RIÊNG</h2>
+        {% for item in order.items.all %}<p class="label-item">{{ item.quantity }} × Nước dùng cho {{ item.menu_item.name }}</p>{% endfor %}
+        <p><strong>Địa chỉ giao:</strong> {{ order.delivery_address }}</p>
+    </section>
+</main>
+{% endblock %}
+{% block extra_js %}<script>window.addEventListener('load', () => window.print());</script>{% endblock %}

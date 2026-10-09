@@ -1,0 +1,46 @@
+{% extends "pho_app/admin/shell.html" %}
+{% block title %}Người dùng - Phở Gia Truyền{% endblock %}
+{% block admin_content %}
+<div class="page-title">
+    <h1>Phân quyền người dùng</h1>
+    <form class="search-inline" method="get">
+        <input class="form-input" type="search" name="q" value="{{ q }}" placeholder="Tìm tên, SĐT, tài khoản">
+        <button class="ghost-btn primary" type="submit">Tìm</button>
+    </form>
+</div>
+<div class="panel">
+    <p class="empty-state">Chỉ quản lý được đổi vai trò. Tài khoản đăng ký mới luôn là khách hàng.</p>
+    <table class="data-table">
+        <thead>
+            <tr><th>Tài khoản</th><th>Họ tên</th><th>SĐT</th><th>Vai trò</th><th>Trạng thái</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for account in users %}
+            <tr>
+                <td>{{ account.username }}</td>
+                <td>{{ account.full_name|default:"-" }}</td>
+                <td>{{ account.phone_number|default:"-" }}</td>
+                <td><span class="role-badge role-{{ account.role }}">{{ account.get_role_display }}</span></td>
+                <td>{% if account.is_active %}Hoạt động{% else %}Khóa{% endif %}</td>
+                <td>
+                    <form method="post" action="{% url 'admin_update_role' account.id %}" class="search-inline">
+                        {% csrf_token %}
+                        <select class="form-input" name="role">
+                            {% for value, label in role_choices %}
+                            <option value="{{ value }}" {% if account.role == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        <label class="user-chip">
+                            <input type="checkbox" name="is_active" {% if account.is_active %}checked{% endif %}> Active
+                        </label>
+                        <button class="ghost-btn primary" type="submit">Lưu</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6">Chưa có người dùng.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

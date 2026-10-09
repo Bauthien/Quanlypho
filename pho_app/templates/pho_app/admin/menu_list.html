@@ -1,0 +1,62 @@
+{% extends "pho_app/admin/shell.html" %}
+{% block title %}Thực đơn - Phở Gia Truyền{% endblock %}
+{% block admin_content %}
+<div class="page-title">
+    <h1>Thực đơn</h1>
+    <a class="ghost-btn primary" href="{% url 'admin_menu_create' %}"><i class="fa-solid fa-plus"></i> Thêm món</a>
+</div>
+<div class="panel">
+    <table class="data-table">
+        <thead>
+            <tr><th>Món</th><th>Giá</th><th>Trạng thái</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.base_price }}đ</td>
+                <td>{% if item.is_active %}Đang bán{% else %}Ẩn{% endif %}</td>
+                <td>
+                    <a class="nav-link" href="{% url 'admin_menu_edit' item.id %}">Sửa</a>
+                    <form method="post" action="{% url 'admin_menu_delete' item.id %}" style="display:inline;" onsubmit="return confirm('Xóa món này?');">
+                        {% csrf_token %}
+                        <button class="ghost-btn" type="submit">Xóa</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="empty-state">Chưa có món. Hãy thêm món để khách đặt.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="page-title">
+    <h1>Topping</h1>
+    <a class="ghost-btn primary" href="{% url 'admin_topping_create' %}"><i class="fa-solid fa-plus"></i> Thêm topping</a>
+</div>
+<div class="panel">
+    <table class="data-table">
+        <thead>
+            <tr><th>Tên</th><th>Giá thêm</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for topping in toppings %}
+            <tr>
+                <td>{{ topping.name }}</td>
+                <td>+{{ topping.price }}đ</td>
+                <td>
+                    <a class="nav-link" href="{% url 'admin_topping_edit' topping.id %}">Sửa</a>
+                    <form method="post" action="{% url 'admin_topping_delete' topping.id %}" style="display:inline;" onsubmit="return confirm('Xóa topping này?');">
+                        {% csrf_token %}
+                        <button class="ghost-btn" type="submit">Xóa</button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="empty-state">Chưa có topping.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

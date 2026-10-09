@@ -1,0 +1,19 @@
+{% extends "pho_app/base.html" %}
+{% block content %}
+<div class="admin-shell">
+    <aside class="admin-side">
+        <a class="{% if request.resolver_match.url_name == 'admin_home' %}active{% endif %}" href="{% url 'admin_home' %}">
+            <i class="fa-solid fa-chart-line"></i> Báo cáo
+        </a>
+        <a class="{% if request.resolver_match.url_name == 'admin_users' %}active{% endif %}" href="{% url 'admin_users' %}">
+            <i class="fa-solid fa-users"></i> Người dùng & vai trò
+        </a>
+        <a class="{% if 'admin_menu' in request.resolver_match.url_name or 'topping' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'admin_menu' %}">
+            <i class="fa-solid fa-bowl-food"></i> Thực đơn & topping
+        </a>
+    </aside>
+    <div>
+        {% block admin_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %}

@@ -18,8 +18,38 @@ class User(AbstractUser):
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CUSTOMER, verbose_name="Vai trò")
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name="Ảnh đại diện")
 
+    def save(self, *args, **kwargs):
+        if self.is_superuser and self.role == self.Role.CUSTOMER:
+            self.role = self.Role.ADMIN
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
+
+    @property
+    def display_name(self):
+        return self.full_name or self.username
+
+    def is_customer(self):
+        return self.role == self.Role.CUSTOMER
+
+    def is_staff_role(self):
+        return self.role == self.Role.STAFF
+
+    def is_kitchen(self):
+        return self.role == self.Role.KITCHEN
+
+    def is_admin_role(self):
+        return self.role == self.Role.ADMIN
+
+    def home_url_name(self):
+        mapping = {
+            self.Role.CUSTOMER: 'menu',
+            self.Role.STAFF: 'staff_home',
+            self.Role.KITCHEN: 'kitchen_home',
+            self.Role.ADMIN: 'admin_home',
+        }
+        return mapping.get(self.role, 'menu')
 
 
 # ==========================================
@@ -54,6 +84,7 @@ class QueueTicket(models.Model):
     customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Khách hàng")
     ticket_number = models.CharField(max_length=20, verbose_name="Số thứ tự (VD: P-015)")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING, verbose_name="Trạng thái hàng đợi")
+    table = models.ForeignKey('Table', on_delete=models.SET_NULL, null=True, blank=True, related_name='queue_tickets', verbose_name="Bàn được gọi")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian lấy số")
 
     class Meta:
@@ -135,7 +166,8 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
         FAILED = 'FAILED', 'Thanh toán thất bại'
 
     class OrderStatus(models.TextChoices):
-        CART = 'CART', 'Giỏ hàng tạm'
+        CART = 'CART', 'Chờ thanh toán'
+        DELIVERING = 'DELIVERING', 'Đang giao hàng'
         PENDING_KITCHEN = 'PENDING_KITCHEN', 'Đang gửi Bếp'
         COOKING = 'COOKING', 'Bếp đang làm'
         READY = 'READY', 'Đã xong (Chờ bưng/Giao)'
@@ -144,6 +176,7 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
 
     order_code = models.CharField(max_length=50, unique=True, verbose_name="Mã đơn hàng")
     customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Khách hàng")
+    queue_ticket = models.ForeignKey(QueueTicket, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders', verbose_name="Vé xếp hàng")
     order_type = models.CharField(max_length=20, choices=OrderType.choices, default=OrderType.DINE_IN, verbose_name="Loại đơn")
     table = models.ForeignKey(Table, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Bàn số")
 

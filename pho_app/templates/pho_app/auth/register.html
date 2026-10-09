@@ -1,0 +1,23 @@
+{% extends "pho_app/base.html" %}
+{% block title %}Đăng ký - Phở Gia Truyền{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+    <div class="auth-card">
+        <h1>Tạo tài khoản</h1>
+        <p class="lead">Bạn sẽ được gán vai trò khách. Chỉ quản lý mới đổi được vai trò.</p>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {{ field.errors }}
+            </div>
+            {% endfor %}
+            <button class="checkout-btn" type="submit"><i class="fa-solid fa-user-plus"></i> Đăng ký</button>
+        </form>
+        <p class="auth-switch">Đã có tài khoản? <a href="{% url 'login' %}">Đăng nhập</a></p>
+    </div>
+</div>
+{% endblock %}
