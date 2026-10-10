@@ -50,6 +50,14 @@
 
 <div class="cart-overlay" id="cartOverlay"></div>
 <aside class="cart-sidebar" id="cartSidebar">
+    {% if latest_order and latest_order.order_status != 'COMPLETED' and latest_order.order_status != 'CANCELLED' %}
+    <div style="padding: 15px; background: #fff3cd; color: #856404; border-bottom: 1px solid #ffeeba; text-align: center;">
+        <strong>Bạn có đơn hàng đang xử lý!</strong><br>
+        Trạng thái: {{ latest_order.get_order_status_display }}<br>
+        <a href="{% url 'order_detail' latest_order.id %}" style="color: #856404; text-decoration: underline; font-weight: bold;">Xem tiến độ</a>
+    </div>
+    {% endif %}
+    
     <div class="cart-header">
         <h3><i class="fa-solid fa-basket-shopping"></i> Giỏ hàng của bạn</h3>
         <button class="close-btn" id="closeCartBtn" type="button">&times;</button>
@@ -59,6 +67,13 @@
         <form method="post" action="{% url 'place_order' %}" id="checkoutForm">
             {% csrf_token %}
             <input type="hidden" name="cart" id="cartPayload">
+                {% if not request.user.is_authenticated %}
+                <div class="form-group" style="margin-top:15px;">
+                    <label>Tên của bạn (Tùy chọn)</label>
+                    <input type="text" name="guest_name" class="form-input" placeholder="Để nhân viên dễ gọi món">
+                </div>
+                {% endif %}
+
             <div class="form-group">
                 <label>Loại đơn</label>
                 <select class="form-input" name="order_type" id="orderType">
@@ -72,9 +87,9 @@
                 </select>
             </div>
             <div class="form-group" id="tableField">
-                <label>Bàn</label>
+                <label>Bàn <small class="muted" style="font-weight:normal;">(chọn số có ghi trên bàn của bạn)</small></label>
                 <select class="form-input" name="table_id" id="tableSelect">
-                    <option value="">Chọn bàn trống</option>
+                    <option value="">-- Chọn số bàn --</option>
                     {% for table in tables %}
                     <option value="{{ table.id }}" {% if selected_table == table.id|stringformat:"s" %}selected{% endif %}>Bàn {{ table.table_number }}{% if table.status == 'OCCUPIED' %} · bàn QR{% endif %}</option>
                     {% endfor %}
@@ -96,11 +111,7 @@
                 <span>Tổng tiền:</span>
                 <strong id="cartTotalAmount" data-delivery-fee="{{ delivery_flat_fee }}">0đ</strong>
             </div>
-            {% if user.is_authenticated %}
-                <button class="checkout-btn" id="checkoutBtn" type="submit" disabled><i class="fa-solid fa-paper-plane"></i> Tiến Hành Đặt Món</button>
-            {% else %}
-                <a class="checkout-btn checkout-link" id="checkoutBtn" href="{% url 'login' %}" aria-disabled="true"><i class="fa-solid fa-right-to-bracket"></i> Đăng nhập để đặt món</a>
-            {% endif %}
+            <button class="checkout-btn" id="checkoutBtn" type="submit" disabled><i class="fa-solid fa-paper-plane"></i> Tiến Hành Đặt Món</button>
         </form>
     </div>
 </aside>
@@ -109,7 +120,13 @@
 {{ menu_payload|json_script:"menu-data" }}
 {{ customization_options|json_script:"customization-data" }}
 {{ toppings|json_script:"topping-data" }}
-<script>const menuItems = JSON.parse(document.getElementById('menu-data').textContent); const customizationOptions = JSON.parse(document.getElementById('customization-data').textContent); const toppings = JSON.parse(document.getElementById('topping-data').textContent);</script>
-{% if user.is_authenticated %}<script>const queueStatusUrl = "{% url 'queue_status' %}";</script>{% endif %}
+<script>
+    const currentUserId = "{{ request.user.id|default:'' }}";
+    let remainingCapacity = {{ remaining_capacity|default:999 }};
+    const menuItems = JSON.parse(document.getElementById('menu-data').textContent);
+    const customizationOptions = JSON.parse(document.getElementById('customization-data').textContent);
+    const toppings = JSON.parse(document.getElementById('topping-data').textContent);
+</script>
+<script>const queueStatusUrl = "{% url 'queue_status' %}";</script>
 <script src="{% static 'pho_app/js/menu.js' %}"></script>
 {% endblock %}

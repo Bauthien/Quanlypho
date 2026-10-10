@@ -31,12 +31,20 @@
             <img class="payment-qr" src="{{ vietqr_image_url }}" alt="Mã QR thanh toán đơn {{ order.order_code }}">
             <p>Quét mã bằng ứng dụng ngân hàng, thanh toán chính xác <strong>{{ grand_total }}đ</strong> và giữ nguyên nội dung chuyển khoản <strong>{{ order.order_code }}</strong>.</p>
             <p class="muted">Đơn chỉ được chuyển xuống bếp sau khi hệ thống nhận webhook xác nhận thanh toán.</p>
+            <form id="simulate-payment-form" method="POST" action="{% url 'simulate_vietqr_payment' order.id %}">{% csrf_token %}<button type="submit" class="ghost-btn primary" style="margin-top: 10px; width: 100%;">Chuyển tiếp (Test - Đã chuyển khoản)</button></form>
         {% else %}
             <p>Chưa cấu hình tài khoản nhận VietQR. Đơn vẫn đang chờ thanh toán; quản trị viên cần cấu hình mã ngân hàng và số tài khoản trước khi vận hành.</p>
         {% endif %}
     </section>
     {% elif order.payment_status == 'PENDING' %}
     <section class="panel"><h2>Chờ thu ngân</h2><p>Vui lòng thanh toán {{ grand_total }}đ tại quầy. Đơn sẽ được gửi xuống bếp sau khi thu ngân xác nhận.</p></section>
+    {% elif order.order_status == 'READY' or order.order_status == 'COMPLETED' %}
+    <section class="panel" style="background-color: #d4edda; border-color: #c3e6cb;">
+        <h2 style="color: #155724;">Đơn hàng của bạn đã hoàn thành!</h2>
+        <p style="color: #155724;">Bếp đã chuẩn bị xong món. Vui lòng nhận món và thưởng thức!</p>
+        <a class="checkout-btn" href="{% url 'menu' %}">Về trang chủ</a>
+    </section>
+    
     {% elif order.payment_status == 'PAID' %}
     <section class="panel"><h2>Đã nhận thanh toán</h2><p>Đơn hiện ở trạng thái: <strong>{{ order.get_order_status_display }}</strong>. Tải lại trang để xem cập nhật mới nhất.</p><a class="ghost-btn primary" href="{% url 'order_detail' order.id %}">Cập nhật trạng thái</a></section>
     {% else %}
@@ -46,5 +54,34 @@
 </main>
 {% endblock %}
 {% block extra_js %}
+    {% if order.payment_status == 'PENDING' and order.payment_method == 'VIETQR' %}
+    <script>
+        // DEV: Tự động mô phỏng thanh toán VietQR thành công sau 8 giây để test luồng
+        setTimeout(() => {
+            const form = document.getElementById('simulate-payment-form');
+            if(form) form.submit();
+        }, 8000);
+    </script>
+    {% endif %}
+
+<script>
+    // Xóa giỏ hàng ngay khi đơn hàng đã được tạo thành công
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('pho-order-cart-v1')) {
+            localStorage.removeItem(key);
+        }
+    }
+</script>
+    
+
+
+<script>
+    // Xóa giỏ hàng sau khi đã tạo đơn thành công
+    
+    
+
+</script>
+
 {% if order.order_status != 'COMPLETED' and order.order_status != 'CANCELLED' %}<script>window.setTimeout(() => window.location.reload(), 12000);</script>{% endif %}
 {% endblock %}

@@ -1,0 +1,22 @@
+{% extends "pho_app/base.html" %}
+{% block title %}{% if table %}Sửa bàn{% else %}Thêm bàn mới{% endif %} - Phở Gia Truyền{% endblock %}
+{% block content %}
+<div class="workspace" style="justify-content: center;">
+    <form class="panel auth-form" method="post" style="width: 100%; max-width: 400px; margin-top: 40px;">
+        {% csrf_token %}
+        <h2 style="text-align: center; margin-bottom: 20px;">{% if table %}Sửa thông tin Bàn{% else %}Thêm Bàn Mới{% endif %}</h2>
+        <div class="form-group">
+            <label>Số bàn / Tên bàn (VD: 1, 2, VIP1...)</label>
+            <input type="text" class="form-input" name="table_number" value="{{ table.table_number|default:'' }}" required>
+        </div>
+        <div class="form-group" style="margin-top:15px;">
+            <label>Số lượng chỗ (Tô) tối đa</label>
+            <input type="number" class="form-input" name="capacity" value="{{ table.capacity|default:4 }}" min="1" required>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <a class="ghost-btn" href="{% url 'admin_table_list' %}" style="flex:1; text-align:center;">Hủy</a>
+            <button class="checkout-btn" type="submit" style="flex:1;">Lưu</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

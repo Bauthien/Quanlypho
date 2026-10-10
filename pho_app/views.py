@@ -7,6 +7,11 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
+import re
+def natural_sort_table(tables_qs):
+    tables = list(tables_qs)
+    tables.sort(key=lambda t: [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', str(t.table_number))])
+    return tables
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -38,17 +43,16 @@ def _generate_order_code():
 
 
 def _vietqr_image_url(order):
-    bank = getattr(settings, 'VIETQR_BANK_ID', '')
-    account = getattr(settings, 'VIETQR_ACCOUNT_NO', '')
-    account_name = getattr(settings, 'VIETQR_ACCOUNT_NAME', '')
-    if not bank or not account:
-        return ''
+    bank = getattr(settings, 'VIETQR_BANK_ID', '') or '970415'
+    account = getattr(settings, 'VIETQR_ACCOUNT_NO', '') or '113366668888'
+    account_name = getattr(settings, 'VIETQR_ACCOUNT_NAME', '') or 'TEST PHO GIA TRUYEN'
     query = urlencode({
         'amount': int(order.total_amount + order.delivery_fee),
         'addInfo': order.order_code,
         'accountName': account_name,
     })
     return f'https://img.vietqr.io/image/{bank}-{account}-compact2.png?{query}'
+
 
 
 def django_admin_disabled(request):
@@ -92,8 +96,10 @@ def logout_view(request):
 
 
 def menu_view(request):
+    selected_table = request.GET.get('table', '')
     if request.user.is_authenticated and request.user.role in (User.Role.STAFF, User.Role.KITCHEN, User.Role.ADMIN):
-        return redirect(request.user.home_url_name())
+        if not selected_table:
+            return redirect(request.user.home_url_name())
     items = MenuItem.objects.filter(is_active=True)
     menu_payload = [
         {
@@ -107,30 +113,57 @@ def menu_view(request):
     ]
     options = list(CustomizationOption.objects.all().order_by('category', 'id').values('id', 'category', 'name'))
     toppings = list(Topping.objects.all().order_by('name').values('id', 'name', 'price'))
+    latest_order = Order.objects.filter(customer=request.user).order_by('-created_at').first() if request.user.is_authenticated else Order.objects.filter(pk=request.session.get('latest_order_id')).first()
     active_ticket = QueueTicket.objects.filter(
         customer=request.user,
         status__in=[QueueTicket.Status.WAITING, QueueTicket.Status.CALLED],
     ).select_related('table').first() if request.user.is_authenticated else None
-    selected_table = request.GET.get('table', '')
-    tables = Table.objects.filter(status=Table.Status.AVAILABLE)
+    from django.db.models import Sum, Q, F
+    from django.db.models.functions import Coalesce
+
+    active_orders_q = Q(order__is_cleared=False) & ~Q(order__order_status=Order.OrderStatus.CANCELLED)
+    tables_qs = Table.objects.annotate(
+        used_capacity=Coalesce(Sum('order__items__quantity', filter=active_orders_q), 0),
+        remaining_cap=F('capacity') - Coalesce(Sum('order__items__quantity', filter=active_orders_q), 0)
+    )
+
     if selected_table.isdigit():
-        tables = (tables | Table.objects.filter(pk=selected_table, status=Table.Status.OCCUPIED)).distinct()
+        tables = tables_qs.filter(Q(remaining_cap__gt=0) | Q(pk=selected_table))
+    else:
+        tables = tables_qs.filter(remaining_cap__gt=0)
+
+    table_obj = None
+    remaining_capacity = -1
+
+    if selected_table.isdigit():
+        table_obj = next((t for t in tables if str(t.pk) == selected_table), None)
+        if not table_obj:
+            table_obj = tables_qs.filter(pk=selected_table).first()
+            
+    if table_obj:
+        remaining_capacity = getattr(table_obj, 'remaining_cap', 0)
+        if remaining_capacity <= 0:
+            messages.warning(request, f'Bàn {table_obj.table_number} hiện đã hết chỗ. Vui lòng chọn bàn khác.')
+
+    tables = natural_sort_table(tables)
     return render(request, 'pho_app/customer/menu.html', {
         'menu_items': items,
         'menu_payload': menu_payload,
         'customization_options': options,
         'toppings': toppings,
-        'tables': tables.order_by('table_number'),
+        'tables': tables,
+        'latest_order': latest_order,
         'active_ticket': active_ticket,
         'selected_table': selected_table,
+        'remaining_capacity': remaining_capacity,
+        'table_obj': table_obj,
         'delivery_flat_fee': getattr(settings, 'DELIVERY_FLAT_FEE', 30000),
     })
 
 
-@login_required
 @require_POST
 def place_order(request):
-    if not request.user.is_customer():
+    if request.user.is_authenticated and not request.user.is_customer():
         messages.error(request, 'Chỉ khách hàng mới được đặt món.')
         return redirect(request.user.home_url_name())
 
@@ -212,7 +245,7 @@ def place_order(request):
     with transaction.atomic():
         if order_type == Order.OrderType.QUEUE_CART:
             ticket = QueueTicket.objects.select_for_update().filter(
-                customer=request.user,
+                customer=request.user if request.user.is_authenticated else None,
                 status=QueueTicket.Status.CALLED,
             ).order_by('-created_at').first()
             if not ticket or not ticket.table_id:
@@ -235,9 +268,19 @@ def place_order(request):
             if not table:
                 messages.error(request, 'Bàn này không còn trống. Vui lòng chọn bàn khác hoặc lấy số xếp hàng.')
                 return redirect('menu')
+
+            # Kiểm tra sức chứa
+            used_capacity = OrderItem.objects.filter(order__table=table, order__is_cleared=False).exclude(order__order_status=Order.OrderStatus.CANCELLED).aggregate(total=Sum('quantity'))['total'] or 0
+            
+            cart_qty = sum(item[1] for item in resolved_items)
+            if used_capacity + cart_qty > table.capacity:
+                messages.error(request, f'Bàn {table.table_number} chỉ còn tối đa {max(0, table.capacity - used_capacity)} chỗ (tô). Vui lòng giảm số lượng đặt.')
+                return redirect('menu')
+                
         order = Order.objects.create(
             order_code=_generate_order_code(),
-            customer=request.user,
+            customer=request.user if request.user.is_authenticated else None,
+            guest_name=request.POST.get('guest_name', '')[:100] if not request.user.is_authenticated else '',
             order_type=order_type,
             table=table,
             queue_ticket=ticket,
@@ -271,12 +314,23 @@ def place_order(request):
             ticket.save(update_fields=['status'])
 
     messages.info(request, f'Đơn {order.order_code} đã tạo. Trạng thái: chờ thanh toán.')
+    if not request.user.is_authenticated:
+        guest_orders = request.session.get('guest_orders', [])
+        guest_orders.append(order.pk)
+        request.session['guest_orders'] = guest_orders
+        request.session['latest_order_id'] = order.pk
     return redirect('order_detail', order_id=order.pk)
 
 
-@login_required
 def order_detail(request, order_id):
-    order = get_object_or_404(Order.objects.prefetch_related('items__menu_item', 'items__toppings__topping', 'items__customizations__customization'), pk=order_id, customer=request.user)
+    order = get_object_or_404(Order.objects.prefetch_related('items__menu_item', 'items__toppings__topping', 'items__customizations__customization'), pk=order_id)
+    if order.customer:
+        if not request.user.is_authenticated or order.customer != request.user:
+            return redirect('menu')
+    else:
+        if order.pk not in request.session.get('guest_orders', []):
+            return redirect('menu')
+
     return render(request, 'pho_app/customer/order_detail.html', {
         'order': order,
         'vietqr_image_url': _vietqr_image_url(order) if order.payment_method == Order.PaymentMethod.VIETQR else '',
@@ -328,7 +382,7 @@ def take_queue_number(request):
         return redirect(request.user.home_url_name())
 
     existing = QueueTicket.objects.filter(
-        customer=request.user,
+        customer=request.user if request.user.is_authenticated else None,
         status__in=[QueueTicket.Status.WAITING, QueueTicket.Status.CALLED],
     ).first()
     if existing:
@@ -336,7 +390,7 @@ def take_queue_number(request):
         return redirect('menu')
 
     ticket = QueueTicket.objects.create(
-        customer=request.user,
+        customer=request.user if request.user.is_authenticated else None,
         ticket_number=f'TMP-{uuid.uuid4().hex}',
     )
     ticket.ticket_number = f'P-{ticket.pk:03d}'
@@ -350,7 +404,7 @@ def queue_status(request):
     if not request.user.is_customer():
         return JsonResponse({'active': False})
     ticket = QueueTicket.objects.filter(
-        customer=request.user,
+        customer=request.user if request.user.is_authenticated else None,
         status__in=[QueueTicket.Status.WAITING, QueueTicket.Status.CALLED],
     ).select_related('table').first()
     if not ticket:
@@ -390,8 +444,8 @@ def staff_home(request):
         'delivery_ready': delivery_ready,
         'delivery_in_transit': delivery_in_transit,
         'serving_ready': serving_ready,
-        'tables': Table.objects.all().order_by('table_number'),
-        'available_tables': Table.objects.filter(status=Table.Status.AVAILABLE).order_by('table_number'),
+        'tables': natural_sort_table(Table.objects.all()),
+        'available_tables': natural_sort_table(Table.objects.filter(status=Table.Status.AVAILABLE)),
     })
 
 
@@ -461,18 +515,17 @@ def complete_dine_in(request, order_id):
     order = get_object_or_404(Order, pk=order_id, order_type=Order.OrderType.DINE_IN, order_status=Order.OrderStatus.READY)
     order.order_status = Order.OrderStatus.COMPLETED
     order.save(update_fields=['order_status', 'updated_at'])
-    if order.table_id:
-        Table.objects.filter(pk=order.table_id).update(status=Table.Status.CLEANING)
-    messages.success(request, f'Đã phục vụ xong đơn {order.order_code}. Bàn chuyển sang trạng thái cần dọn.')
+    messages.success(request, f'Đã phục vụ xong đơn {order.order_code}. Khách đang dùng bữa.')
     return redirect('staff_home')
 
 
 @staff_required
 @require_POST
 def free_table(request, table_id):
-    table = get_object_or_404(Table, pk=table_id, status=Table.Status.CLEANING)
+    table = get_object_or_404(Table, pk=table_id, status__in=[Table.Status.CLEANING, Table.Status.OCCUPIED])
     table.status = Table.Status.AVAILABLE
     table.save(update_fields=['status'])
+    Order.objects.filter(table=table, is_cleared=False).update(is_cleared=True)
     messages.success(request, f'Bàn {table.table_number} đã dọn xong và sẵn sàng đón khách.')
     return redirect('staff_home')
 
@@ -659,3 +712,100 @@ def admin_topping_delete(request, topping_id):
     topping.delete()
     messages.success(request, 'Đã xóa topping.')
     return redirect('admin_menu')
+
+@require_POST
+def simulate_vietqr_payment(request, order_id):
+    order = get_object_or_404(Order, pk=order_id, payment_method=Order.PaymentMethod.VIETQR)
+    if order.customer:
+        if not request.user.is_authenticated or order.customer != request.user:
+            return redirect('menu')
+    else:
+        if order.pk not in request.session.get('guest_orders', []):
+            return redirect('menu')
+    if order.payment_status == Order.PaymentStatus.PENDING:
+        order.payment_status = Order.PaymentStatus.PAID
+        order.order_status = Order.OrderStatus.PENDING_KITCHEN
+        order.save(update_fields=['payment_status', 'order_status', 'updated_at'])
+        messages.success(request, 'Đã mô phỏng thanh toán thành công! Đơn đã chuyển xuống bếp.')
+    return redirect('order_detail', order_id=order.pk)
+
+@staff_required
+@require_POST
+def cancel_cash_order(request, order_id):
+    with transaction.atomic():
+        order = get_object_or_404(Order.objects.select_for_update(), pk=order_id, payment_method=Order.PaymentMethod.CASH)
+        if order.payment_status != Order.PaymentStatus.PENDING or order.order_status != Order.OrderStatus.CART:
+            messages.info(request, 'Đơn này đã được xử lý trước đó.')
+            return redirect('staff_home')
+        order.payment_status = Order.PaymentStatus.FAILED
+        order.order_status = Order.OrderStatus.CANCELLED
+        order.save(update_fields=['payment_status', 'order_status', 'updated_at'])
+        
+        # Free the table if there are no other active orders on it
+        if order.table_id:
+            has_other_active = Order.objects.filter(
+                table_id=order.table_id
+            ).exclude(
+                order_status__in=[Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED]
+            ).exclude(pk=order.pk).exists()
+            if not has_other_active:
+                Table.objects.filter(pk=order.table_id).update(status=Table.Status.AVAILABLE)
+
+    messages.success(request, f'Đã hủy đơn {order.order_code}.')
+    return redirect('staff_home')
+
+def _generate_table_qr(request, table):
+    # Dùng API qrserver.com để tạo mã QR
+    from urllib.parse import urlencode
+    domain = request.build_absolute_uri('/')[:-1] # Bỏ dấu / ở cuối
+    menu_url = f"{domain}/thuc-don/?table={table.id}"
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=500x500&data={menu_url}"
+    return qr_url
+
+@admin_required
+def admin_table_list(request):
+
+    tables = natural_sort_table(Table.objects.all())
+    return render(request, 'pho_app/admin/table_list.html', {'tables': tables})
+
+@admin_required
+def admin_table_create(request):
+    if request.method == 'POST':
+        table_number = request.POST.get('table_number', '').strip()
+        capacity = int(request.POST.get('capacity', 4))
+        if table_number:
+            if Table.objects.filter(table_number__iexact=table_number).exists():
+                messages.error(request, f'Lỗi: Tên bàn "{table_number}" đã tồn tại! Vui lòng chọn tên khác.')
+            else:
+                table = Table.objects.create(table_number=table_number, capacity=capacity, status=Table.Status.AVAILABLE)
+                table.qr_code_url = _generate_table_qr(request, table)
+                table.save(update_fields=['qr_code_url'])
+                messages.success(request, 'Đã thêm bàn mới thành công.')
+                return redirect('admin_table_list')
+    return render(request, 'pho_app/admin/table_form.html')
+
+@admin_required
+def admin_table_edit(request, table_id):
+    table = get_object_or_404(Table, pk=table_id)
+    if request.method == 'POST':
+        table_number = request.POST.get('table_number', '').strip()
+        capacity = int(request.POST.get('capacity', 4))
+        if table_number:
+            if Table.objects.filter(table_number__iexact=table_number).exclude(pk=table.pk).exists():
+                messages.error(request, f'Lỗi: Tên bàn "{table_number}" đã tồn tại ở bàn khác!')
+            else:
+                table.table_number = table_number
+                table.capacity = capacity
+                table.qr_code_url = _generate_table_qr(request, table)
+                table.save()
+                messages.success(request, 'Đã cập nhật bàn thành công.')
+                return redirect('admin_table_list')
+    return render(request, 'pho_app/admin/table_form.html', {'table': table})
+
+@admin_required
+@require_POST
+def admin_table_delete(request, table_id):
+    table = get_object_or_404(Table, pk=table_id)
+    table.delete()
+    messages.success(request, 'Đã xóa bàn.')
+    return redirect('admin_table_list')

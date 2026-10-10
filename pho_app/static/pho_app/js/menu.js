@@ -1,4 +1,4 @@
-const CART_KEY = 'pho-order-cart-v1';
+const CART_KEY = 'pho-order-cart-v1-' + (typeof currentUserId !== 'undefined' ? currentUserId : 'guest');
 let cart = [];
 try {
     cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
@@ -115,7 +115,19 @@ function renderCart() {
     const total = foodTotal + deliveryFee;
     cartBadge.textContent = totalQty;
     cartTotalAmount.textContent = formatMoney(total);
-    checkoutBtn.disabled = totalQty === 0;
+    
+    const isTableFull = (typeof remainingCapacity !== 'undefined') && (totalQty > remainingCapacity) && (document.getElementById('orderType').value === 'DINE_IN');
+    
+    if (isTableFull) {
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Quá giới hạn của bàn (' + remainingCapacity + ' phần)';
+        checkoutBtn.style.backgroundColor = '#dc3545';
+    } else {
+        checkoutBtn.disabled = totalQty === 0;
+        checkoutBtn.textContent = 'Tiến Hành Đặt Món';
+        checkoutBtn.style.backgroundColor = '';
+    }
+
     cartItemsList.innerHTML = cart.map((item) => {
         const selected = item.customizations.map((id) => customizationOptions.find((option) => option.id === id)?.name).filter(Boolean);
         const extras = item.toppings.map((id) => toppings.find((topping) => topping.id === id)?.name).filter(Boolean);
@@ -222,3 +234,13 @@ checkoutForm.addEventListener('submit', () => {
 renderMenu(menuItems);
 renderCart();
 orderType.dispatchEvent(new Event('change'));
+
+tableSelect.addEventListener('change', () => {
+    const selectedOption = tableSelect.options[tableSelect.selectedIndex];
+    if (selectedOption && selectedOption.dataset.remaining) {
+        remainingCapacity = parseInt(selectedOption.dataset.remaining, 10);
+    } else {
+        remainingCapacity = 999;
+    }
+    renderCart();
+});

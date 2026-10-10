@@ -14,9 +14,11 @@ urlpatterns = [
     path('hang-doi/lay-so/', views.take_queue_number, name='take_queue'),
     path('hang-doi/trang-thai/', views.queue_status, name='queue_status'),
     path('thanh-toan/vietqr/webhook/', views.vietqr_webhook, name='vietqr_webhook'),
+    path('thanh-toan/vietqr/simulate/<int:order_id>/', views.simulate_vietqr_payment, name='simulate_vietqr_payment'),
 
     path('thu-ngan/', views.staff_home, name='staff_home'),
     path('thu-ngan/xac-nhan-tien-mat/<int:order_id>/', views.confirm_cash_payment, name='confirm_cash'),
+    path('thu-ngan/huy-don/<int:order_id>/', views.cancel_cash_order, name='cancel_order'),
     path('thu-ngan/goi-so/', views.call_next_queue, name='call_next_queue'),
     path('thu-ngan/ban-giao/<int:order_id>/', views.handover_delivery, name='handover_delivery'),
     path('thu-ngan/giao-xong/<int:order_id>/', views.complete_delivery, name='complete_delivery'),
@@ -29,6 +31,10 @@ urlpatterns = [
     path('bep/tem-giao-hang/<int:order_id>/', views.delivery_labels, name='delivery_labels'),
 
     path('quan-ly/', views.admin_home, name='admin_home'),
+    path('quan-ly/ban/', views.admin_table_list, name='admin_table_list'),
+    path('quan-ly/ban/them/', views.admin_table_create, name='admin_table_create'),
+    path('quan-ly/ban/<int:table_id>/sua/', views.admin_table_edit, name='admin_table_edit'),
+    path('quan-ly/ban/<int:table_id>/xoa/', views.admin_table_delete, name='admin_table_delete'),
     path('quan-ly/nguoi-dung/', views.admin_users, name='admin_users'),
     path('quan-ly/nguoi-dung/<int:user_id>/vai-tro/', views.admin_update_role, name='admin_update_role'),
     path('quan-ly/thuc-don/', views.admin_menu_list, name='admin_menu'),

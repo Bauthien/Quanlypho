@@ -77,7 +77,7 @@ WSGI_APPLICATION = 'core_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis', # Dùng engine GIS
-        'NAME': os.environ.get('POSTGRES_DB', 'Quanlypho'),
+        'NAME': os.environ.get('POSTGRES_DB', 'quanlypho'),
         'USER': os.environ.get('POSTGRES_USER', 'postgres'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', '123'),
         'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
@@ -150,7 +150,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # --- Cấu hình GDAL/GEOS cho môi trường Windows ---
 if os.name == 'nt':
     # 1. Đường dẫn tới thư mục bin PostgreSQL có cài PostGIS/GDAL.
-    POSTGIS_BIN = r'C:\Program Files\PostgreSQL\17\bin'
+    POSTGIS_BIN = r'C:\Program Files\PostgreSQL\18\bin'
     
     # 2. Thêm thư mục bin vào PATH của hệ điều hành
     os.environ['PATH'] = POSTGIS_BIN + os.pathsep + os.environ['PATH']
