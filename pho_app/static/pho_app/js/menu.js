@@ -275,10 +275,8 @@ if (typeof queueStatusUrl !== 'undefined') {
                     orderType.add(queueOption);
                 }
                 queueOption.textContent = `Giỏ xếp hàng · Bàn ${data.table}`;
-                if (orderType.value !== 'QUEUE_CART') {
-                    orderType.value = 'QUEUE_CART';
-                    orderType.dispatchEvent(new Event('change'));
-                }
+                // KHÔNG auto chuyển sang QUEUE_CART - để user tự chọn
+                // Chỉ cập nhật status và thông báo
                 currentQueueStatus = data.status;
                 if (state !== previousQueueState) {
                     if (navigator.vibrate) navigator.vibrate([250, 100, 250]);

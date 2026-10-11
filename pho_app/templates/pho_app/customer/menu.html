@@ -54,7 +54,7 @@
 
 <div class="cart-overlay" id="cartOverlay"></div>
 <aside class="cart-sidebar" id="cartSidebar">
-    {% if latest_order and latest_order.order_status != 'COMPLETED' and latest_order.order_status != 'CANCELLED' %}
+    {% if latest_order and latest_order.order_status not in 'READY COMPLETED CANCELLED DELIVERING' %}
     <div style="padding: 15px; background: #fff3cd; color: #856404; border-bottom: 1px solid #ffeeba; text-align: center;">
         <strong>Bạn có đơn hàng đang xử lý!</strong><br>
         Trạng thái: {{ latest_order.get_order_status_display }}<br>

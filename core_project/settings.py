@@ -28,6 +28,11 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if host.strip()]
 
+# CSRF settings for development
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+
 
 # Application definition
 
@@ -133,6 +138,7 @@ VIETQR_ACCOUNT_NO = os.environ.get('VIETQR_ACCOUNT_NO', '')
 VIETQR_ACCOUNT_NAME = os.environ.get('VIETQR_ACCOUNT_NAME', '')
 PAYMENT_WEBHOOK_SECRET = os.environ.get('PAYMENT_WEBHOOK_SECRET', '')
 DELIVERY_FLAT_FEE = int(os.environ.get('DELIVERY_FLAT_FEE', '30000'))
+DELIVERY_MAX_KM = int(os.environ.get('DELIVERY_MAX_KM', '20'))  # Tăng lên 20km để test
 
 
 # Email

@@ -257,12 +257,15 @@ def place_order(request):
 
     if order_type == Order.OrderType.DELIVERY:
         payment_method = Order.PaymentMethod.VIETQR
-        if not address:
-            messages.error(request, 'Vui lòng nhập địa chỉ giao hàng.')
-            return redirect('menu')
         coords = parse_coords(request.POST.get('customer_lat'), request.POST.get('customer_lng'))
         lat = coords[0] if coords else None
         lng = coords[1] if coords else None
+        
+        # Nếu không có địa chỉ VÀ không có GPS thì mới báo lỗi
+        if not address and not coords:
+            messages.error(request, 'Vui lòng nhập địa chỉ giao hàng hoặc dùng vị trí hiện tại.')
+            return redirect('menu')
+        
         delivery_fee, delivery_distance, in_range = compute_delivery_fee(lat, lng)
         if not in_range:
             messages.error(request, f'Địa chỉ nằm ngoài phạm vi giao hàng ({getattr(settings, "DELIVERY_MAX_KM", 10)} km).')
