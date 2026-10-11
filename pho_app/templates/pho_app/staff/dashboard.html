@@ -19,15 +19,23 @@
                 {% for order in cash_orders %}
                 <tr>
                     <td>{{ order.order_code }}</td>
-                    <td>{{ order.customer.display_name|default:"Khách" }}</td>
+                    <td>{% if order.customer %}{{ order.customer.display_name }}{% elif order.guest_name %}{{ order.guest_name }}{% else %}Khách{% endif %}</td>
                     <td>{% if order.table %}Bàn {{ order.table.table_number }}{% else %}-{% endif %}</td>
                     <td>{{ order.total_amount }}đ</td>
+                    
                     <td>
-                        <form method="post" action="{% url 'confirm_cash' order.id %}">
-                            {% csrf_token %}
-                            <button class="ghost-btn primary" type="submit">Đã nhận tiền</button>
-                        </form>
+                        <div style="display: flex; gap: 8px;">
+                            <form method="post" action="{% url 'confirm_cash' order.id %}">
+                                {% csrf_token %}
+                                <button class="ghost-btn primary" type="submit">Đã nhận tiền</button>
+                            </form>
+                            <form method="post" action="{% url 'cancel_order' order.id %}" onsubmit="return confirm('Bạn có chắc chắn muốn hủy đơn này không?');">
+                                {% csrf_token %}
+                                <button class="ghost-btn" style="color: red; border-color: red;" type="submit">Hủy đơn</button>
+                            </form>
+                        </div>
                     </td>
+
                 </tr>
                 {% endfor %}
             </tbody>
@@ -58,7 +66,7 @@
                 {% for ticket in waiting_tickets %}
                 <tr>
                     <td><strong>{{ ticket.ticket_number }}</strong></td>
-                    <td>{{ ticket.customer.display_name|default:"Khách" }}</td>
+                    <td>{% if ticket.customer %}{{ ticket.customer.display_name }}{% elif ticket.guest_name %}{{ ticket.guest_name }}{% else %}Khách{% endif %}</td>
                     <td>{{ ticket.created_at|date:"H:i d/m" }}</td>
                     <td>{% if ticket.table %}{{ ticket.table.table_number }}{% else %}Chưa gọi{% endif %}</td>
                 </tr>
@@ -90,18 +98,21 @@
         {% if delivery_ready %}
         <table class="data-table">
             <thead>
-                <tr><th>Mã đơn</th><th>Địa chỉ</th><th></th></tr>
+                <tr><th>Mã đơn / vận đơn</th><th>Địa chỉ</th><th></th></tr>
             </thead>
             <tbody>
                 {% for order in delivery_ready %}
                 <tr>
-                    <td>{{ order.order_code }}</td>
+                    <td>{{ order.order_code }}<br><small>VD: {{ order.shipping_code|default:"—" }}</small></td>
                     <td>{{ order.delivery_address }}</td>
                     <td>
-                        <form method="post" action="{% url 'handover_delivery' order.id %}">
-                            {% csrf_token %}
-                            <button class="ghost-btn primary" type="submit">Bàn giao</button>
-                        </form>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <a class="ghost-btn" href="{% url 'delivery_labels' order.id %}">In 2 tem</a>
+                            <form method="post" action="{% url 'handover_delivery' order.id %}">
+                                {% csrf_token %}
+                                <button class="ghost-btn primary" type="submit">Bàn giao shipper</button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -116,18 +127,25 @@
         <h2>Đơn đang giao</h2>
         {% if delivery_in_transit %}
         <table class="data-table"><thead><tr><th>Mã đơn</th><th>Khách</th><th>Địa chỉ</th><th></th></tr></thead><tbody>
-            {% for order in delivery_in_transit %}<tr><td>{{ order.order_code }}</td><td>{{ order.customer.display_name|default:"Khách" }}</td><td>{{ order.delivery_address }}</td><td>
+            {% for order in delivery_in_transit %}<tr><td>{{ order.order_code }}<br><small>{{ order.shipping_code }}</small></td><td>{% if order.customer %}{{ order.customer.display_name }}{% elif order.guest_name %}{{ order.guest_name }}{% else %}Khách{% endif %}</td><td>{{ order.delivery_address }}</td><td>
                 <form method="post" action="{% url 'complete_delivery' order.id %}">{% csrf_token %}<button class="ghost-btn primary" type="submit">Giao xong</button></form>
             </td></tr>{% endfor %}
         </tbody></table>
         {% else %}<p class="empty-state">Không có đơn đang giao.</p>{% endif %}
     </div>
 
+    
     <div class="panel">
-        <h2>Bàn đang dọn</h2>
-        {% for table in tables %}{% if table.status == 'CLEANING' %}
-        <div class="table-clean-row"><strong>Bàn {{ table.table_number }}</strong><form method="post" action="{% url 'free_table' table.id %}">{% csrf_token %}<button class="ghost-btn primary" type="submit">Đã dọn xong</button></form></div>
-        {% endif %}{% empty %}<p class="empty-state">Chưa có bàn cần dọn.</p>{% endfor %}
+        <h2>Bàn đang có khách</h2>
+        {% for table in tables %}{% if table.status == 'OCCUPIED' or table.status == 'CLEANING' %}
+        <div class="table-clean-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #ddd;">
+            <strong>Bàn {{ table.table_number }}</strong>
+            <form method="post" action="{% url 'free_table' table.id %}">
+                {% csrf_token %}
+                <button class="ghost-btn primary" type="submit">Khách ăn xong</button>
+            </form>
+        </div>
+        {% endif %}{% endfor %}
     </div>
 </div>
 {% endblock %}

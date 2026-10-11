@@ -340,6 +340,9 @@
 .auth-card { border: 1px solid rgba(192, 57, 43, .08); }
 .auth-card .checkout-btn { margin-top: 6px; }
 .queue-banner .empty-state { max-width: 660px; }
+.queue-banner-full { border-left: 6px solid var(--primary-color); }
+.queue-take-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.queue-take-form .form-input { min-width: 180px; }
 .label-page { max-width: 520px; }
 .label-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px; }
 .shipping-label { background: #fff; color: #111; border: 2px dashed #333; padding: 18px; margin-bottom: 14px; break-inside: avoid; }

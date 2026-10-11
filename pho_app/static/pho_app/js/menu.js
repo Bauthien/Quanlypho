@@ -1,4 +1,4 @@
-const CART_KEY = 'pho-order-cart-v1';
+const CART_KEY = 'pho-order-cart-v1-' + (typeof currentUserId !== 'undefined' ? currentUserId : 'guest');
 let cart = [];
 try {
     cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
@@ -23,6 +23,13 @@ const orderType = document.getElementById('orderType');
 const paymentMethod = document.getElementById('paymentMethod');
 const addressField = document.getElementById('addressField');
 const tableField = document.getElementById('tableField');
+const tableSelect = document.getElementById('tableSelect');
+const locateBtn = document.getElementById('locateBtn');
+const deliveryFeeHint = document.getElementById('deliveryFeeHint');
+const customerLat = document.getElementById('customerLat');
+const customerLng = document.getElementById('customerLng');
+let currentQueueStatus = typeof queueTicketStatus !== 'undefined' ? queueTicketStatus : '';
+let deliveryAllowed = true;
 
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -115,7 +122,30 @@ function renderCart() {
     const total = foodTotal + deliveryFee;
     cartBadge.textContent = totalQty;
     cartTotalAmount.textContent = formatMoney(total);
-    checkoutBtn.disabled = totalQty === 0;
+    
+    const currentType = orderType.value;
+    const isTableFull = (typeof remainingCapacity !== 'undefined') && (totalQty > remainingCapacity) && currentType === 'DINE_IN';
+    const waitingQueue = currentType === 'QUEUE_CART' && currentQueueStatus !== 'CALLED';
+    const deliveryBlocked = currentType === 'DELIVERY' && !deliveryAllowed;
+
+    if (waitingQueue) {
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Chờ gọi số — chưa thanh toán';
+        checkoutBtn.style.backgroundColor = '';
+    } else if (deliveryBlocked) {
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Ngoài phạm vi giao hàng';
+        checkoutBtn.style.backgroundColor = '#dc3545';
+    } else if (isTableFull) {
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Quá giới hạn của bàn (' + remainingCapacity + ' phần)';
+        checkoutBtn.style.backgroundColor = '#dc3545';
+    } else {
+        checkoutBtn.disabled = totalQty === 0;
+        checkoutBtn.textContent = 'Tiến Hành Đặt Món';
+        checkoutBtn.style.backgroundColor = '';
+    }
+
     cartItemsList.innerHTML = cart.map((item) => {
         const selected = item.customizations.map((id) => customizationOptions.find((option) => option.id === id)?.name).filter(Boolean);
         const extras = item.toppings.map((id) => toppings.find((topping) => topping.id === id)?.name).filter(Boolean);
@@ -174,6 +204,57 @@ orderType.addEventListener('change', () => {
     renderCart();
 });
 
+async function quoteDeliveryFee(lat, lng) {
+    if (!deliveryFeeQuoteUrl) return;
+    const params = new URLSearchParams();
+    if (lat != null && lng != null) {
+        params.set('lat', lat);
+        params.set('lng', lng);
+    }
+    const response = await fetch(`${deliveryFeeQuoteUrl}?${params}`, { headers: { Accept: 'application/json' } });
+    const data = await response.json();
+    if (!data.ok) {
+        deliveryAllowed = false;
+        cartTotalAmount.dataset.deliveryFee = '0';
+        if (deliveryFeeHint) {
+            deliveryFeeHint.textContent = `Ngoài phạm vi giao (${data.distance_km || '?'} km > ${data.max_km} km).`;
+        }
+        renderCart();
+        return;
+    }
+    deliveryAllowed = true;
+    cartTotalAmount.dataset.deliveryFee = String(data.fee);
+    if (deliveryFeeHint) {
+        deliveryFeeHint.textContent = data.fallback
+            ? `Chưa có GPS · phí tạm ${Number(data.fee).toLocaleString('vi-VN')}đ. Bấm lấy vị trí để tính chính xác.`
+            : `Cách quán ${data.distance_km} km · phí ship ${Number(data.fee).toLocaleString('vi-VN')}đ.`;
+    }
+    renderCart();
+}
+
+if (locateBtn) {
+    locateBtn.addEventListener('click', () => {
+        if (!navigator.geolocation) {
+            quoteDeliveryFee();
+            return;
+        }
+        locateBtn.disabled = true;
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                locateBtn.disabled = false;
+                if (customerLat) customerLat.value = position.coords.latitude;
+                if (customerLng) customerLng.value = position.coords.longitude;
+                quoteDeliveryFee(position.coords.latitude, position.coords.longitude);
+            },
+            () => {
+                locateBtn.disabled = false;
+                quoteDeliveryFee();
+            },
+            { enableHighAccuracy: true, timeout: 8000 },
+        );
+    });
+}
+
 if (typeof queueStatusUrl !== 'undefined') {
     let previousQueueState = '';
     const pollQueueStatus = async () => {
@@ -194,15 +275,15 @@ if (typeof queueStatusUrl !== 'undefined') {
                     orderType.add(queueOption);
                 }
                 queueOption.textContent = `Giỏ xếp hàng · Bàn ${data.table}`;
-                if (orderType.value !== 'QUEUE_CART') {
-                    orderType.value = 'QUEUE_CART';
-                    orderType.dispatchEvent(new Event('change'));
-                }
+                // KHÔNG auto chuyển sang QUEUE_CART - để user tự chọn
+                // Chỉ cập nhật status và thông báo
+                currentQueueStatus = data.status;
                 if (state !== previousQueueState) {
                     if (navigator.vibrate) navigator.vibrate([250, 100, 250]);
                     if ('Notification' in window && Notification.permission === 'granted') {
                         new Notification('Đến lượt bạn!', { body: `Vui lòng vào Bàn ${data.table}.` });
                     }
+                    renderCart();
                 }
             }
             previousQueueState = state;
@@ -222,3 +303,15 @@ checkoutForm.addEventListener('submit', () => {
 renderMenu(menuItems);
 renderCart();
 orderType.dispatchEvent(new Event('change'));
+
+if (tableSelect) {
+    tableSelect.addEventListener('change', () => {
+        const selectedOption = tableSelect.options[tableSelect.selectedIndex];
+        if (selectedOption && selectedOption.dataset.remaining) {
+            remainingCapacity = parseInt(selectedOption.dataset.remaining, 10);
+        } else {
+            remainingCapacity = 999;
+        }
+        renderCart();
+    });
+}

@@ -1,0 +1,92 @@
+import math
+from decimal import Decimal
+
+from django.conf import settings
+from django.db.models import F, Q, Sum
+from django.db.models.functions import Coalesce
+
+from .models import Order, OrderItem, QueueTicket, Table
+
+
+def active_orders_q():
+    return Q(order__is_cleared=False) & ~Q(order__order_status=Order.OrderStatus.CANCELLED)
+
+
+def tables_with_capacity():
+    return Table.objects.annotate(
+        used_capacity=Coalesce(Sum('order__items__quantity', filter=active_orders_q()), 0),
+        remaining_cap=F('capacity') - Coalesce(Sum('order__items__quantity', filter=active_orders_q()), 0),
+    )
+
+
+def tables_are_full():
+    return not tables_with_capacity().filter(remaining_cap__gt=0).exists()
+
+
+def used_bowls(table):
+    return (
+        OrderItem.objects.filter(order__table=table, order__is_cleared=False)
+        .exclude(order__order_status=Order.OrderStatus.CANCELLED)
+        .aggregate(total=Sum('quantity'))['total']
+        or 0
+    )
+
+
+def active_queue_ticket(request):
+    waiting = QueueTicket.objects.filter(
+        status__in=[QueueTicket.Status.WAITING, QueueTicket.Status.CALLED],
+    ).select_related('table')
+    if request.user.is_authenticated and getattr(request.user, 'is_customer', lambda: False)():
+        ticket = waiting.filter(customer=request.user).first()
+        if ticket:
+            request.session['queue_ticket_id'] = ticket.pk
+            return ticket
+    ticket_id = request.session.get('queue_ticket_id')
+    if ticket_id:
+        return waiting.filter(pk=ticket_id).first()
+    return None
+
+
+def haversine_km(lat1, lng1, lat2, lng2):
+    radius = 6371.0
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lng2 - lng1)
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def parse_coords(lat_raw, lng_raw):
+    try:
+        lat = float(lat_raw)
+        lng = float(lng_raw)
+    except (TypeError, ValueError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return None
+    return lat, lng
+
+
+def compute_delivery_fee(lat=None, lng=None):
+    shop_lat = float(getattr(settings, 'RESTAURANT_LAT', 10.7769))
+    shop_lng = float(getattr(settings, 'RESTAURANT_LNG', 106.7009))
+    max_km = float(getattr(settings, 'DELIVERY_MAX_KM', 10))
+    base = Decimal(str(getattr(settings, 'DELIVERY_BASE_FEE', 15000)))
+    per_km = Decimal(str(getattr(settings, 'DELIVERY_FEE_PER_KM', 8000)))
+    fallback = Decimal(str(getattr(settings, 'DELIVERY_FLAT_FEE', 30000)))
+    if lat is None or lng is None:
+        return fallback, None, True
+    km = haversine_km(shop_lat, shop_lng, lat, lng)
+    if km > max_km:
+        return None, Decimal(str(round(km, 2))), False
+    billed_km = max(1, math.ceil(km))
+    fee = base + per_km * billed_km
+    return fee, Decimal(str(round(km, 2))), True
+
+
+def customer_point(lat, lng):
+    try:
+        from django.contrib.gis.geos import Point
+        return Point(float(lng), float(lat), srid=4326)
+    except Exception:
+        return None

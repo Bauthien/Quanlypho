@@ -28,6 +28,11 @@ DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
 
 ALLOWED_HOSTS = [host.strip() for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if host.strip()]
 
+# CSRF settings for development
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
+CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_SECURE = False
+
 
 # Application definition
 
@@ -133,6 +138,7 @@ VIETQR_ACCOUNT_NO = os.environ.get('VIETQR_ACCOUNT_NO', '')
 VIETQR_ACCOUNT_NAME = os.environ.get('VIETQR_ACCOUNT_NAME', '')
 PAYMENT_WEBHOOK_SECRET = os.environ.get('PAYMENT_WEBHOOK_SECRET', '')
 DELIVERY_FLAT_FEE = int(os.environ.get('DELIVERY_FLAT_FEE', '30000'))
+DELIVERY_MAX_KM = int(os.environ.get('DELIVERY_MAX_KM', '20'))  # Tăng lên 20km để test
 
 
 # Email
@@ -149,22 +155,44 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # --- Cấu hình GDAL/GEOS cho môi trường Windows ---
 if os.name == 'nt':
-    # 1. Đường dẫn tới thư mục bin PostgreSQL có cài PostGIS/GDAL.
-    POSTGIS_BIN = r'C:\Program Files\PostgreSQL\17\bin'
-    
-    # 2. Thêm thư mục bin vào PATH của hệ điều hành
-    os.environ['PATH'] = POSTGIS_BIN + os.pathsep + os.environ['PATH']
-    
-    # 3. Kích hoạt tính năng tải DLL của Python (rất quan trọng với Python >= 3.8)
-    if hasattr(os, 'add_dll_directory'):
-        try:
-            os.add_dll_directory(POSTGIS_BIN)
-        except Exception:
-            pass
-            
-    # 4. Trỏ trực tiếp tới file GDAL và GEOS
-    GDAL_LIBRARY_PATH = os.path.join(POSTGIS_BIN, 'libgdal-35.dll')
-    GEOS_LIBRARY_PATH = os.path.join(POSTGIS_BIN, 'libgeos_c.dll')
+    # Có thể chỉ định rõ thư mục bin bằng POSTGIS_BIN; nếu không, tự tìm
+    # bản PostgreSQL cài trên máy có đủ DLL GDAL và GEOS.
+    configured_postgis_bin = os.environ.get('POSTGIS_BIN')
+    postgis_bin = Path(configured_postgis_bin) if configured_postgis_bin else None
+    required_dlls = ('libgdal*.dll', 'libgeos_c.dll')
+
+    def has_postgis_dlls(directory):
+        return (
+            directory.is_dir()
+            and next(directory.glob(required_dlls[0]), None) is not None
+            and (directory / required_dlls[1]).is_file()
+        )
+
+    if postgis_bin is None or not has_postgis_dlls(postgis_bin):
+        postgres_root = Path(os.environ.get('POSTGRES_INSTALL_ROOT', r'C:\Program Files\PostgreSQL'))
+        postgres_bins = sorted(
+            postgres_root.glob('*/bin'),
+            key=lambda directory: tuple(
+                int(part) for part in directory.parent.name.split('.') if part.isdigit()
+            ),
+            reverse=True,
+        )
+        postgis_bin = next(
+            (directory for directory in postgres_bins if has_postgis_dlls(directory)),
+            None,
+        )
+
+    if postgis_bin is not None:
+        gdal_library = next(postgis_bin.glob('libgdal*.dll'))
+        geos_library = postgis_bin / 'libgeos_c.dll'
+        os.environ['PATH'] = str(postgis_bin) + os.pathsep + os.environ.get('PATH', '')
+
+        # Giữ handle sống trong suốt thời gian chạy để Windows tra cứu được DLL.
+        if hasattr(os, 'add_dll_directory'):
+            _POSTGIS_DLL_DIRECTORY_HANDLE = os.add_dll_directory(str(postgis_bin))
+
+        GDAL_LIBRARY_PATH = str(gdal_library)
+        GEOS_LIBRARY_PATH = str(geos_library)
 # ------------------------------------------------
 
 AUTH_USER_MODEL = 'pho_app.User'

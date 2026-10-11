@@ -88,7 +88,7 @@ class AuthAndRoleTests(TestCase):
             'payment_method': Order.PaymentMethod.VIETQR,
         })
         order = Order.objects.get(customer=customer)
-        self.assertRedirects(response, reverse('order_detail', args=[order.pk]))
+        self.assertRedirects(response, f"{reverse('order_detail', args=[order.pk])}?placed=1")
         self.assertEqual(order.total_amount, 110000)
         self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
         self.assertEqual(order.order_status, Order.OrderStatus.CART)
@@ -136,3 +136,62 @@ class AuthAndRoleTests(TestCase):
         self.assertEqual(first.table, table)
         self.assertEqual(second.status, QueueTicket.Status.WAITING)
         self.assertEqual(table.status, Table.Status.OCCUPIED)
+
+    def test_guest_can_take_queue_and_keep_ticket_in_session(self):
+        response = self.client.post(reverse('take_queue'), {'guest_name': 'Lan'})
+        self.assertEqual(response.status_code, 302)
+        ticket = QueueTicket.objects.get()
+        self.assertEqual(ticket.guest_name, 'Lan')
+        self.assertEqual(ticket.status, QueueTicket.Status.WAITING)
+        status = self.client.get(reverse('queue_status')).json()
+        self.assertTrue(status['active'])
+        self.assertEqual(status['ticket'], ticket.ticket_number)
+
+    def test_queue_cart_cannot_checkout_before_called(self):
+        customer = User.objects.create_user(username='wait-c', password='pass12345')
+        QueueTicket.objects.create(customer=customer, ticket_number='P-009')
+        item = MenuItem.objects.create(name='Phở Nam', base_price=45000, image_primary='menu_items/pho.jpg')
+        options = {}
+        for option in CustomizationOption.objects.all().order_by('category', 'id'):
+            options.setdefault(option.category, option)
+        self.client.login(username='wait-c', password='pass12345')
+        response = self.client.post(reverse('place_order'), {
+            'cart': json.dumps([{
+                'id': item.pk, 'qty': 1, 'toppings': [],
+                'customizations': [opt.pk for opt in options.values()],
+                'note': '',
+            }]),
+            'order_type': Order.OrderType.QUEUE_CART,
+            'payment_method': Order.PaymentMethod.VIETQR,
+        })
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertRedirects(response, reverse('menu'))
+
+    def test_delivery_fee_uses_distance_and_requires_vietqr(self):
+        customer = User.objects.create_user(username='ship-c', password='pass12345')
+        item = MenuItem.objects.create(name='Phở Gà', base_price=40000, image_primary='menu_items/pho.jpg')
+        options = {}
+        for option in CustomizationOption.objects.all().order_by('category', 'id'):
+            options.setdefault(option.category, option)
+        self.client.login(username='ship-c', password='pass12345')
+        quote = self.client.get(reverse('delivery_fee_quote'), {'lat': '10.7769', 'lng': '106.7009'}).json()
+        self.assertTrue(quote['ok'])
+        self.assertGreaterEqual(quote['fee'], 15000)
+        response = self.client.post(reverse('place_order'), {
+            'cart': json.dumps([{
+                'id': item.pk, 'qty': 1, 'toppings': [],
+                'customizations': [opt.pk for opt in options.values()],
+                'note': '',
+            }]),
+            'order_type': Order.OrderType.DELIVERY,
+            'payment_method': Order.PaymentMethod.CASH,
+            'delivery_address': '12 Nguyễn Huệ, Q1',
+            'customer_lat': '10.7769',
+            'customer_lng': '106.7009',
+        })
+        order = Order.objects.get(customer=customer)
+        self.assertRedirects(response, f"{reverse('order_detail', args=[order.pk])}?placed=1")
+        self.assertEqual(order.order_type, Order.OrderType.DELIVERY)
+        self.assertEqual(order.payment_method, Order.PaymentMethod.VIETQR)
+        self.assertGreater(order.delivery_fee, 0)
+        self.assertTrue(order.shipping_code)

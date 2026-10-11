@@ -31,3 +31,7 @@ def staff_required(view_func):
 
 def kitchen_required(view_func):
     return role_required(User.Role.KITCHEN, User.Role.ADMIN)(view_func)
+
+
+def kitchen_or_staff_required(view_func):
+    return role_required(User.Role.KITCHEN, User.Role.STAFF, User.Role.ADMIN)(view_func)
