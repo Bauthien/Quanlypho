@@ -13,6 +13,7 @@ urlpatterns = [
     path('thuc-don/don/<int:order_id>/', views.order_detail, name='order_detail'),
     path('hang-doi/lay-so/', views.take_queue_number, name='take_queue'),
     path('hang-doi/trang-thai/', views.queue_status, name='queue_status'),
+    path('giao-hang/phi/', views.delivery_fee_quote, name='delivery_fee_quote'),
     path('thanh-toan/vietqr/webhook/', views.vietqr_webhook, name='vietqr_webhook'),
     path('thanh-toan/vietqr/simulate/<int:order_id>/', views.simulate_vietqr_payment, name='simulate_vietqr_payment'),
 

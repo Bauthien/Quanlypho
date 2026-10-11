@@ -13,6 +13,12 @@
     <div class="stat-card"><span>Món trên menu</span><strong>{{ stats.menu_items }}</strong></div>
 </div>
 <div class="panel">
+    <h2>QR cửa quán (lấy số xếp hàng)</h2>
+    <p class="empty-state" style="padding-top:0;">Khách quét mã này khi hết bàn, không cần đăng nhập. In dán tại cửa.</p>
+    <p><a href="{{ door_qr_url }}" target="_blank">{{ door_qr_url }}</a></p>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ door_qr_url|urlencode }}" alt="QR cửa quán" width="180" height="180">
+</div>
+<div class="panel">
     <h2>Đơn gần đây</h2>
     <table class="data-table">
         <thead>

@@ -37,3 +37,8 @@ Thumbs.db
 # Coverage
 .coverage
 htmlcov/
+
+# Frontend scaffold leftovers (this repo is Django)
+node_modules/
+dist/
+scratch/

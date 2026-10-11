@@ -11,7 +11,7 @@
     {% for order in orders %}
     <article class="kitchen-card">
         <h2>{% if order.order_type == 'DELIVERY' %}<span class="delivery-label">DELIVERY</span>{% endif %} {{ order.order_code }} · {{ order.get_order_type_display }}</h2>
-        <p>{% if order.table %}BÀN {{ order.table.table_number }}{% endif %} · {{ order.customer.display_name|default:"Khách" }} · {{ order.get_order_status_display }}</p>
+        <p>{% if order.table %}BÀN {{ order.table.table_number }}{% endif %} · {% if order.customer %}{{ order.customer.display_name }}{% elif order.guest_name %}{{ order.guest_name }}{% else %}Khách{% endif %} · {{ order.get_order_status_display }}</p>
         {% for item in order.items.all %}
             <p style="font-size:1.25rem;font-weight:700;margin-top:10px;">{{ item.quantity }} × {{ item.menu_item.name }}</p>
             {% for topping in item.toppings.all %}<div class="kitchen-note">THÊM {{ topping.topping.name|upper }} × {{ topping.quantity }}</div>{% endfor %}

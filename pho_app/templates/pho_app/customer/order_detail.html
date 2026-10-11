@@ -20,7 +20,8 @@
             <strong>{{ item.item_price }}đ × {{ item.quantity }}</strong>
         </div>
         {% endfor %}
-        {% if order.delivery_fee %}<div class="order-line"><span>Phí giao hàng</span><strong>{{ order.delivery_fee }}đ</strong></div>{% endif %}
+        {% if order.delivery_fee %}<div class="order-line"><span>Phí giao hàng{% if order.delivery_distance_km %} ({{ order.delivery_distance_km }} km){% endif %}</span><strong>{{ order.delivery_fee }}đ</strong></div>{% endif %}
+        {% if order.shipping_code %}<div class="order-line"><span>Mã vận đơn</span><strong>{{ order.shipping_code }}</strong></div>{% endif %}
         <div class="order-line order-total"><span>Tổng thanh toán</span><strong>{{ grand_total }}đ</strong></div>
     </section>
 
@@ -64,8 +65,8 @@
     </script>
     {% endif %}
 
+{% if clear_cart %}
 <script>
-    // Xóa giỏ hàng ngay khi đơn hàng đã được tạo thành công
     for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
         if (key && key.startsWith('pho-order-cart-v1')) {
@@ -73,15 +74,7 @@
         }
     }
 </script>
-    
-
-
-<script>
-    // Xóa giỏ hàng sau khi đã tạo đơn thành công
-    
-    
-
-</script>
+{% endif %}
 
 {% if order.order_status != 'COMPLETED' and order.order_status != 'CANCELLED' %}<script>window.setTimeout(() => window.location.reload(), 12000);</script>{% endif %}
 {% endblock %}

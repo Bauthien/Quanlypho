@@ -22,23 +22,27 @@
 </section>
 
 <main class="main-container">
-    <div class="queue-banner">
+    <div class="queue-banner{% if tables_full or scanned_table_full or is_door %} queue-banner-full{% endif %}">
         <div>
             {% if active_ticket %}
                 <strong id="queueStatusText">Số {{ active_ticket.ticket_number }} · {{ active_ticket.get_status_display }}</strong>
-                <p class="empty-state" id="queueStatusHelp" style="padding:4px 0 0;">{% if active_ticket.table %}Mời bạn vào Bàn {{ active_ticket.table.table_number }}. Chọn “Giỏ xếp hàng” để đặt món.{% else %}Bạn có thể chọn món trước; chúng tôi sẽ gọi khi có bàn.{% endif %}</p>
+                <p class="empty-state" id="queueStatusHelp" style="padding:4px 0 0;">{% if active_ticket.status == 'CALLED' and active_ticket.table %}Đến lượt bạn, vui lòng vào quán và quét QR Bàn {{ active_ticket.table.table_number }}. Giỏ hàng đã chọn sẽ chuyển sang thanh toán.{% else %}Hiện đang hết bàn. Bạn có thể xem menu và bỏ món vào giỏ trước, chưa cần thanh toán.{% endif %}</p>
+            {% elif tables_full or scanned_table_full or is_door %}
+                <strong>Hiện đang hết bàn</strong>
+                <p class="empty-state" style="padding:4px 0 0;">Lấy số xếp hàng. Trong lúc chờ hãy xem menu và chọn món sẵn — thanh toán khi được gọi vào bàn.</p>
             {% else %}
-                <strong>Quán đang đông?</strong>
-                <p class="empty-state" style="padding:4px 0 0;">Lấy số xếp hàng, xem menu và chọn món sẵn trong lúc chờ.</p>
+                <strong>Tại bàn · Giao tận nơi · Xếp hàng</strong>
+                <p class="empty-state" style="padding:4px 0 0;">Còn bàn trống. Nếu đông, hệ thống sẽ báo hết bàn để bạn lấy số.</p>
             {% endif %}
         </div>
-        {% if not active_ticket and user.is_authenticated %}
-            <form method="post" action="{% url 'take_queue' %}">
+        {% if not active_ticket %}
+            <form method="post" action="{% url 'take_queue' %}" class="queue-take-form">
                 {% csrf_token %}
+                {% if not user.is_authenticated %}
+                <input class="form-input" type="text" name="guest_name" placeholder="Tên của bạn" maxlength="100" {% if tables_full or scanned_table_full or is_door %}required{% endif %}>
+                {% endif %}
                 <button class="ghost-btn primary" type="submit"><i class="fa-solid fa-ticket"></i> Lấy số xếp hàng</button>
             </form>
-        {% elif not user.is_authenticated %}
-            <a class="ghost-btn primary" href="{% url 'login' %}"><i class="fa-solid fa-right-to-bracket"></i> Đăng nhập để lấy số</a>
         {% endif %}
     </div>
 
@@ -91,14 +95,17 @@
                 <select class="form-input" name="table_id" id="tableSelect">
                     <option value="">-- Chọn số bàn --</option>
                     {% for table in tables %}
-                    <option value="{{ table.id }}" {% if selected_table == table.id|stringformat:"s" %}selected{% endif %}>Bàn {{ table.table_number }}{% if table.status == 'OCCUPIED' %} · bàn QR{% endif %}</option>
+                    <option value="{{ table.id }}" data-remaining="{{ table.remaining_cap }}" {% if selected_table == table.id|stringformat:"s" %}selected{% endif %}>Bàn {{ table.table_number }} · còn {{ table.remaining_cap }} tô{% if table.status == 'OCCUPIED' %} · đang có khách{% endif %}</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="form-group" id="addressField" style="display:none;">
                 <label>Địa chỉ giao</label>
                 <input class="form-input" type="text" name="delivery_address" placeholder="Nhập địa chỉ giao hàng" maxlength="500">
-                <small>Phí giao hàng: {{ delivery_flat_fee|default:"30.000" }}đ · Thanh toán online 100%</small>
+                <input type="hidden" name="customer_lat" id="customerLat">
+                <input type="hidden" name="customer_lng" id="customerLng">
+                <button class="ghost-btn" type="button" id="locateBtn" style="margin-top:8px;width:100%;"><i class="fa-solid fa-location-crosshairs"></i> Dùng vị trí hiện tại để tính phí ship</button>
+                <small id="deliveryFeeHint">Phí tạm tính {{ delivery_flat_fee|default:"30000" }}đ nếu không có GPS · Tối đa {{ delivery_max_km }} km · Thanh toán VietQR 100%</small>
             </div>
             <div class="form-group">
                 <label>Thanh toán</label>
@@ -127,6 +134,10 @@
     const customizationOptions = JSON.parse(document.getElementById('customization-data').textContent);
     const toppings = JSON.parse(document.getElementById('topping-data').textContent);
 </script>
-<script>const queueStatusUrl = "{% url 'queue_status' %}";</script>
+<script>
+    const queueStatusUrl = "{% url 'queue_status' %}";
+    const deliveryFeeQuoteUrl = "{% url 'delivery_fee_quote' %}";
+    const queueTicketStatus = "{{ active_ticket.status|default:'' }}";
+</script>
 <script src="{% static 'pho_app/js/menu.js' %}"></script>
 {% endblock %}

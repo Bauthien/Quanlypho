@@ -82,6 +82,7 @@ class QueueTicket(models.Model):
         CANCELLED = 'CANCELLED', 'Đã hủy'
 
     customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Khách hàng")
+    guest_name = models.CharField(max_length=100, blank=True, verbose_name="Tên khách (không đăng nhập)")
     ticket_number = models.CharField(max_length=20, verbose_name="Số thứ tự (VD: P-015)")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING, verbose_name="Trạng thái hàng đợi")
     table = models.ForeignKey('Table', on_delete=models.SET_NULL, null=True, blank=True, related_name='queue_tickets', verbose_name="Bàn được gọi")
@@ -192,6 +193,8 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
     delivery_address = models.TextField(blank=True, null=True, verbose_name="Địa chỉ giao hàng")
     customer_location = gis_models.PointField(srid=4326, blank=True, null=True, verbose_name="Tọa độ GPS khách hàng (PostGIS)")
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Phí giao hàng (VNĐ)")
+    delivery_distance_km = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True, verbose_name="Khoảng cách giao (km)")
+    shipping_code = models.CharField(max_length=50, blank=True, verbose_name="Mã vận đơn")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian tạo")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
