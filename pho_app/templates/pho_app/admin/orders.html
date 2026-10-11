@@ -1,0 +1,64 @@
+{% extends 'pho_app/admin/shell.html' %}
+{% load order_format %}
+{% block title %}Quản lý đơn hàng · Phở Nhà{% endblock %}
+{% block breadcrumb %}Đơn hàng{% endblock %}
+{% block admin_content %}
+<div class="page-heading">
+    <div><span class="order-eyebrow">VẬN HÀNH CỬA HÀNG</span><h1>Quản lý đơn hàng</h1><p>Theo dõi từng đơn, từ thanh toán đến khi phục vụ hoàn tất.</p></div>
+    <a class="secondary-btn" href="{% url 'admin_orders' %}{% if query_string %}?{{ query_string }}{% endif %}">{% include 'pho_app/includes/icon.html' with name='clock' %} Cập nhật danh sách</a>
+</div>
+<div class="order-section-caption"><strong>Số liệu theo bộ lọc</strong><span>Tính trên toàn bộ kết quả, bao gồm các trang khác</span></div>
+<section class="stats-grid order-stats" aria-label="Thống kê theo bộ lọc">
+    {% for label, value, icon, tone in stat_cards %}
+    <article class="stat-card order-stat-{{ tone }}"><div class="stat-top"><span>{{ label }}</span><span class="stat-icon">{% include 'pho_app/includes/icon.html' with name=icon %}</span></div><strong class="stat-value">{{ value }}</strong><span class="stat-bottom">Đơn hàng</span></article>
+    {% endfor %}
+    <article class="stat-card order-stat-paid"><div class="stat-top"><span>Tổng đã thanh toán</span><span class="stat-icon">{% include 'pho_app/includes/icon.html' with name='wallet' %}</span></div><strong class="stat-value order-paid-total">{{ stats.paid_total|vnd }}</strong><span class="stat-bottom">Đã thanh toán · Gồm phí giao hàng</span></article>
+</section>
+<section class="panel order-filter-panel" aria-labelledby="filter-heading">
+    <div class="panel-heading"><div><h2 id="filter-heading">Tìm và lọc đơn hàng</h2><p>Kết hợp nhiều điều kiện để tìm đúng đơn cần xử lý.</p></div>{% include 'pho_app/includes/icon.html' with name='search' %}</div>
+    {% if filter_form.errors %}<div class="order-filter-error" role="alert">Bộ lọc chưa hợp lệ. Vui lòng sửa các trường bên dưới để xem kết quả.</div>{% endif %}
+    <form method="get" action="{% url 'admin_orders' %}" class="order-filter-grid">
+        {% for field in filter_form %}
+        <div class="order-filter-field order-filter-{{ field.name }}">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+            {% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="order-filter-actions"><button class="primary-btn" type="submit">{% include 'pho_app/includes/icon.html' with name='search' %} Áp dụng bộ lọc</button><a class="secondary-btn" href="{% url 'admin_orders' %}">Xóa bộ lọc</a></div>
+    </form>
+</section>
+<section class="panel order-list-panel" aria-labelledby="order-list-heading">
+    <div class="panel-heading"><div><h2 id="order-list-heading">Danh sách đơn hàng <span class="badge">{{ stats.total }} đơn</span></h2><p>{% if stats.total %}Hiển thị {{ page_obj.start_index }}–{{ page_obj.end_index }} trong {{ stats.total }} đơn{% else %}Chưa có kết quả phù hợp{% endif %}</p></div><span class="badge">20 đơn / trang</span></div>
+    {% if page_obj %}
+    <p class="order-scroll-hint">Cuộn ngang bảng để xem đầy đủ thông tin và thao tác →</p>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="Bảng đơn hàng, cuộn ngang để xem các cột">
+        <table class="data-table order-management-table">
+            <thead><tr><th scope="col">Mã đơn / thời gian</th><th scope="col">Khách hàng</th><th scope="col">Loại đơn / bàn</th><th scope="col">Thanh toán</th><th scope="col">Trạng thái đơn</th><th scope="col" class="order-money">Tiền món</th><th scope="col" class="order-money">Phí giao</th><th scope="col" class="order-money">Tổng thanh toán</th><th scope="col">Thao tác</th></tr></thead>
+            <tbody>{% for order in page_obj %}
+                <tr>
+                    <td><a class="order-code-link" href="{% url 'admin_order_detail' order.pk %}">{{ order.order_code }}</a><time class="table-person" datetime="{{ order.created_at|date:'c' }}">{{ order.created_at|date:'d/m/Y H:i' }}</time></td>
+                    <td class="order-customer">{% if order.customer %}{{ order.customer.display_name }}{% else %}{{ order.guest_name|default:'Khách tại quán' }}{% endif %}</td>
+                    <td>{{ order.get_order_type_display }}{% if order.table %}<small class="table-person">Bàn {{ order.table.table_number }}</small>{% endif %}</td>
+                    <td><span class="order-payment-method">{{ order.get_payment_method_display }}</span><span class="badge status-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span></td>
+                    <td><span class="badge status-{{ order.order_status }}">{{ order.get_order_status_display }}</span></td>
+                    <td class="order-money">{{ order.total_amount|vnd }}</td><td class="order-money">{{ order.delivery_fee|vnd }}</td><td class="order-money"><strong>{{ order.grand_total|vnd }}</strong></td>
+                    <td><a class="ghost-btn" href="{% url 'admin_order_detail' order.pk %}" aria-label="Chi tiết đơn {{ order.order_code }}">Chi tiết {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></td>
+                </tr>
+            {% endfor %}</tbody>
+        </table>
+    </div>
+    <nav class="order-pagination" aria-label="Phân trang đơn hàng">
+        <span>Trang {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        <div class="order-page-links">
+            {% if page_obj.has_previous %}<a href="?{% if query_string %}{{ query_string }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" aria-label="Trang trước">←</a>{% endif %}
+            {% for number in page_links %}
+                {% if number == page_obj.paginator.ELLIPSIS %}<span>…</span>{% elif number == page_obj.number %}<span class="current" aria-current="page">{{ number }}</span>{% else %}<a href="?{% if query_string %}{{ query_string }}&amp;{% endif %}page={{ number }}" aria-label="Trang {{ number }}">{{ number }}</a>{% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}<a href="?{% if query_string %}{{ query_string }}&amp;{% endif %}page={{ page_obj.next_page_number }}" aria-label="Trang sau">→</a>{% endif %}
+        </div>
+    </nav>
+    {% else %}
+    <div class="empty-state">{% include 'pho_app/includes/icon.html' with name='orders' %}<strong>Không tìm thấy đơn hàng</strong><p>{% if filter_form.errors %}Kiểm tra lại bộ lọc để tiếp tục.{% else %}Thử đổi từ khóa hoặc mở rộng khoảng thời gian.{% endif %}</p><a class="text-button" href="{% url 'admin_orders' %}">Xóa bộ lọc và xem tất cả đơn</a></div>
+    {% endif %}
+</section>
+{% endblock %}

@@ -101,7 +101,12 @@ class QueueTicket(models.Model):
 # 3. MODULE QUẢN LÝ THỰC ĐƠN (MENU MANAGEMENT)
 # ==========================================
 class MenuItem(models.Model):
+    class Category(models.TextChoices):
+        PHO = 'PHO', 'Phở'
+        DRINK = 'DRINK', 'Đồ uống'
+
     name = models.CharField(max_length=255, verbose_name="Tên món (VD: Phở Tái)")
+    category = models.CharField(max_length=10, choices=Category.choices, default=Category.PHO, verbose_name='Nhóm món')
     base_price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá gốc (VNĐ)")
     is_active = models.BooleanField(default=True, verbose_name="Còn kinh doanh")
 
@@ -120,6 +125,7 @@ class MenuItem(models.Model):
 
 class Topping(models.Model):
     name = models.CharField(max_length=255, verbose_name="Tên Topping (VD: Trứng chần)")
+    is_active = models.BooleanField(default=True, verbose_name='Còn kinh doanh')
     price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá tính thêm (VNĐ)")
     image_thumbnail = models.ImageField(upload_to='toppings/', blank=True, null=True, verbose_name="Ảnh minh họa nhỏ")
 

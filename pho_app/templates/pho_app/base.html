@@ -3,53 +3,51 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Phở Gia Truyền{% endblock %}</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'assets/style.css' %}">
-    <link rel="stylesheet" href="{% static 'pho_app/css/app.css' %}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#9b3b2f">
+    <meta name="description" content="Phở Nhà — Đậm vị Việt, trọn yêu thương. Đặt món, nhận số xếp hàng và theo dõi đơn của bạn.">
+    <title>{% block title %}Phở Nhà · Đậm vị Việt{% endblock %}</title>
+    <link rel="icon" href="{% static 'pho_app/images/brand-mark.svg' %}" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'pho_app/css/figma-ui.css' %}">
+    {% block extra_css %}{% endblock %}
 </head>
-<body>
-    <header class="navbar">
-        <div class="nav-container">
-            <a class="logo" href="{% url 'home' %}" style="text-decoration:none;">
-                <i class="fa-solid fa-bowl-rice"></i>
-                <span>Phở <strong>Gia Truyền</strong></span>
-            </a>
-            {% block nav_center %}{% endblock %}
-            <div class="nav-actions">
-                {% if user.is_authenticated %}
-                    <span class="user-chip">{{ user.display_name }} · {{ user.get_role_display }}</span>
-                    {% if user.is_admin_role %}
-                        <a class="nav-link" href="{% url 'admin_home' %}"><i class="fa-solid fa-gauge"></i> Quản lý</a>
-                    {% elif user.is_staff_role %}
-                        <a class="nav-link" href="{% url 'staff_home' %}"><i class="fa-solid fa-cash-register"></i> Thu ngân</a>
-                    {% elif user.is_kitchen %}
-                        <a class="nav-link" href="{% url 'kitchen_home' %}"><i class="fa-solid fa-fire-burner"></i> Bếp</a>
+<body class="{% if user.is_authenticated and not user.is_customer %}operations-layout{% else %}customer-layout{% endif %} {% block body_class %}{% endblock %}">
+    {% include 'pho_app/includes/icons.html' %}
+    <a class="skip-link" href="#main-content">Đến nội dung chính</a>
+    {% if user.is_authenticated and not user.is_customer %}
+        {% include 'pho_app/includes/sidebar.html' %}
+        <button class="sidebar-scrim" data-close-sidebar aria-label="Đóng điều hướng" hidden></button>
+        <header class="topbar">
+            <div class="breadcrumb"><button class="icon-button mobile-menu" data-open-sidebar aria-controls="workspace-sidebar" aria-expanded="false" aria-label="Mở điều hướng">{% include 'pho_app/includes/icon.html' with name='menu' %}</button><span>Phở Nhà</span><span aria-hidden="true">/</span><strong>{% block breadcrumb %}Quản lý cửa hàng{% endblock %}</strong></div>
+            <div class="topbar-right"><span class="connection-label"><i></i> Phiên làm việc</span><span class="role-badge">{{ user.get_role_display }}</span><span class="avatar" aria-hidden="true">{{ user.display_name|first|upper }}</span></div>
+        </header>
+    {% else %}
+        <header class="customer-header">
+            <div class="customer-header-inner">
+                {% include 'pho_app/includes/brand.html' %}
+                <nav class="customer-nav" aria-label="Điều hướng khách hàng"><a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>Trang chủ</a><a href="{% url 'menu' %}" {% if request.resolver_match.url_name == 'menu' %}aria-current="page"{% endif %}>Thực đơn</a><a href="{% url 'menu' %}?door=1">Xếp hàng</a></nav>
+                <div class="header-actions">
+                    {% if user.is_authenticated %}
+                        <span class="header-user">Chào, {{ user.display_name }}</span>
+                        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="icon-button" type="submit" aria-label="Đăng xuất">{% include 'pho_app/includes/icon.html' with name='logout' %}</button></form>
+                    {% else %}
+                        <a class="login-link" href="{% url 'login' %}">Đăng nhập</a><a class="primary-btn register-link" href="{% url 'register' %}">Đăng ký</a>
                     {% endif %}
-                    <form class="logout-form" method="post" action="{% url 'logout' %}">
-                        {% csrf_token %}
-                        <button class="ghost-btn" type="submit"><i class="fa-solid fa-right-from-bracket"></i> Đăng xuất</button>
-                    </form>
-                {% else %}
-                    <a class="nav-link" href="{% url 'login' %}">Đăng nhập</a>
-                    <a class="nav-link primary" href="{% url 'register' %}">Đăng ký</a>
-                {% endif %}
-                {% block nav_extra %}{% endblock %}
+                    {% block nav_extra %}{% endblock %}
+                </div>
             </div>
-        </div>
-    </header>
-
-    {% if messages %}
-    <div class="flash-stack">
-        {% for message in messages %}
-            <div class="flash flash-{{ message.tags }}">{{ message }}</div>
-        {% endfor %}
-    </div>
+        </header>
     {% endif %}
-
-    {% block content %}{% endblock %}
+    <div class="application-content" id="main-content" tabindex="-1">
+        {% if messages %}<div class="flash-stack" aria-live="polite">{% for message in messages %}<div class="flash flash-{{ message.tags }}"><span>{{ message }}</span><button class="icon-button" data-dismiss-message aria-label="Đóng thông báo">{% include 'pho_app/includes/icon.html' with name='close' %}</button></div>{% endfor %}</div>{% endif %}
+        {% block content %}{% endblock %}
+        {% block footer %}<footer class="page-footer"><span>Phở Nhà <span aria-hidden="true">·</span> Đậm vị Việt, trọn yêu thương</span><span>{% now 'Y' %}</span></footer>{% endblock %}
+    </div>
+    <div id="uiToast" class="ui-toast" role="status" aria-live="polite" hidden></div>
+    <script src="{% static 'pho_app/js/ui.js' %}" defer></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

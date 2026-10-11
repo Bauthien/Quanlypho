@@ -32,6 +32,9 @@ urlpatterns = [
     path('bep/tem-giao-hang/<int:order_id>/', views.delivery_labels, name='delivery_labels'),
 
     path('quan-ly/', views.admin_home, name='admin_home'),
+    path('quan-ly/don-hang/', views.admin_orders, name='admin_orders'),
+    path('quan-ly/don-hang/<int:order_id>/', views.admin_order_detail, name='admin_order_detail'),
+    path('quan-ly/don-hang/<int:order_id>/xu-ly/', views.admin_order_action, name='admin_order_action'),
     path('quan-ly/ban/', views.admin_table_list, name='admin_table_list'),
     path('quan-ly/ban/them/', views.admin_table_create, name='admin_table_create'),
     path('quan-ly/ban/<int:table_id>/sua/', views.admin_table_edit, name='admin_table_edit'),

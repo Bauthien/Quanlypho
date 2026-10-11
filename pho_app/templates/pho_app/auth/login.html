@@ -1,32 +1,6 @@
-{% extends "pho_app/base.html" %}
-{% block title %}Đăng nhập - Phở Gia Truyền{% endblock %}
+{% extends 'pho_app/base.html' %}
+{% load static %}
+{% block title %}Đăng nhập · Phở Nhà{% endblock %}
 {% block content %}
-<section class="hero-banner">
-    <div class="hero-content">
-        <h1>Hương Vị Phở Việt Đậm Đà</h1>
-        <p>Đăng nhập để gọi món, lấy số xếp hàng hoặc vào khu vực làm việc</p>
-    </div>
-</section>
-<div class="auth-wrap">
-    <div class="auth-card">
-        <h1>Đăng nhập</h1>
-        <p class="lead">Tài khoản mới sau khi đăng ký mặc định là khách hàng.</p>
-        <form method="post">
-            {% csrf_token %}
-            {{ form.non_field_errors }}
-            <div class="form-group">
-                <label for="{{ form.username.id_for_label }}">Tên đăng nhập</label>
-                {{ form.username }}
-                {{ form.username.errors }}
-            </div>
-            <div class="form-group">
-                <label for="{{ form.password.id_for_label }}">Mật khẩu</label>
-                {{ form.password }}
-                {{ form.password.errors }}
-            </div>
-            <button class="checkout-btn" type="submit"><i class="fa-solid fa-right-to-bracket"></i> Đăng nhập</button>
-        </form>
-        <p class="auth-switch">Chưa có tài khoản? <a href="{% url 'register' %}">Đăng ký ngay</a></p>
-    </div>
-</div>
+<main class="auth-wrap"><aside class="auth-visual"><div><span class="eyebrow">ĐẬM VỊ VIỆT · TRỌN YÊU THƯƠNG</span><h2>Một tô phở ngon,<br>một ngày trọn vẹn.</h2><p>Chào mừng bạn về Phở Nhà. Hương vị thân quen, luôn sẵn sàng đón bạn.</p></div><img src="{% static 'pho_app/images/pho-dac-biet.jpg' %}" width="460" height="350" alt="Phở bò đặc biệt của Phở Nhà"></aside><section class="auth-card"><span class="eyebrow">CHÀO MỪNG BẠN TRỞ LẠI</span><h1>Đăng nhập</h1><p class="lead">Tiếp tục gọi món hoặc vào không gian làm việc của bạn.</p><form method="post">{% csrf_token %}{{ form.non_field_errors }}<div class="form-group"><label for="{{ form.username.id_for_label }}">Tên đăng nhập</label>{{ form.username }}{{ form.username.errors }}</div><div class="form-group"><label for="{{ form.password.id_for_label }}">Mật khẩu</label><div class="password-field">{{ form.password }}<button class="password-toggle" type="button" data-password-toggle="{{ form.password.id_for_label }}" aria-pressed="false">Hiện</button></div>{{ form.password.errors }}</div><button class="checkout-btn" type="submit">Đăng nhập {% include 'pho_app/includes/icon.html' with name='arrow' %}</button></form><p class="auth-switch">Chưa có tài khoản? <a href="{% url 'register' %}">Đăng ký ngay</a></p><p class="auth-switch"><a href="{% url 'menu' %}">Xem thực đơn trước</a></p></section></main>
 {% endblock %}

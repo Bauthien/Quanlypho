@@ -1,80 +1,16 @@
-{% extends "pho_app/base.html" %}
-{% block title %}Đơn {{ order.order_code }} - Phở Gia Truyền{% endblock %}
+{% extends 'pho_app/base.html' %}
+{% block title %}Đơn {{ order.order_code }} · Phở Nhà{% endblock %}
 {% block content %}
-<section class="hero-banner">
-    <div class="hero-content">
-        <h1>Đơn hàng {{ order.order_code }}</h1>
-        <p>{{ order.get_order_type_display }} · {{ order.get_order_status_display }} · {{ order.get_payment_status_display }}</p>
-    </div>
-</section>
-<main class="workspace order-detail">
-    <section class="panel">
-        <h2>Chi tiết món</h2>
-        {% for item in order.items.all %}
-        <div class="order-line">
-            <div><strong>{{ item.quantity }} × {{ item.menu_item.name }}</strong>
-                {% for choice in item.customizations.all %}<span>{{ choice.customization.name }}</span>{% endfor %}
-                {% for topping in item.toppings.all %}<span>+ {{ topping.topping.name }}</span>{% endfor %}
-                {% if item.note %}<span>Ghi chú: {{ item.note }}</span>{% endif %}
-            </div>
-            <strong>{{ item.item_price }}đ × {{ item.quantity }}</strong>
-        </div>
-        {% endfor %}
-        {% if order.delivery_fee %}<div class="order-line"><span>Phí giao hàng{% if order.delivery_distance_km %} ({{ order.delivery_distance_km }} km){% endif %}</span><strong>{{ order.delivery_fee }}đ</strong></div>{% endif %}
-        {% if order.shipping_code %}<div class="order-line"><span>Mã vận đơn</span><strong>{{ order.shipping_code }}</strong></div>{% endif %}
-        <div class="order-line order-total"><span>Tổng thanh toán</span><strong>{{ grand_total }}đ</strong></div>
-    </section>
-
-    {% if order.payment_status == 'PENDING' and order.payment_method == 'VIETQR' %}
-    <section class="panel payment-panel">
-        <h2>Thanh toán VietQR</h2>
-        {% if vietqr_image_url %}
-            <img class="payment-qr" src="{{ vietqr_image_url }}" alt="Mã QR thanh toán đơn {{ order.order_code }}">
-            <p>Quét mã bằng ứng dụng ngân hàng, thanh toán chính xác <strong>{{ grand_total }}đ</strong> và giữ nguyên nội dung chuyển khoản <strong>{{ order.order_code }}</strong>.</p>
-            <p class="muted">Đơn chỉ được chuyển xuống bếp sau khi hệ thống nhận webhook xác nhận thanh toán.</p>
-            <form id="simulate-payment-form" method="POST" action="{% url 'simulate_vietqr_payment' order.id %}">{% csrf_token %}<button type="submit" class="ghost-btn primary" style="margin-top: 10px; width: 100%;">Chuyển tiếp (Test - Đã chuyển khoản)</button></form>
-        {% else %}
-            <p>Chưa cấu hình tài khoản nhận VietQR. Đơn vẫn đang chờ thanh toán; quản trị viên cần cấu hình mã ngân hàng và số tài khoản trước khi vận hành.</p>
-        {% endif %}
-    </section>
-    {% elif order.payment_status == 'PENDING' %}
-    <section class="panel"><h2>Chờ thu ngân</h2><p>Vui lòng thanh toán {{ grand_total }}đ tại quầy. Đơn sẽ được gửi xuống bếp sau khi thu ngân xác nhận.</p></section>
-    {% elif order.order_status == 'READY' or order.order_status == 'COMPLETED' %}
-    <section class="panel" style="background-color: #d4edda; border-color: #c3e6cb;">
-        <h2 style="color: #155724;">Đơn hàng của bạn đã hoàn thành!</h2>
-        <p style="color: #155724;">Bếp đã chuẩn bị xong món. Vui lòng nhận món và thưởng thức!</p>
-        <a class="checkout-btn" href="{% url 'menu' %}">Về trang chủ</a>
-    </section>
-    
-    {% elif order.payment_status == 'PAID' %}
-    <section class="panel"><h2>Đã nhận thanh toán</h2><p>Đơn hiện ở trạng thái: <strong>{{ order.get_order_status_display }}</strong>. Tải lại trang để xem cập nhật mới nhất.</p><a class="ghost-btn primary" href="{% url 'order_detail' order.id %}">Cập nhật trạng thái</a></section>
-    {% else %}
-    <section class="panel"><h2>Thanh toán chưa thành công</h2><p>Đơn chưa được gửi xuống bếp. Vui lòng liên hệ thu ngân để được hỗ trợ.</p></section>
-    {% endif %}
-    <a class="nav-link" href="{% url 'menu' %}">Quay lại thực đơn</a>
-</main>
+<div class="customer-main"><div class="page-heading"><div><span class="eyebrow">PHỞ NHÀ ĐANG CHĂM CHÚT ĐƠN CỦA BẠN</span><h1>Đơn {{ order.order_code }}</h1><p>{{ order.get_order_type_display }}{% if order.table %} · Bàn {{ order.table.table_number }}{% endif %} · {{ order.created_at|date:'H:i, d/m/Y' }}</p></div><span class="badge status-{{ order.order_status }}">{{ order.get_order_status_display }}</span></div></div>
+<main class="customer-main order-detail"><section class="panel"><div class="panel-heading"><h2>Món ngon của bạn</h2><span class="badge status-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span></div>{% for item in order.items.all %}<div class="order-line"><div><strong>{{ item.quantity }} × {{ item.menu_item.name }}</strong>{% for choice in item.customizations.all %}<span>{{ choice.customization.name }}</span>{% endfor %}{% for topping in item.toppings.all %}<span>+ {{ topping.topping.name }}</span>{% endfor %}{% if item.note %}<span>Ghi chú: {{ item.note }}</span>{% endif %}</div><strong><span data-money="{{ item.item_price|stringformat:'.0f' }}">{{ item.item_price }}đ</span> × {{ item.quantity }}</strong></div>{% endfor %}{% if order.delivery_fee %}<div class="order-line"><span>Phí giao hàng{% if order.delivery_distance_km %} · {{ order.delivery_distance_km }} km{% endif %}</span><strong data-money="{{ order.delivery_fee|stringformat:'.0f' }}">{{ order.delivery_fee }}đ</strong></div>{% endif %}{% if order.delivery_address %}<div class="order-line"><div><strong>Địa chỉ nhận món</strong><span>{{ order.delivery_address }}</span>{% if order.shipping_code %}<span>Mã vận đơn: {{ order.shipping_code }}</span>{% endif %}</div></div>{% endif %}<div class="order-line order-total"><span>Tổng thanh toán</span><strong data-money="{{ grand_total|stringformat:'.0f' }}">{{ grand_total }}đ</strong></div><a class="text-button" href="{% url 'menu' %}">Quay lại thực đơn {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></section>
+<section class="panel payment-panel" data-qr-state>
+{% if order.order_status == 'CANCELLED' %}<span class="stat-icon tone-red">{% include 'pho_app/includes/icon.html' with name='close' %}</span><h2>Đơn hàng đã hủy</h2><p>Nếu cần hỗ trợ, bạn hãy liên hệ nhân viên tại quầy.</p>
+{% elif order.payment_status == 'PENDING' and order.payment_method == 'VIETQR' %}<span class="eyebrow">THANH TOÁN AN TOÀN, THUẬN TIỆN</span><h2>Quét mã VietQR để thanh toán</h2>{% if vietqr_image_url %}<img class="payment-qr" src="{{ vietqr_image_url }}" width="260" height="300" alt="QR thanh toán đơn {{ order.order_code }}" data-qr-image><div class="qr-unavailable" data-qr-error role="status" hidden>Chưa tải được VietQR. Vui lòng kiểm tra kết nối hoặc liên hệ thu ngân trước khi chuyển tiền.</div><p>Thanh toán đúng <strong data-money="{{ grand_total|stringformat:'.0f' }}">{{ grand_total }}đ</strong> và giữ nội dung chuyển khoản <strong>{{ order.order_code }}</strong>.</p><p>Đơn được chuyển đến bếp khi hệ thống nhận xác nhận thanh toán.</p><details><summary>Công cụ thử nghiệm thanh toán</summary><form method="post" action="{% url 'simulate_vietqr_payment' order.id %}">{% csrf_token %}<button class="secondary-btn full" type="submit">Mô phỏng thanh toán thành công</button></form></details>{% else %}<p>Tài khoản nhận VietQR chưa được cấu hình. Vui lòng liên hệ thu ngân.</p>{% endif %}
+{% elif order.payment_status == 'PENDING' %}<span class="stat-icon tone-orange">{% include 'pho_app/includes/icon.html' with name='wallet' %}</span><h2>Thanh toán tại quầy</h2><p>Mời bạn thanh toán <strong data-money="{{ grand_total|stringformat:'.0f' }}">{{ grand_total }}đ</strong> với thu ngân. Bếp sẽ nhận đơn ngay khi tiền được xác nhận.</p>
+{% elif order.order_status == 'READY' or order.order_status == 'COMPLETED' %}<span class="stat-icon tone-red">{% include 'pho_app/includes/icon.html' with name='bowl' %}</span><h2>Phở nóng đã sẵn sàng!</h2><p>Bếp đã chuẩn bị xong món của bạn. Chúc bạn một bữa ăn thật ngon miệng.</p><a class="primary-btn" href="{% url 'menu' %}">Về thực đơn</a>
+{% elif order.payment_status == 'PAID' %}<span class="stat-icon tone-orange">{% include 'pho_app/includes/icon.html' with name='chef' %}</span><h2>{% if order.order_status == 'DELIVERING' %}Món ngon đang trên đường{% else %}Bếp đang chăm chút món ngon{% endif %}</h2><p>Đã nhận thanh toán. Cảm ơn bạn đã chọn Phở Nhà.</p><div class="order-timeline"><div class="timeline-step active"><span>{% include 'pho_app/includes/icon.html' with name='check' %}</span>Đã thanh toán</div><div class="timeline-step active"><span>{% include 'pho_app/includes/icon.html' with name='chef' %}</span>Đang chuẩn bị</div><div class="timeline-step"><span>{% include 'pho_app/includes/icon.html' with name='bowl' %}</span>Sẵn sàng</div></div>
+{% else %}<h2>Thanh toán chưa thành công</h2><p>Vui lòng liên hệ thu ngân để được hỗ trợ.</p>{% endif %}
+<a class="text-button" href="{% url 'order_detail' order.id %}">{% include 'pho_app/includes/icon.html' with name='clock' %} Cập nhật trạng thái</a>
+</section></main>
 {% endblock %}
-{% block extra_js %}
-    {% if order.payment_status == 'PENDING' and order.payment_method == 'VIETQR' %}
-    <script>
-        // DEV: Tự động mô phỏng thanh toán VietQR thành công sau 8 giây để test luồng
-        setTimeout(() => {
-            const form = document.getElementById('simulate-payment-form');
-            if(form) form.submit();
-        }, 8000);
-    </script>
-    {% endif %}
-
-{% if clear_cart %}
-<script>
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('pho-order-cart-v1')) {
-            localStorage.removeItem(key);
-        }
-    }
-</script>
-{% endif %}
-
-{% if order.order_status != 'COMPLETED' and order.order_status != 'CANCELLED' %}<script>window.setTimeout(() => window.location.reload(), 12000);</script>{% endif %}
-{% endblock %}
+{% block extra_js %}{% if clear_cart %}<script>try { localStorage.removeItem('pho-order-cart-v1-{{ request.user.id|default:'guest'|escapejs }}'); } catch (_) {}</script>{% endif %}{% if order.order_status != 'COMPLETED' and order.order_status != 'CANCELLED' %}<script>setTimeout(() => { if (!document.hidden && !document.querySelector('details[open]')) location.replace(location.pathname); }, 12000);</script>{% endif %}{% endblock %}

@@ -1,42 +1,21 @@
-{% extends "pho_app/admin/shell.html" %}
-{% block title %}Quản lý - Phở Gia Truyền{% endblock %}
+{% extends 'pho_app/admin/shell.html' %}
+{% block title %}Tổng quan cửa hàng · Phở Nhà{% endblock %}
+{% block breadcrumb %}Tổng quan{% endblock %}
 {% block admin_content %}
-<div class="page-title">
-    <h1>Dashboard quản lý</h1>
+<div class="page-heading"><div><span class="eyebrow">MỘT NGÀY MỚI, MỘT KHỞI ĐẦU NGON</span><h1>Tổng quan cửa hàng {% include 'pho_app/includes/icon.html' with name='sun' class='heading-sun' %}</h1><p>Chào {{ user.display_name }}, cùng xem cửa hàng của bạn đang hoạt động thế nào nhé.</p></div><div class="heading-actions"><span class="secondary-btn">{% include 'pho_app/includes/icon.html' with name='calendar' %}{% now 'd/m/Y' %}</span><a class="primary-btn" href="#revenue-section">{% include 'pho_app/includes/icon.html' with name='chart' %} Xem báo cáo</a></div></div>
+<section class="stats-grid" aria-label="Chỉ số cửa hàng">
+    <article class="stat-card"><div class="stat-top"><span>Doanh thu đã thanh toán</span><span class="stat-icon tone-red">{% include 'pho_app/includes/icon.html' with name='wallet' %}</span></div><strong class="stat-value" data-money="{{ stats.revenue|stringformat:'.0f' }}">{{ stats.revenue }}đ</strong><span class="stat-bottom">Tổng tiền món từ trước đến nay</span></article>
+    <article class="stat-card"><div class="stat-top"><span>Tổng đơn hàng</span><span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='bag' %}</span></div><strong class="stat-value">{{ stats.orders }}</strong><span class="stat-bottom">{{ stats.dine_in }} tại bàn · {{ stats.delivery }} giao hàng đã trả tiền</span></article>
+    <article class="stat-card"><div class="stat-top"><span>Khách đang chờ</span><span class="stat-icon tone-orange">{% include 'pho_app/includes/icon.html' with name='users' %}</span></div><strong class="stat-value">{{ stats.waiting }} <small>khách</small></strong><span class="stat-bottom">Đón khách đúng lượt, phục vụ tận tâm</span></article>
+    <article class="stat-card"><div class="stat-top"><span>Thực đơn cửa hàng</span><span class="stat-icon tone-purple">{% include 'pho_app/includes/icon.html' with name='bowl' %}</span></div><strong class="stat-value">{{ stats.menu_items }} <small>món</small></strong><a class="stat-bottom" href="{% url 'admin_menu' %}">Chăm chút từng món ngon →</a></article>
+</section>
+<div class="dashboard-analytics" id="revenue-section">
+    <section class="panel"><div class="panel-heading"><div><h2>Biểu đồ doanh thu</h2><p>Tiền món từ đơn đã thanh toán · 7 ngày gần nhất</p></div><span class="badge">7 ngày qua</span></div><div class="chart-summary"><strong data-money="{{ weekly_revenue }}">{{ weekly_revenue }}đ</strong><span class="badge badge-green">{% include 'pho_app/includes/icon.html' with name='check' %} Đã thanh toán</span></div><svg id="revenueChart" class="revenue-chart" role="img" aria-label="Doanh thu tiền món trong 7 ngày qua, tổng {{ weekly_revenue }} đồng"></svg><div class="chart-axis">{% for day in revenue_chart %}<span>{{ day.label }}</span>{% endfor %}</div><div class="chart-caption"><span>● Doanh thu thực tế</span><span>Cập nhật khi tải trang</span></div><details class="chart-details"><summary>Xem số liệu theo ngày</summary><div class="table-scroll"><table class="data-table"><thead><tr><th>Ngày</th><th>Doanh thu tiền món</th></tr></thead><tbody>{% for day in revenue_chart %}<tr><td>{{ day.label }}</td><td data-money="{{ day.total }}">{{ day.total }}đ</td></tr>{% endfor %}</tbody></table></div></details></section>
+    <section class="panel"><div class="panel-heading"><div><h2>Đơn hàng theo kênh</h2><p>Tổng số đơn đã thanh toán</p></div></div><div class="channel-donut{% if not stats.dine_in and not stats.delivery %} is-empty{% endif %}" style="--channel-percent: {{ dine_in_percent }}%"><div><span>Dùng tại bàn</span><strong>{{ dine_in_percent }}%</strong></div></div><div class="channel-row"><span class="stat-icon tone-red">{% include 'pho_app/includes/icon.html' with name='table' %}</span><div><strong>Tại bàn</strong><small>Ấm lòng từng vị khách</small></div><strong>{{ stats.dine_in }} đơn</strong></div><div class="channel-row"><span class="stat-icon tone-orange">{% include 'pho_app/includes/icon.html' with name='truck' %}</span><div><strong>Giao tận nơi</strong><small>Gói trọn hương vị nhà</small></div><strong>{{ stats.delivery }} đơn</strong></div></section>
 </div>
-<div class="stats-grid">
-    <div class="stat-card"><span>Doanh thu đã thanh toán</span><strong>{{ stats.revenue }}đ</strong></div>
-    <div class="stat-card"><span>Đơn tại bàn</span><strong>{{ stats.dine_in }}</strong></div>
-    <div class="stat-card"><span>Đơn giao hàng</span><strong>{{ stats.delivery }}</strong></div>
-    <div class="stat-card"><span>Khách đang xếp hàng</span><strong>{{ stats.waiting }}</strong></div>
-    <div class="stat-card"><span>Người dùng</span><strong>{{ stats.users }}</strong></div>
-    <div class="stat-card"><span>Món trên menu</span><strong>{{ stats.menu_items }}</strong></div>
-</div>
-<div class="panel">
-    <h2>QR cửa quán (lấy số xếp hàng)</h2>
-    <p class="empty-state" style="padding-top:0;">Khách quét mã này khi hết bàn, không cần đăng nhập. In dán tại cửa.</p>
-    <p><a href="{{ door_qr_url }}" target="_blank">{{ door_qr_url }}</a></p>
-    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ door_qr_url|urlencode }}" alt="QR cửa quán" width="180" height="180">
-</div>
-<div class="panel">
-    <h2>Đơn gần đây</h2>
-    <table class="data-table">
-        <thead>
-            <tr><th>Mã</th><th>Loại</th><th>Thanh toán</th><th>Trạng thái</th><th>Tổng</th></tr>
-        </thead>
-        <tbody>
-            {% for order in recent_orders %}
-            <tr>
-                <td>{{ order.order_code }}</td>
-                <td>{{ order.get_order_type_display }}</td>
-                <td>{{ order.get_payment_status_display }}</td>
-                <td>{{ order.get_order_status_display }}</td>
-                <td>{{ order.total_amount }}đ</td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="5" class="empty-state">Chưa có đơn hàng.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="dashboard-bottom">
+    <section class="panel" id="recent-orders"><div class="panel-heading"><div><h2>Đơn hàng gần đây <span class="badge">{{ recent_orders|length }} đơn</span></h2><p>Mọi đơn hàng, từ thanh toán đến phục vụ</p></div><a class="text-button" href="{% url 'admin_orders' %}">Xem tất cả đơn →</a></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Mã đơn / khách</th><th>Hình thức</th><th>Thanh toán</th><th>Trạng thái</th><th>Tổng tiền món</th></tr></thead><tbody>{% for order in recent_orders %}<tr><td><a class="order-code-link" href="{% url 'admin_order_detail' order.pk %}">{{ order.order_code }}</a><small class="table-person">{% if order.customer %}{{ order.customer.display_name }}{% else %}{{ order.guest_name|default:'Khách tại quán' }}{% endif %}</small></td><td>{{ order.get_order_type_display }}{% if order.table %}<small class="table-person">Bàn {{ order.table.table_number }}</small>{% endif %}</td><td><span class="badge status-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span></td><td><span class="badge status-{{ order.order_status }}">{{ order.get_order_status_display }}</span></td><td><strong data-money="{{ order.total_amount|stringformat:'.0f' }}">{{ order.total_amount }}đ</strong></td></tr>{% empty %}<tr><td colspan="5"><div class="empty-state">{% include 'pho_app/includes/icon.html' with name='orders' %}<strong>Khởi đầu cho một ngày ngon</strong>Đơn mới sẽ xuất hiện tại đây.</div></td></tr>{% endfor %}</tbody></table></div></section>
+    <div><section class="panel"><div class="panel-heading"><h2>Hàng đợi hiện tại</h2><span class="badge badge-orange">{{ stats.waiting }}</span></div><div class="queue-list">{% for ticket in waiting_tickets %}<div class="queue-line"><span class="ticket-number">{{ ticket.ticket_number }}</span><div><strong>{% if ticket.customer %}{{ ticket.customer.display_name }}{% else %}{{ ticket.guest_name|default:'Khách' }}{% endif %}</strong><small>Đã chờ {{ ticket.created_at|timesince }}</small></div></div>{% empty %}<p class="empty-state">Mọi vị khách đều đã có chỗ.</p>{% endfor %}</div><a class="text-button" href="{% url 'staff_home' %}#queue">Điều phối hàng đợi {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></section><section class="panel qr-panel" data-qr-state><h2>Đón khách bằng mã QR</h2><p>In và đặt mã tại cửa quán để khách lấy số.</p><img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&amp;data={{ door_qr_url|urlencode }}" width="150" height="150" alt="Mã QR lấy số xếp hàng tại cửa" data-qr-image><div class="qr-unavailable" data-qr-error role="status" hidden>Chưa tải được mã QR. Kiểm tra kết nối Internet hoặc dùng liên kết lấy số bên dưới.</div><button class="text-button" type="button" data-copy-text="{{ door_qr_url }}">Sao chép liên kết lấy số {% include 'pho_app/includes/icon.html' with name='arrow' %}</button></section></div>
 </div>
 {% endblock %}
+{% block extra_js %}{{ revenue_chart|json_script:'revenue-chart-data' }}{% endblock %}
