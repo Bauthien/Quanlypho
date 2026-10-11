@@ -213,6 +213,16 @@ Xem tại [Thực đơn quản lý](http://127.0.0.1:8000/quan-ly/thuc-don/). M�
 
 Script QA mới: [test_catalog_tabs.cjs](C:/Users/HP/Quanlypho/scratch/test_catalog_tabs.cjs). Kết quả: [catalog-tabs-results.json](C:/Users/HP/Quanlypho/scratch/catalog-tabs-results.json). Ảnh: [desktop](C:/Users/HP/Quanlypho/scratch/ui-screenshots/catalog-tabs-1440.png), [điện thoại](C:/Users/HP/Quanlypho/scratch/ui-screenshots/catalog-tabs-390.png). Các request xóa trong trình duyệt được chặn trước khi tới server; kiểm thử xóa thật chạy trong database test riêng. Phiên đăng nhập QA được xóa sau kiểm tra.
 
+## Đồng bộ nhánh develop trước khi push — 11/10/2026
+
+- Giữ các cập nhật mới trên GitHub (`d7d70d6`, `7dcf5d5`) cùng giao diện, quản lý đơn hàng và thực đơn đã triển khai.
+- Hòa giải hai file giao diện khách hàng: giữ HTML/CSS/JS mới, không tự đổi hình thức đặt món khi vé được gọi và áp dụng điều kiện banner đơn hàng từ nhánh remote.
+- Giữ thay đổi backend cho phép địa chỉ hoặc GPS khi giao hàng; biểu mẫu cập nhật trường địa chỉ bắt buộc theo trạng thái GPS.
+- Bổ sung [0010_merge_menu_and_queue.py](C:/Users/HP/Quanlypho/pho_app/migrations/0010_merge_menu_and_queue.py) để nối hai migration `0009`; đã áp dụng thành công vào database cục bộ.
+- Sau khi đồng bộ: Django check và migration check đạt, **49/49 tests đạt**. Chrome xác nhận giữ hình thức giao hàng khi được gọi số, đặt giao hàng bằng GPS và yêu cầu địa chỉ khi từ chối GPS. Request đặt món QA được chặn trước server; kết quả nằm ở `scratch/merge-ui-results.json`.
+- Cập nhật README với cách tạo `.env` từ `.env.example` sau khi clone và số lượng kiểm thử hiện tại. `.env`, ảnh chụp và dữ liệu QA mới tiếp tục được Git bỏ qua.
+- Nhánh đích: [Bauthien/Quanlypho · develop](https://github.com/Bauthien/Quanlypho/tree/develop).
+
 ## Nhật ký
 
 Phần **Quản lý đơn hàng** bổ sung có tiến độ, bản đồ code, 39 bài kiểm thử và cách kiểm tra tại [TIEN_DO_QUAN_LY_DON_HANG.md](C:/Users/HP/Quanlypho/TIEN_DO_QUAN_LY_DON_HANG.md).

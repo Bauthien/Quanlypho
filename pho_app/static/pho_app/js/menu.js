@@ -130,7 +130,7 @@
     $('#addressField').hidden = !delivery;
     $('#tableField').hidden = delivery || queue;
     tableSelect.required = !delivery && !queue;
-    address.required = delivery;
+    address.required = delivery && !($('#customerLat').value && $('#customerLng').value);
     if (delivery) payment.value = 'VIETQR';
     payment.disabled = delivery;
     document.querySelectorAll('[data-order-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.orderMode === orderType.value)));
@@ -162,10 +162,12 @@
       $('#locateBtn').disabled = false;
       $('#customerLat').value = position.coords.latitude;
       $('#customerLng').value = position.coords.longitude;
+      updateMode();
       quoteFee(position.coords.latitude, position.coords.longitude);
     }, () => {
       $('#locateBtn').disabled = false;
       $('#customerLat').value = ''; $('#customerLng').value = '';
+      updateMode();
       quoteFee();
     }, { enableHighAccuracy: true, timeout: 8000 });
   });
@@ -185,7 +187,6 @@
         if (!option) { option = new Option('Chờ vào bàn', 'QUEUE_CART'); orderType.add(option); }
         option.textContent = `Chờ vào bàn · Bàn ${data.table}`;
         if (calledNow) {
-          orderType.value = 'QUEUE_CART'; updateMode();
           window.phoToast?.(`Đến lượt bạn! Mời vào Bàn ${data.table}.`);
           navigator.vibrate?.([200, 100, 200]);
         }
