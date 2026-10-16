@@ -961,8 +961,11 @@ def admin_table_delete(request, table_id):
 # ==========================================
 # REVIEWS - ĐÁNH GIÁ KHÁCH HÀNG
 # ==========================================
-@login_required
 def reviews_list(request):
+    if not request.user.is_authenticated:
+        messages.info(request, 'Vui lòng đăng nhập để xem đánh giá của bạn.')
+        return redirect('login')
+    
     if not request.user.is_customer():
         messages.error(request, 'Chỉ khách hàng mới xem danh sách đánh giá.')
         return redirect(request.user.home_url_name())
@@ -980,8 +983,11 @@ def reviews_list(request):
     })
 
 
-@login_required
 def review_form(request):
+    if not request.user.is_authenticated:
+        messages.info(request, 'Vui lòng đăng nhập để viết đánh giá.')
+        return redirect('login')
+    
     if not request.user.is_customer():
         messages.error(request, 'Chỉ khách hàng mới được đánh giá.')
         return redirect(request.user.home_url_name())

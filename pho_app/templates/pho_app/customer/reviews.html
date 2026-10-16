@@ -1,43 +1,119 @@
 {% extends "pho_app/base.html" %}
 {% load static %}
-{% block title %}Đánh giá của tôi - Phở Gia Truyền{% endblock %}
+{% block title %}Đánh giá của bạn - Phở Nhà{% endblock %}
 {% block content %}
 <style>
-    .reviews-container {
-        max-width: 900px;
-        margin: 40px auto;
-        padding: 0 20px;
+    body {
+        background: linear-gradient(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95)),
+                    url("{% static 'pho_app/images/pho-dac-biet.jpg' %}");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        background-repeat: no-repeat;
     }
     
-    .reviews-header {
-        text-align: center;
-        margin-bottom: 40px;
+    .reviews-page {
+        max-width: 1200px;
+        margin: 0 auto;
         padding: 40px 20px;
+    }
+    
+    .hero-banner {
         background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%);
-        border-radius: 20px;
+        border-radius: 24px;
+        padding: 60px 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         color: white;
-        box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
+        box-shadow: 0 15px 40px rgba(255, 107, 53, 0.3);
+        margin-bottom: 40px;
     }
     
-    .reviews-header h1 {
-        font-size: 2.5rem;
-        margin-bottom: 10px;
-        font-weight: 700;
+    .hero-content {
+        flex: 1;
+        padding-right: 40px;
     }
     
-    .reviews-header p {
-        font-size: 1.1rem;
+    .hero-title {
+        font-size: 3rem;
+        font-weight: 800;
+        margin-bottom: 16px;
+        line-height: 1.2;
+    }
+    
+    .hero-subtitle {
+        font-size: 1.2rem;
         opacity: 0.95;
+        margin-bottom: 32px;
+        line-height: 1.6;
+    }
+    
+    .hero-image {
+        width: 350px;
+        height: 250px;
+        object-fit: cover;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+    
+    .primary-btn {
+        background: white;
+        color: #FF6B35;
+        border: none;
+        padding: 16px 32px;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .primary-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    .reviews-section {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 80px 40px;
+    }
+    
+    .empty-icon {
+        font-size: 5rem;
+        margin-bottom: 24px;
+    }
+    
+    .empty-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 12px;
+    }
+    
+    .empty-subtitle {
+        font-size: 1.1rem;
+        color: #666;
+        margin-bottom: 32px;
     }
     
     .review-card {
-        background: white;
+        background: #f8f9fa;
         border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        padding: 32px;
+        margin-bottom: 24px;
         border-left: 4px solid #FF6B35;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        transition: all 0.3s ease;
     }
     
     .review-card:hover {
@@ -49,20 +125,20 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 16px;
-        padding-bottom: 16px;
-        border-bottom: 2px solid #f0f0f0;
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e0e0e0;
     }
     
     .reviewer-info {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 16px;
     }
     
     .reviewer-avatar {
-        width: 50px;
-        height: 50px;
+        width: 60px;
+        height: 60px;
         border-radius: 50%;
         background: linear-gradient(135deg, #FF6B35, #FF8E53);
         display: flex;
@@ -70,23 +146,24 @@
         justify-content: center;
         color: white;
         font-weight: bold;
-        font-size: 1.2rem;
+        font-size: 1.5rem;
     }
     
     .reviewer-name {
-        font-weight: 600;
+        font-weight: 700;
+        font-size: 1.2rem;
         color: #333;
     }
     
     .review-date {
         color: #999;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
     }
     
     .stars {
         color: #FFD700;
-        font-size: 1.5rem;
-        letter-spacing: 2px;
+        font-size: 1.8rem;
+        letter-spacing: 3px;
     }
     
     .stars .empty {
@@ -94,59 +171,47 @@
     }
     
     .review-item {
-        background: #f8f9fa;
+        background: white;
         border-radius: 12px;
-        padding: 16px;
-        margin-top: 12px;
+        padding: 20px;
+        margin-top: 16px;
     }
     
     .review-item-name {
-        font-weight: 600;
+        font-weight: 700;
         color: #FF6B35;
-        margin-bottom: 8px;
+        font-size: 1.1rem;
+        margin-bottom: 10px;
     }
     
     .review-comment {
         color: #555;
-        line-height: 1.6;
-        margin-top: 12px;
+        line-height: 1.8;
+        margin-top: 16px;
         font-style: italic;
-    }
-    
-    .write-review-btn {
-        background: linear-gradient(135deg, #FF6B35, #FF8E53);
-        color: white;
-        border: none;
-        padding: 14px 28px;
-        border-radius: 30px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
-    }
-    
-    .write-review-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+        padding: 16px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        border-left: 3px solid #FF6B35;
     }
     
     .pagination {
         display: flex;
         justify-content: center;
-        gap: 8px;
+        gap: 10px;
         margin-top: 40px;
         padding: 20px;
     }
     
     .pagination a, .pagination span {
-        padding: 10px 16px;
-        border-radius: 8px;
+        padding: 12px 20px;
+        border-radius: 10px;
         text-decoration: none;
         color: #333;
         background: white;
         border: 2px solid #e0e0e0;
         transition: all 0.3s ease;
+        font-weight: 600;
     }
     
     .pagination a:hover {
@@ -159,104 +224,103 @@
         background: #FF6B35;
         color: white;
         border-color: #FF6B35;
-        font-weight: 600;
     }
     
-    .empty-state {
-        text-align: center;
-        padding: 60px 20px;
-        color: #999;
-    }
-    
-    .empty-state-icon {
-        font-size: 4rem;
-        margin-bottom: 20px;
-    }
-    
-    .pho-pattern {
-        background: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.85)),
-                    url("{% static 'pho_app/images/pho-dac-biet.jpg' %}");
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        background-repeat: no-repeat;
+    @media (max-width: 768px) {
+        .hero-banner {
+            flex-direction: column;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .hero-content {
+            padding-right: 0;
+            margin-bottom: 30px;
+        }
+        
+        .hero-title {
+            font-size: 2rem;
+        }
+        
+        .hero-image {
+            width: 100%;
+            max-width: 350px;
+            height: 200px;
+        }
     }
 </style>
 
-<div class="reviews-container pho-pattern">
-    <div class="reviews-header">
-        <h1>🍜 Đánh Giá Của Bạn</h1>
-        <p>Chia sẻ trải nghiệm và giúp chúng tôi phục vụ tốt hơn</p>
+<div class="reviews-page">
+    <div class="hero-banner">
+        <div class="hero-content">
+            <h1 class="hero-title">Đánh Giá Của Bạn</h1>
+            <p class="hero-subtitle">Chia sẻ trải nghiệm và giúp chúng tôi phục vụ tốt hơn</p>
+            <a href="{% url 'review_form' %}" class="primary-btn">Viết Đánh Giá Mới</a>
+        </div>
+        <img src="{% static 'pho_app/images/pho-dac-biet.jpg' %}" alt="Phở đặc biệt" class="hero-image">
     </div>
     
-    <div style="text-align: center; margin-bottom: 30px;">
-        <a href="{% url 'review_form' %}" class="write-review-btn">
-            ✏️ Viết Đánh Giá Mới
-        </a>
+    <div class="reviews-section">
+        {% if page_obj %}
+            {% for review in page_obj %}
+            <div class="review-card">
+                <div class="review-header">
+                    <div class="reviewer-info">
+                        <div class="reviewer-avatar">
+                            {{ review.customer.display_name|first|upper }}
+                        </div>
+                        <div>
+                            <div class="reviewer-name">{{ review.customer.display_name }}</div>
+                            <div class="review-date">{{ review.created_at|date:"d/m/Y H:i" }}</div>
+                        </div>
+                    </div>
+                    <div class="stars">
+                        {% for i in "12345" %}
+                            {% if i|add:0 <= review.rating %}
+                                ★
+                            {% else %}
+                                <span class="empty">★</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                {% if review.menu_item %}
+                <div class="review-item">
+                    <div class="review-item-name">🍲 {{ review.menu_item.name }}</div>
+                    <div style="font-size: 0.95rem; color: #666;">
+                        Giá: {{ review.menu_item.base_price|add:0 }}đ
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if review.comment %}
+                <div class="review-comment">
+                    "{{ review.comment }}"
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            
+            <div class="pagination">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}">← Trước</a>
+                {% endif %}
+                
+                <span class="current">Trang {{ page_obj.number }}</span>
+                
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}">Tiếp →</a>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">⭐</div>
+                <h3 class="empty-title">Chưa có đánh giá nào</h3>
+                <p class="empty-subtitle">Hãy là người đầu tiên chia sẻ trải nghiệm!</p>
+                <a href="{% url 'review_form' %}" class="primary-btn">Viết Đánh Giá</a>
+            </div>
+        {% endif %}
     </div>
-    
-    {% if page_obj %}
-        {% for review in page_obj %}
-        <div class="review-card">
-            <div class="review-header">
-                <div class="reviewer-info">
-                    <div class="reviewer-avatar">
-                        {{ review.customer.display_name|first|upper }}
-                    </div>
-                    <div>
-                        <div class="reviewer-name">{{ review.customer.display_name }}</div>
-                        <div class="review-date">{{ review.created_at|date:"d/m/Y H:i" }}</div>
-                    </div>
-                </div>
-                <div class="stars">
-                    {% for i in "12345" %}
-                        {% if i|add:0 <= review.rating %}
-                            ★
-                        {% else %}
-                            <span class="empty">★</span>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-            </div>
-            
-            {% if review.menu_item %}
-            <div class="review-item">
-                <div class="review-item-name">🍲 {{ review.menu_item.name }}</div>
-                <div class="stars" style="font-size: 1rem;">
-                    {{ review.rating }}/5 sao
-                </div>
-            </div>
-            {% endif %}
-            
-            {% if review.comment %}
-            <div class="review-comment">
-                "{{ review.comment }}"
-            </div>
-            {% endif %}
-        </div>
-        {% endfor %}
-        
-        <div class="pagination">
-            {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}">← Trước</a>
-            {% endif %}
-            
-            <span class="current">Trang {{ page_obj.number }}</span>
-            
-            {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}">Tiếp →</a>
-            {% endif %}
-        </div>
-    {% else %}
-        <div class="empty-state">
-            <div class="empty-state-icon">⭐</div>
-            <h3>Chưa có đánh giá nào</h3>
-            <p>Hãy là người đầu tiên chia sẻ trải nghiệm!</p>
-            <br>
-            <a href="{% url 'review_form' %}" class="write-review-btn">
-                ✏️ Viết Đánh Giá
-            </a>
-        </div>
-    {% endif %}
 </div>
 {% endblock %}

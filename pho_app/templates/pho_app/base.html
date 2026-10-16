@@ -28,7 +28,7 @@
         <header class="customer-header">
             <div class="customer-header-inner">
                 {% include 'pho_app/includes/brand.html' %}
-                <nav class="customer-nav" aria-label="Điều hướng khách hàng"><a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>Trang chủ</a><a href="{% url 'menu' %}" {% if request.resolver_match.url_name == 'menu' %}aria-current="page"{% endif %}>Thực đơn</a><a href="{% url 'menu' %}?door=1">Xếp hàng</a>{% if user.is_authenticated and user.is_customer %}<a href="{% url 'reviews_list' %}" {% if request.resolver_match.url_name == 'reviews_list' %}aria-current="page"{% endif %}>Đánh giá</a>{% endif %}</nav>
+                <nav class="customer-nav" aria-label="Điều hướng khách hàng"><a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}aria-current="page"{% endif %}>Trang chủ</a><a href="{% url 'menu' %}" {% if request.resolver_match.url_name == 'menu' %}aria-current="page"{% endif %}>Thực đơn</a><a href="{% url 'menu' %}?door=1">Xếp hàng</a><a href="{% url 'reviews_list' %}" {% if request.resolver_match.url_name == 'reviews_list' %}aria-current="page"{% endif %}>Đánh giá</a></nav>
                 <div class="header-actions">
                     {% if user.is_authenticated %}
                         <span class="header-user">Chào, {{ user.display_name }}</span>
