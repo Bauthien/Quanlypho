@@ -48,4 +48,9 @@ urlpatterns = [
     path('quan-ly/topping/them/', views.admin_topping_create, name='admin_topping_create'),
     path('quan-ly/topping/<int:topping_id>/sua/', views.admin_topping_edit, name='admin_topping_edit'),
     path('quan-ly/topping/<int:topping_id>/xoa/', views.admin_topping_delete, name='admin_topping_delete'),
+
+    path('danh-gia/', views.reviews_list, name='reviews_list'),
+    path('danh-gia/viet/', views.review_form, name='review_form'),
+    path('danh-gia/submit/', views.submit_review, name='submit_review'),
+    path('quan-ly/danh-gia/', views.review_list_all, name='review_list_all'),
 ]

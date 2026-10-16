@@ -296,3 +296,24 @@ class InventoryTransaction(models.Model):
 
     def __str__(self):
         return f"[{self.get_transaction_type_display()}] {self.ingredient.name}: {self.quantity_changed} {self.ingredient.unit}"
+
+
+# ==========================================
+# 6. MODULE ĐÁNH GIÁ KHÁCH HÀNG (REVIEWS)
+# ==========================================
+class Review(models.Model):
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews', verbose_name="Khách hàng")
+    menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE, related_name='reviews', blank=True, null=True, verbose_name="Món ăn (nếu có)")
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='reviews', blank=True, null=True, verbose_name="Đơn hàng")
+    rating = models.IntegerField(choices=[(1, '1★'), (2, '2★'), (3, '3★'), (4, '4★'), (5, '5★')], verbose_name="Đánh giá")
+    comment = models.TextField(blank=True, verbose_name="Nhận xét")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian")
+
+    class Meta:
+        verbose_name = "Đánh giá"
+        verbose_name_plural = "Danh sách Đánh giá"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        item_name = self.menu_item.name if self.menu_item else 'Đơn hàng'
+        return f"{self.customer.display_name} - {item_name} - {self.rating}★"

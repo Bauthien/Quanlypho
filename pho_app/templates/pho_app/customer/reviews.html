@@ -1,0 +1,258 @@
+{% extends "pho_app/base.html" %}
+{% load static %}
+{% block title %}Đánh giá của tôi - Phở Gia Truyền{% endblock %}
+{% block content %}
+<style>
+    .reviews-container {
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+    
+    .reviews-header {
+        text-align: center;
+        margin-bottom: 40px;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%);
+        border-radius: 20px;
+        color: white;
+        box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
+    }
+    
+    .reviews-header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+    
+    .reviews-header p {
+        font-size: 1.1rem;
+        opacity: 0.95;
+    }
+    
+    .review-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+        border-left: 4px solid #FF6B35;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .review-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
+    }
+    
+    .review-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+    
+    .reviewer-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .reviewer-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #FF6B35, #FF8E53);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+    
+    .reviewer-name {
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .review-date {
+        color: #999;
+        font-size: 0.9rem;
+    }
+    
+    .stars {
+        color: #FFD700;
+        font-size: 1.5rem;
+        letter-spacing: 2px;
+    }
+    
+    .stars .empty {
+        color: #e0e0e0;
+    }
+    
+    .review-item {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 12px;
+    }
+    
+    .review-item-name {
+        font-weight: 600;
+        color: #FF6B35;
+        margin-bottom: 8px;
+    }
+    
+    .review-comment {
+        color: #555;
+        line-height: 1.6;
+        margin-top: 12px;
+        font-style: italic;
+    }
+    
+    .write-review-btn {
+        background: linear-gradient(135deg, #FF6B35, #FF8E53);
+        color: white;
+        border: none;
+        padding: 14px 28px;
+        border-radius: 30px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+    }
+    
+    .write-review-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+    }
+    
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 40px;
+        padding: 20px;
+    }
+    
+    .pagination a, .pagination span {
+        padding: 10px 16px;
+        border-radius: 8px;
+        text-decoration: none;
+        color: #333;
+        background: white;
+        border: 2px solid #e0e0e0;
+        transition: all 0.3s ease;
+    }
+    
+    .pagination a:hover {
+        background: #FF6B35;
+        color: white;
+        border-color: #FF6B35;
+    }
+    
+    .pagination .current {
+        background: #FF6B35;
+        color: white;
+        border-color: #FF6B35;
+        font-weight: 600;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+    }
+    
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 20px;
+    }
+    
+    .pho-pattern {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath d='M30 5c-14 0-25 11-25 25s11 25 25 25 25-11 25-25-25-11-25-25-25zm0 5c11 0 20 9 20 20s-9 20-20 20-9 20-20-20 9-20 20-20z' fill='%23FF6B35' opacity='0.05'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+    }
+</style>
+
+<div class="reviews-container pho-pattern">
+    <div class="reviews-header">
+        <h1>🍜 Đánh Giá Của Bạn</h1>
+        <p>Chia sẻ trải nghiệm và giúp chúng tôi phục vụ tốt hơn</p>
+    </div>
+    
+    <div style="text-align: center; margin-bottom: 30px;">
+        <a href="{% url 'review_form' %}" class="write-review-btn">
+            ✏️ Viết Đánh Giá Mới
+        </a>
+    </div>
+    
+    {% if page_obj %}
+        {% for review in page_obj %}
+        <div class="review-card">
+            <div class="review-header">
+                <div class="reviewer-info">
+                    <div class="reviewer-avatar">
+                        {{ review.customer.display_name|first|upper }}
+                    </div>
+                    <div>
+                        <div class="reviewer-name">{{ review.customer.display_name }}</div>
+                        <div class="review-date">{{ review.created_at|date:"d/m/Y H:i" }}</div>
+                    </div>
+                </div>
+                <div class="stars">
+                    {% for i in "12345" %}
+                        {% if i|add:0 <= review.rating %}
+                            ★
+                        {% else %}
+                            <span class="empty">★</span>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            
+            {% if review.menu_item %}
+            <div class="review-item">
+                <div class="review-item-name">🍲 {{ review.menu_item.name }}</div>
+                <div class="stars" style="font-size: 1rem;">
+                    {{ review.rating }}/5 sao
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if review.comment %}
+            <div class="review-comment">
+                "{{ review.comment }}"
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}">← Trước</a>
+            {% endif %}
+            
+            <span class="current">Trang {{ page_obj.number }}</span>
+            
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}">Tiếp →</a>
+            {% endif %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-state-icon">⭐</div>
+            <h3>Chưa có đánh giá nào</h3>
+            <p>Hãy là người đầu tiên chia sẻ trải nghiệm!</p>
+            <br>
+            <a href="{% url 'review_form' %}" class="write-review-btn">
+                ✏️ Viết Đánh Giá
+            </a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

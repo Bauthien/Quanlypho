@@ -13,7 +13,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, F, Prefetch, Q, Sum
+from django.db.models import Avg, Count, F, Prefetch, Q, Sum
 from django.db.models.functions import TruncDate
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -31,6 +31,7 @@ from .models import (
     OrderItemCustomization,
     OrderItemTopping,
     QueueTicket,
+    Review,
     Table,
     Topping,
     User,
@@ -955,3 +956,99 @@ def admin_table_delete(request, table_id):
     table.delete()
     messages.success(request, 'Đã xóa bàn.')
     return redirect('admin_table_list')
+
+
+# ==========================================
+# REVIEWS - ĐÁNH GIÁ KHÁCH HÀNG
+# ==========================================
+@login_required
+def reviews_list(request):
+    if not request.user.is_customer():
+        messages.error(request, 'Chỉ khách hàng mới xem danh sách đánh giá.')
+        return redirect(request.user.home_url_name())
+    
+    reviews = Review.objects.filter(customer=request.user).select_related('menu_item', 'order').order_by('-created_at')
+    
+    # Phân trang - 10 đánh giá mỗi trang
+    paginator = Paginator(reviews, 10)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'pho_app/customer/reviews.html', {
+        'page_obj': page_obj,
+        'paginator': paginator,
+    })
+
+
+@login_required
+def review_form(request):
+    if not request.user.is_customer():
+        messages.error(request, 'Chỉ khách hàng mới được đánh giá.')
+        return redirect(request.user.home_url_name())
+    
+    # Lấy menu items và recent orders cho dropdown
+    menu_items = MenuItem.objects.all().order_by('name')
+    recent_orders = Order.objects.filter(customer=request.user).order_by('-created_at')[:10]
+    
+    return render(request, 'pho_app/customer/review_form.html', {
+        'menu_items': menu_items,
+        'recent_orders': recent_orders,
+    })
+
+
+@login_required
+def review_list_all(request):
+    # Hiển thị tất cả đánh giá cho admin
+    if not request.user.is_admin_role():
+        messages.error(request, 'Chỉ quản lý mới xem tất cả đánh giá.')
+        return redirect(request.user.home_url_name())
+    
+    reviews = Review.objects.select_related('customer', 'menu_item', 'order').order_by('-created_at')
+    
+    # Tính trung bình đánh giá
+    avg_rating = Review.objects.aggregate(avg=Avg('rating'))['avg'] or 0
+    
+    paginator = Paginator(reviews, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'pho_app/admin/reviews.html', {
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'avg_rating': round(avg_rating, 1),
+    })
+
+
+@login_required
+@require_POST
+def submit_review(request):
+    if not request.user.is_customer():
+        messages.error(request, 'Chỉ khách hàng mới được đánh giá.')
+        return redirect(request.user.home_url_name())
+    
+    rating = request.POST.get('rating')
+    comment = request.POST.get('comment', '').strip()[:500]
+    menu_item_id = request.POST.get('menu_item_id')
+    order_id = request.POST.get('order_id')
+    
+    if not rating or not rating.isdigit() or not 1 <= int(rating) <= 5:
+        messages.error(request, 'Vui lòng chọn đánh giá từ 1 đến 5 sao.')
+        return redirect('reviews_list')
+    
+    try:
+        menu_item = MenuItem.objects.get(pk=menu_item_id) if menu_item_id else None
+        order = Order.objects.get(pk=order_id, customer=request.user) if order_id else None
+    except (MenuItem.DoesNotExist, Order.DoesNotExist):
+        messages.error(request, 'Món ăn hoặc đơn hàng không hợp lệ.')
+        return redirect('reviews_list')
+    
+    Review.objects.create(
+        customer=request.user,
+        menu_item=menu_item,
+        order=order,
+        rating=int(rating),
+        comment=comment,
+    )
+    
+    messages.success(request, 'Cảm ơn bạn đã đánh giá!')
+    return redirect('reviews_list')

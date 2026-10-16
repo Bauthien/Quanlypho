@@ -9,6 +9,7 @@
         <a href="{% url 'admin_menu' %}" {% if 'menu' in request.resolver_match.url_name or 'topping' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='bowl' %}<span>Thực đơn & topping</span></a>
         <a href="{% url 'admin_table_list' %}" {% if 'table' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='table' %}<span>Sơ đồ bàn & QR</span></a>
         <a href="{% url 'admin_users' %}" {% if 'users' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='users' %}<span>Người dùng & vai trò</span></a>
+        <a href="{% url 'review_list_all' %}" {% if 'review' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='star' %}<span>Đánh giá khách hàng</span></a>
         {% endif %}
         {% if user.is_staff_role or user.is_admin_role %}
         <a href="{% url 'staff_home' %}" {% if request.resolver_match.url_name == 'staff_home' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='wallet' %}<span>Thu ngân</span></a>

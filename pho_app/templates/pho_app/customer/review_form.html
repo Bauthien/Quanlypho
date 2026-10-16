@@ -1,0 +1,209 @@
+{% extends "pho_app/base.html" %}
+{% load static %}
+{% block title %}Viết Đánh Giá - Phở Gia Truyền{% endblock %}
+{% block content %}
+<style>
+    .review-container {
+        max-width: 700px;
+        margin: 40px auto;
+        padding: 0 20px;
+    }
+    
+    .review-header {
+        text-align: center;
+        margin-bottom: 40px;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 100%);
+        border-radius: 20px;
+        color: white;
+        box-shadow: 0 10px 30px rgba(255, 107, 53, 0.3);
+    }
+    
+    .review-header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+    
+    .review-form {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    }
+    
+    .form-group {
+        margin-bottom: 24px;
+    }
+    
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+        font-size: 1rem;
+    }
+    
+    .form-input {
+        width: 100%;
+        padding: 14px 16px;
+        border: 2px solid #e0e0e0;
+        border-radius: 10px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        box-sizing: border-box;
+    }
+    
+    .form-input:focus {
+        outline: none;
+        border-color: #FF6B35;
+        box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    }
+    
+    .form-input::placeholder {
+        color: #999;
+    }
+    
+    textarea.form-input {
+        min-height: 120px;
+        resize: vertical;
+    }
+    
+    .rating-group {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin: 20px 0;
+    }
+    
+    .rating-option {
+        text-align: center;
+        cursor: pointer;
+        transition: transform 0.2s ease;
+    }
+    
+    .rating-option:hover {
+        transform: scale(1.1);
+    }
+    
+    .rating-option input {
+        display: none;
+    }
+    
+    .rating-star {
+        font-size: 3rem;
+        color: #e0e0e0;
+        transition: color 0.2s ease;
+    }
+    
+    .rating-option:hover .rating-star {
+        color: #FFD700;
+    }
+    
+    .rating-option input:checked + .rating-star {
+        color: #FFD700;
+    }
+    
+    .rating-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-top: 4px;
+    }
+    
+    .submit-btn {
+        width: 100%;
+        background: linear-gradient(135deg, #FF6B35, #FF8E53);
+        color: white;
+        border: none;
+        padding: 16px;
+        border-radius: 12px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+    }
+    
+    .submit-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+    }
+    
+    .pho-pattern {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cpath d='M30 5c-14 0-25 11-25 25s11 25 25 25 25-11 25-25-25-11-25-25-25zm0 5c11 0 20 9 20 20s-9 20-20 20-9 20-20 20 9-20 20-20z' fill='%23FF6B35' opacity='0.05'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+    }
+</style>
+
+<div class="review-container pho-pattern">
+    <div class="review-header">
+        <h1>⭐ Viết Đánh Giá</h1>
+        <p>Chia sẻ trải nghiệm của bạn với chúng tôi</p>
+    </div>
+    
+    <form method="post" action="{% url 'submit_review' %}" class="review-form">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label>Chọn món ăn hoặc đơn hàng để đánh giá</label>
+            <select class="form-input" name="menu_item_id" id="menu_item_select">
+                <option value="">-- Chọn món ăn (tùy chọn) --</option>
+                {% for item in menu_items %}
+                <option value="{{ item.id }}">{{ item.name }} - {{ item.base_price|add:0 }}đ</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Hoặc chọn đơn hàng gần nhất</label>
+            <select class="form-input" name="order_id" id="order_select">
+                <option value="">-- Chọn đơn hàng (tùy chọn) --</option>
+                {% for order in recent_orders %}
+                <option value="{{ order.id }}">Đơn {{ order.order_code }} - {{ order.created_at|date:"d/m/Y H:i" }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label>Đánh giá của bạn <span style="color: #FF6B35;">*</span></label>
+            <div class="rating-group">
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="1" required>
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Kém</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="2">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Tạm ổn</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="3">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Bình thường</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="4">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Ngon</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="5">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Rất ngon</div>
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Nhận xét của bạn</label>
+            <textarea class="form-input" name="comment" placeholder="Món ăn ngon, phục vụ nhanh, không gian đẹp..." maxlength="500"></textarea>
+            <small style="color: #999;">Tối đa 500 ký tự</small>
+        </div>
+        
+        <button type="submit" class="submit-btn">
+            Gửi Đánh Giá →
+        </button>
+    </form>
+</div>
+{% endblock %}
