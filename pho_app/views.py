@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -25,12 +25,15 @@ from django.views.decorators.http import require_POST
 from .forms import MenuItemForm, OrderFilterForm, RegisterForm, StyledAuthForm, ToppingForm, UserRoleForm
 from .models import (
     CustomizationOption,
+    Ingredient,
+    InventoryTransaction,
     MenuItem,
     Order,
     OrderItem,
     OrderItemCustomization,
     OrderItemTopping,
     QueueTicket,
+    Recipe,
     Review,
     Table,
     Topping,
@@ -332,17 +335,21 @@ def place_order(request):
         if len(topping_ids) != len(set(topping_ids)) or len(customization_ids) != len(set(customization_ids)):
             continue
         selected_options = list(CustomizationOption.objects.filter(pk__in=customization_ids))
-        if len({option.category for option in selected_options}) != len(selected_options):
-            messages.error(request, f'Chỉ chọn một tùy chọn cho mỗi nhóm của món {menu_item.name}.')
-            return redirect('menu')
-        required_categories = {choice[0] for choice in CustomizationOption.Category.choices}
-        if {option.category for option in selected_options} != required_categories:
-            messages.error(request, f'Vui lòng chọn đủ nước dùng, rau/gia và bánh phở cho món {menu_item.name}.')
-            return redirect('menu')
-        selected_toppings = list(Topping.objects.filter(pk__in=topping_ids, is_active=True))
-        if len(selected_toppings) != len(topping_ids) or len(selected_options) != len(customization_ids):
-            messages.error(request, 'Tùy chọn món không hợp lệ. Vui lòng tải lại thực đơn.')
-            return redirect('menu')
+        if menu_item.category == MenuItem.Category.PHO:
+            if len({option.category for option in selected_options}) != len(selected_options):
+                messages.error(request, f'Chỉ chọn một tùy chọn cho mỗi nhóm của món {menu_item.name}.')
+                return redirect('menu')
+            required_categories = {choice[0] for choice in CustomizationOption.Category.choices}
+            if {option.category for option in selected_options} != required_categories:
+                messages.error(request, f'Vui lòng chọn đủ nước dùng, rau/giá và bánh phở cho món {menu_item.name}.')
+                return redirect('menu')
+            selected_toppings = list(Topping.objects.filter(pk__in=topping_ids, is_active=True))
+            if len(selected_toppings) != len(topping_ids) or len(selected_options) != len(customization_ids):
+                messages.error(request, 'Tùy chọn món không hợp lệ. Vui lòng tải lại thực đơn.')
+                return redirect('menu')
+        else:
+            selected_options = []
+            selected_toppings = []
         note = str(row.get('note', '')).strip()[:500]
         item_total = menu_item.base_price + sum((topping.price for topping in selected_toppings), Decimal('0'))
         resolved_items.append((menu_item, quantity, selected_toppings, selected_options, note, item_total))
@@ -414,9 +421,9 @@ def place_order(request):
 
         if table and order_type == Order.OrderType.DINE_IN:
             used_capacity = used_bowls(table)
-            cart_qty = sum(item[1] for item in resolved_items)
-            if used_capacity + cart_qty > table.capacity:
-                messages.error(request, f'Bàn {table.table_number} chỉ còn tối đa {max(0, table.capacity - used_capacity)} chỗ (tô). Không thể đặt tại bàn đang hết.')
+            pho_qty = sum(item[1] for item in resolved_items if item[0].category == MenuItem.Category.PHO)
+            if used_capacity + pho_qty > table.capacity:
+                messages.error(request, f'Bàn {table.table_number} chỉ còn tối đa {max(0, table.capacity - used_capacity)} chỗ (tô phở). Không thể đặt vượt quá sức chứa bàn.')
                 return redirect('menu')
 
         order = Order.objects.create(
@@ -600,13 +607,32 @@ def staff_home(request):
         order_status=Order.OrderStatus.READY,
     ).select_related('customer', 'table')
 
+    tables = natural_sort_table(Table.objects.all())
+    active_dining_orders = Order.objects.filter(
+        order_type=Order.OrderType.DINE_IN,
+        is_cleared=False,
+        table__isnull=False,
+    ).exclude(order_status=Order.OrderStatus.CANCELLED).select_related('customer', 'table').prefetch_related('items__menu_item')
+
+    active_orders_by_table = {}
+    for o in active_dining_orders:
+        o.pho_count = sum(i.quantity for i in o.items.all() if i.menu_item.category == MenuItem.Category.PHO)
+        active_orders_by_table.setdefault(o.table_id, []).append(o)
+
+    for t in tables:
+        t.active_orders = active_orders_by_table.get(t.id, [])
+        t.current_pho_bowls = sum(o.pho_count for o in t.active_orders)
+        t.remaining_capacity = max(0, t.capacity - t.current_pho_bowls)
+    occupied_tables = [t for t in tables if t.active_orders]
+
     return render(request, 'pho_app/staff/dashboard.html', {
         'cash_orders': cash_orders,
         'waiting_tickets': waiting_tickets,
         'delivery_ready': delivery_ready,
         'delivery_in_transit': delivery_in_transit,
         'serving_ready': serving_ready,
-        'tables': natural_sort_table(Table.objects.all()),
+        'tables': tables,
+        'occupied_tables': occupied_tables,
         'available_tables': natural_sort_table(Table.objects.filter(status=Table.Status.AVAILABLE)),
     })
 
@@ -672,7 +698,37 @@ def free_table(request, table_id):
     table.status = Table.Status.AVAILABLE
     table.save(update_fields=['status'])
     Order.objects.filter(table=table, is_cleared=False).update(is_cleared=True)
-    messages.success(request, f'Bàn {table.table_number} đã dọn xong và sẵn sàng đón khách.')
+    messages.success(request, f'Bàn {table.table_number} đã dọn xong toàn bộ và sẵn sàng đón khách.')
+    return redirect('staff_home')
+
+
+@staff_required
+@require_POST
+@transaction.atomic
+def free_order_table(request, order_id):
+    order = get_object_or_404(Order.objects.select_for_update(), pk=order_id, is_cleared=False)
+    table = order.table
+    order.is_cleared = True
+    order.save(update_fields=['is_cleared', 'updated_at'])
+
+    pho_qty = sum(item.quantity for item in order.items.all() if item.menu_item.category == MenuItem.Category.PHO)
+
+    if table:
+        has_other_active = Order.objects.filter(
+            table=table,
+            is_cleared=False,
+        ).exclude(order_status=Order.OrderStatus.CANCELLED).exists()
+
+        if not has_other_active:
+            table.status = Table.Status.AVAILABLE
+            table.save(update_fields=['status'])
+            messages.success(request, f'Khách đơn {order.order_code} đã ăn xong. Bàn {table.table_number} hiện đã trống hoàn toàn.')
+        else:
+            remaining = max(0, table.capacity - used_bowls(table))
+            messages.success(request, f'Khách đơn {order.order_code} đã ăn xong (giải phóng {pho_qty} tô). Bàn {table.table_number} hiện còn trống {remaining}/{table.capacity} chỗ (tô).')
+    else:
+        messages.success(request, f'Đã giải phóng đơn {order.order_code}.')
+
     return redirect('staff_home')
 
 
@@ -1058,3 +1114,203 @@ def submit_review(request):
     
     messages.success(request, 'Cảm ơn bạn đã đánh giá!')
     return redirect('reviews_list')
+
+
+def custom_404_view(request, exception=None):
+    """Trang thông báo lỗi 404 tùy chỉnh thân thiện, đồng bộ nhận diện thương hiệu Phở Nhà."""
+    return render(request, '404.html', status=404)
+
+
+# ==========================================
+# MODULE QUẢN LÝ TỒN KHO & ĐỊNH LƯỢNG (BOM)
+# ==========================================
+@admin_required
+def admin_inventory(request):
+    """Trang quản lý kho nguyên liệu, công thức định lượng và lịch sử biến động kho."""
+    ingredients = Ingredient.objects.all().order_by('name')
+    recipes = Recipe.objects.select_related('menu_item', 'topping', 'ingredient').all().order_by('menu_item__name', 'topping__name')
+    recent_transactions = InventoryTransaction.objects.select_related('ingredient', 'created_by').order_by('-created_at')[:40]
+
+    total_ingredients = ingredients.count()
+    low_stock_count = Ingredient.objects.filter(current_stock__lte=F('minimum_stock')).count()
+    total_recipes = recipes.count()
+
+    menu_items = MenuItem.objects.filter(is_active=True).order_by('name')
+    toppings = Topping.objects.all().order_by('name')
+
+    return render(request, 'pho_app/admin/inventory_list.html', {
+        'ingredients': ingredients,
+        'recipes': recipes,
+        'recent_transactions': recent_transactions,
+        'total_ingredients': total_ingredients,
+        'low_stock_count': low_stock_count,
+        'total_recipes': total_recipes,
+        'menu_items': menu_items,
+        'toppings': toppings,
+    })
+
+
+@admin_required
+def admin_ingredient_create(request):
+    """Thêm nguyên liệu mới vào kho."""
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        unit = request.POST.get('unit', '').strip()
+        current_stock_str = request.POST.get('current_stock', '0')
+        minimum_stock_str = request.POST.get('minimum_stock', '0')
+
+        if not name or not unit:
+            messages.error(request, 'Vui lòng điền đầy đủ tên và đơn vị tính.')
+            return render(request, 'pho_app/admin/ingredient_form.html')
+
+        try:
+            current_stock = Decimal(current_stock_str)
+            minimum_stock = Decimal(minimum_stock_str)
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Số lượng tồn hoặc ngưỡng tối thiểu không hợp lệ.')
+            return render(request, 'pho_app/admin/ingredient_form.html')
+
+        with transaction.atomic():
+            ingredient = Ingredient.objects.create(
+                name=name,
+                unit=unit,
+                current_stock=current_stock,
+                minimum_stock=minimum_stock,
+            )
+            if current_stock > 0:
+                InventoryTransaction.objects.create(
+                    ingredient=ingredient,
+                    transaction_type=InventoryTransaction.TransactionType.IMPORT,
+                    quantity_changed=current_stock,
+                    created_by=request.user,
+                )
+        messages.success(request, f'Đã thêm nguyên liệu "{name}" vào kho thành công.')
+        return redirect('admin_inventory')
+
+    return render(request, 'pho_app/admin/ingredient_form.html')
+
+
+@admin_required
+def admin_ingredient_edit(request, ingredient_id):
+    """Chỉnh sửa thông tin nguyên liệu và điều chỉnh kho."""
+    ingredient = get_object_or_404(Ingredient, pk=ingredient_id)
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        unit = request.POST.get('unit', '').strip()
+        new_stock_str = request.POST.get('current_stock', '0')
+        minimum_stock_str = request.POST.get('minimum_stock', '0')
+
+        if not name or not unit:
+            messages.error(request, 'Vui lòng điền đầy đủ tên và đơn vị tính.')
+            return render(request, 'pho_app/admin/ingredient_form.html', {'ingredient': ingredient})
+
+        try:
+            new_stock = Decimal(new_stock_str)
+            minimum_stock = Decimal(minimum_stock_str)
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Số lượng tồn hoặc ngưỡng tối thiểu không hợp lệ.')
+            return render(request, 'pho_app/admin/ingredient_form.html', {'ingredient': ingredient})
+
+        diff = new_stock - ingredient.current_stock
+        with transaction.atomic():
+            ingredient.name = name
+            ingredient.unit = unit
+            ingredient.current_stock = new_stock
+            ingredient.minimum_stock = minimum_stock
+            ingredient.save(update_fields=['name', 'unit', 'current_stock', 'minimum_stock'])
+
+            if diff != 0:
+                InventoryTransaction.objects.create(
+                    ingredient=ingredient,
+                    transaction_type=InventoryTransaction.TransactionType.ADJUST,
+                    quantity_changed=diff,
+                    created_by=request.user,
+                )
+        messages.success(request, f'Đã cập nhật thông tin nguyên liệu "{name}".')
+        return redirect('admin_inventory')
+
+    return render(request, 'pho_app/admin/ingredient_form.html', {'ingredient': ingredient})
+
+
+@admin_required
+@require_POST
+def admin_ingredient_delete(request, ingredient_id):
+    """Xóa nguyên liệu khỏi kho."""
+    ingredient = get_object_or_404(Ingredient, pk=ingredient_id)
+    name = ingredient.name
+    ingredient.delete()
+    messages.success(request, f'Đã xóa nguyên liệu "{name}" khỏi kho.')
+    return redirect('admin_inventory')
+
+
+@admin_required
+@require_POST
+def admin_ingredient_import(request, ingredient_id):
+    """Nhập thêm số lượng hàng vào kho nhanh chóng."""
+    ingredient = get_object_or_404(Ingredient, pk=ingredient_id)
+    qty_str = request.POST.get('quantity', '0')
+    try:
+        qty = Decimal(qty_str)
+        if qty <= 0:
+            raise ValueError
+    except (InvalidOperation, ValueError):
+        messages.error(request, 'Số lượng nhập kho phải lớn hơn 0.')
+        return redirect('admin_inventory')
+
+    with transaction.atomic():
+        ingredient.current_stock += qty
+        ingredient.save(update_fields=['current_stock'])
+        InventoryTransaction.objects.create(
+            ingredient=ingredient,
+            transaction_type=InventoryTransaction.TransactionType.IMPORT,
+            quantity_changed=qty,
+            created_by=request.user,
+        )
+    messages.success(request, f'Đã nhập thêm +{qty:g} {ingredient.unit} cho nguyên liệu "{ingredient.name}".')
+    return redirect('admin_inventory')
+
+
+@admin_required
+@require_POST
+def admin_recipe_create(request):
+    """Thiết lập định lượng (BOM) tiêu hao cho món chính hoặc topping."""
+    menu_item_id = request.POST.get('menu_item_id')
+    topping_id = request.POST.get('topping_id')
+    ingredient_id = request.POST.get('ingredient_id')
+    qty_str = request.POST.get('quantity_required', '0')
+
+    try:
+        qty = Decimal(qty_str)
+        if qty <= 0:
+            raise ValueError
+    except (InvalidOperation, ValueError):
+        messages.error(request, 'Định lượng tiêu hao phải là số dương hợp lệ.')
+        return redirect('admin_inventory')
+
+    ingredient = get_object_or_404(Ingredient, pk=ingredient_id)
+    menu_item = MenuItem.objects.filter(pk=menu_item_id).first() if menu_item_id else None
+    topping = Topping.objects.filter(pk=topping_id).first() if topping_id else None
+
+    if not menu_item and not topping:
+        messages.error(request, 'Vui lòng chọn món chính hoặc topping cần định lượng.')
+        return redirect('admin_inventory')
+
+    Recipe.objects.create(
+        menu_item=menu_item,
+        topping=topping,
+        ingredient=ingredient,
+        quantity_required=qty,
+    )
+    target_name = menu_item.name if menu_item else topping.name
+    messages.success(request, f'Đã lưu định lượng: 1x {target_name} tiêu hao {qty:g} {ingredient.unit} {ingredient.name}.')
+    return redirect('admin_inventory')
+
+
+@admin_required
+@require_POST
+def admin_recipe_delete(request, recipe_id):
+    """Xóa công thức định lượng."""
+    recipe = get_object_or_404(Recipe, pk=recipe_id)
+    recipe.delete()
+    messages.success(request, 'Đã xóa công thức định lượng thành công.')
+    return redirect('admin_inventory')

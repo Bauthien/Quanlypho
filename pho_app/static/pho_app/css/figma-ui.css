@@ -216,6 +216,15 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
 .table-tile .ghost-btn { font-size: 9px; padding: 6px; min-height: 34px; margin-top: 8px; width: 100%; }
 .table-tile.table-OCCUPIED { background: #fcf5e9; }
 .table-tile.table-CLEANING { background: #f2eef7; }
+.dining-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; background: var(--surface); }
+.dining-group:last-of-type { margin-bottom: 0; }
+.dining-group-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border); padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+.dining-group-head strong { font-size: 14px; color: var(--brand); margin-right: 8px; }
+.dining-orders { display: flex; flex-direction: column; gap: 8px; }
+.dining-order { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--background); border-radius: 8px; font-size: 12px; flex-wrap: wrap; gap: 6px; }
+.dining-order strong { margin-right: 4px; }
+.dining-clear-all { font-size: 11px; padding: 4px 8px; min-height: 34px; }
+.dining-clear-order { min-height: 32px; padding: 4px 10px; font-size: 11px; }
 .kitchen-card { padding: 21px; border-top: 3px solid #d6aa69; }
 .kitchen-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .kitchen-card-top h2 { font-size: 23px; }

@@ -10,6 +10,7 @@
         <a href="{% url 'admin_table_list' %}" {% if 'table' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='table' %}<span>Sơ đồ bàn & QR</span></a>
         <a href="{% url 'admin_users' %}" {% if 'users' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='users' %}<span>Người dùng & vai trò</span></a>
         <a href="{% url 'review_list_all' %}" {% if 'review' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='star' %}<span>Đánh giá khách hàng</span></a>
+        <a href="{% url 'admin_inventory' %}" {% if 'inventory' in request.resolver_match.url_name or 'ingredient' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='bag' %}<span>Quản lý tồn kho</span>{% if low_stock_count %}<span class="badge" style="margin-left: auto; background: #c24134; color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700;" title="{{ low_stock_count }} nguyên liệu sắp hết">{{ low_stock_count }}</span>{% endif %}</a>
         {% endif %}
         {% if user.is_staff_role or user.is_admin_role %}
         <a href="{% url 'staff_home' %}" {% if request.resolver_match.url_name == 'staff_home' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='wallet' %}<span>Thu ngân</span></a>

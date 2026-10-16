@@ -56,11 +56,16 @@
     $('#customNote').value = '';
     $('#customError').hidden = true;
     $('#customDishIntro').innerHTML = `<img src="${escape(image(customItem))}" data-image-fallback="${escape(fallbackImage(customItem))}" alt="${escape(customItem.name)}"><div><span class="muted">Một món ngon, đúng khẩu vị</span><strong>${money(customItem.price)}</strong></div>`;
-    const groups = { BROTH: 'Nước dùng', VEGGIE: 'Hành / giá', NOODLE: 'Bánh phở' };
-    $('#customOptions').innerHTML = Object.entries(groups).map(([key, label]) => {
-      const options = customizationOptions.filter((option) => option.category === key);
-      return options.length ? `<fieldset class="choice-group"><legend>${label} <small>· chọn 1</small></legend>${options.map((option, index) => `<label><input type="radio" name="custom-${key}" value="${option.id}" data-category="${key}" ${index === 0 ? 'checked' : ''} required>${escape(option.name)}</label>`).join('')}</fieldset>` : '';
-    }).join('') + (toppings.length ? `<fieldset class="choice-group"><legend>Thêm chút topping <small>· không bắt buộc</small></legend>${toppings.map((topping) => `<label><input type="checkbox" data-topping-id="${topping.id}">${escape(topping.name)}<span>+${money(topping.price)}</span></label>`).join('')}</fieldset>` : '');
+    const isDrink = category(customItem) === 'drink';
+    if (isDrink) {
+      $('#customOptions').innerHTML = `<div style="padding: 14px 12px; background: var(--blue-soft, #edf3f9); border-radius: 8px; color: var(--blue, #3f6c8e); font-size: 12.5px; margin-bottom: 8px;">🥤 Đồ uống ướp lạnh mát giải khát. Bạn có thể ghi chú thêm yêu cầu phục vụ (ví dụ: dùng kèm ly đá, ít đá...) ở ô bên dưới.</div>`;
+    } else {
+      const groups = { BROTH: 'Nước dùng', VEGGIE: 'Hành / giá', NOODLE: 'Bánh phở' };
+      $('#customOptions').innerHTML = Object.entries(groups).map(([key, label]) => {
+        const options = customizationOptions.filter((option) => option.category === key);
+        return options.length ? `<fieldset class="choice-group"><legend>${label} <small>· chọn 1</small></legend>${options.map((option, index) => `<label><input type="radio" name="custom-${key}" value="${option.id}" data-category="${key}" ${index === 0 ? 'checked' : ''} required>${escape(option.name)}</label>`).join('')}</fieldset>` : '';
+      }).join('') + (toppings.length ? `<fieldset class="choice-group"><legend>Thêm chút topping <small>· không bắt buộc</small></legend>${toppings.map((topping) => `<label><input type="checkbox" data-topping-id="${topping.id}">${escape(topping.name)}<span>+${money(topping.price)}</span></label>`).join('')}</fieldset>` : '');
+    }
     customPrice();
     customDialog.showModal();
   }
@@ -84,6 +89,10 @@
 
   function renderCart() {
     const count = cart.reduce((total, entry) => total + entry.qty, 0);
+    const phoCount = cart.reduce((total, entry) => {
+      const item = product(entry);
+      return (item && category(item) === 'pho') ? total + entry.qty : total;
+    }, 0);
     const subtotal = cart.reduce((total, entry) => total + linePrice(entry) * entry.qty, 0);
     const fee = orderType.value === 'DELIVERY' ? Number($('#cartTotalAmount').dataset.deliveryFee || 0) : 0;
     const badge = $('#cartBadge');
@@ -95,10 +104,10 @@
       return `<div class="cart-item"><img src="${escape(image(item))}" data-image-fallback="${escape(fallbackImage(item))}" alt=""><div><div class="cart-item-name">${escape(item.name)}</div><small>${escape(details)}</small><div class="cart-item-price">${money(linePrice(entry) * entry.qty)}</div></div><div class="qty-controls"><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="-1" aria-label="Giảm số lượng ${escape(item.name)}">−</button><span>${entry.qty}</span><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="1" aria-label="Tăng số lượng ${escape(item.name)}">+</button></div></div>`;
     }).join('') || `<div class="empty-state">${icon('bag')}<strong>Giỏ hàng đang chờ món ngon</strong>Chọn một tô phở yêu thích để bắt đầu nhé.</div>`;
     const waiting = orderType.value === 'QUEUE_CART' && queueStatus !== 'CALLED';
-    const full = orderType.value === 'DINE_IN' && count > remainingCapacity;
+    const full = orderType.value === 'DINE_IN' && phoCount > remainingCapacity;
     const blocked = orderType.value === 'DELIVERY' && !deliveryAllowed;
     $('#checkoutBtn').disabled = !count || waiting || full || blocked;
-    $('#checkoutBtn').textContent = waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
+    $('#checkoutBtn').textContent = waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
   }
   $('#cartItemsList').addEventListener('click', (event) => {
     const button = event.target.closest('[data-cart-index]');

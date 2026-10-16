@@ -1,0 +1,49 @@
+{% extends 'pho_app/admin/shell.html' %}
+{% load static %}
+{% block title %}{% if ingredient %}Chỉnh sửa nguyên liệu: {{ ingredient.name }}{% else %}Thêm nguyên liệu mới{% endif %} · Phở Nhà{% endblock %}
+{% block breadcrumb %}Quản lý tồn kho / {% if ingredient %}Chỉnh sửa{% else %}Thêm mới{% endif %}{% endblock %}
+
+{% block admin_content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">QUẢN LÝ KHO & NGUYÊN VẬT LIỆU</span>
+        <h1>{% if ingredient %}Chỉnh sửa nguyên liệu: {{ ingredient.name }}{% else %}Thêm nguyên liệu mới vào kho{% endif %}</h1>
+        <p>Thiết lập thông tin tên, đơn vị tính và ngưỡng cảnh báo để hệ thống tự động nhắc nhở khi sắp hết hàng.</p>
+    </div>
+</div>
+
+<form class="panel editor-card" method="post" style="max-width: 650px;">
+    {% csrf_token %}
+    <div class="form-group">
+        <label for="ingName">Tên nguyên liệu / vật tư (*)</label>
+        <input type="text" class="form-input" id="ingName" name="name" value="{{ ingredient.name|default:'' }}" placeholder="Ví dụ: Bánh phở tươi, Thịt bò phi lê, Nước dùng phở..." required maxlength="255">
+    </div>
+
+    <div class="form-group">
+        <label for="ingUnit">Đơn vị tính (*)</label>
+        <input type="text" class="form-input" id="ingUnit" name="unit" value="{{ ingredient.unit|default:'gram' }}" placeholder="Ví dụ: gram, ml, kg, lít, lon, chai, quả..." required maxlength="50">
+        <small style="color: var(--muted); font-size: 11px; margin-top: 4px; display: block;">Nên dùng đơn vị nhỏ nhất tương ứng với công thức (VD: gram thay vì kg, ml thay vì lít) để dễ định lượng chính xác.</small>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div class="form-group">
+            <label for="ingCurrentStock">Số lượng tồn kho hiện tại (*)</label>
+            <input type="number" step="any" min="0" class="form-input" id="ingCurrentStock" name="current_stock" value="{{ ingredient.current_stock|default:'0' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="ingMinStock">Ngưỡng cảnh báo tối thiểu (*)</label>
+            <input type="number" step="any" min="0" class="form-input" id="ingMinStock" name="minimum_stock" value="{{ ingredient.minimum_stock|default:'0' }}" required>
+            <small style="color: var(--muted); font-size: 11px; margin-top: 4px; display: block;">Khi số tồn <= ngưỡng này, hệ thống sẽ gửi thông báo cảnh báo cho Admin.</small>
+        </div>
+    </div>
+
+    <div class="actions" style="margin-top: 24px;">
+        <a class="secondary-btn" href="{% url 'admin_inventory' %}">Quay lại danh sách</a>
+        <button class="primary-btn" type="submit">
+            {% include 'pho_app/includes/icon.html' with name='check' %}
+            {% if ingredient %}Cập nhật nguyên liệu{% else %}Lưu nguyên liệu mới{% endif %}
+        </button>
+    </div>
+</form>
+{% endblock %}

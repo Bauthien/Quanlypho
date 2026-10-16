@@ -25,6 +25,7 @@ urlpatterns = [
     path('thu-ngan/giao-xong/<int:order_id>/', views.complete_delivery, name='complete_delivery'),
     path('thu-ngan/phuc-vu-xong/<int:order_id>/', views.complete_dine_in, name='complete_dine_in'),
     path('thu-ngan/ban/<int:table_id>/da-don/', views.free_table, name='free_table'),
+    path('thu-ngan/don/<int:order_id>/da-an-xong/', views.free_order_table, name='free_order_table'),
 
     path('bep/', views.kitchen_home, name='kitchen_home'),
     path('bep/bat-dau/<int:order_id>/', views.kitchen_start, name='kitchen_start'),
@@ -53,4 +54,14 @@ urlpatterns = [
     path('danh-gia/viet/', views.review_form, name='review_form'),
     path('danh-gia/submit/', views.submit_review, name='submit_review'),
     path('quan-ly/danh-gia/', views.review_list_all, name='review_list_all'),
+
+    path('quan-ly/ton-kho/', views.admin_inventory, name='admin_inventory'),
+    path('quan-ly/ton-kho/them/', views.admin_ingredient_create, name='admin_ingredient_create'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/sua/', views.admin_ingredient_edit, name='admin_ingredient_edit'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/xoa/', views.admin_ingredient_delete, name='admin_ingredient_delete'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/nhap-kho/', views.admin_ingredient_import, name='admin_ingredient_import'),
+    path('quan-ly/ton-kho/dinh-luong/them/', views.admin_recipe_create, name='admin_recipe_create'),
+    path('quan-ly/ton-kho/dinh-luong/<int:recipe_id>/xoa/', views.admin_recipe_delete, name='admin_recipe_delete'),
+
+    path('404/', views.custom_404_view, name='custom_404'),
 ]

@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import F, Q, Sum
 from django.db.models.functions import Coalesce
 
-from .models import Order, OrderItem, QueueTicket, Table
+from .models import MenuItem, Order, OrderItem, QueueTicket, Table
 
 
 class InvalidOrderTransition(ValueError):
@@ -96,7 +96,11 @@ def apply_order_action(order_id, action):
 
 
 def active_orders_q():
-    return Q(order__is_cleared=False) & ~Q(order__order_status=Order.OrderStatus.CANCELLED)
+    return (
+        Q(order__is_cleared=False)
+        & ~Q(order__order_status=Order.OrderStatus.CANCELLED)
+        & Q(order__items__menu_item__category=MenuItem.Category.PHO)
+    )
 
 
 def tables_with_capacity():
@@ -112,7 +116,11 @@ def tables_are_full():
 
 def used_bowls(table):
     return (
-        OrderItem.objects.filter(order__table=table, order__is_cleared=False)
+        OrderItem.objects.filter(
+            order__table=table,
+            order__is_cleared=False,
+            menu_item__category=MenuItem.Category.PHO,
+        )
         .exclude(order__order_status=Order.OrderStatus.CANCELLED)
         .aggregate(total=Sum('quantity'))['total']
         or 0

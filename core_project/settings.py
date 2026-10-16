@@ -74,6 +74,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'pho_app.context_processors.inventory_alerts',
             ],
         },
     },
@@ -88,7 +89,7 @@ WSGI_APPLICATION = 'core_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis', # Dùng engine GIS
-        'NAME': os.environ.get('POSTGRES_DB', 'Quanlypho'),
+        'NAME': os.environ.get('POSTGRES_DB', 'quanlypho'),
         'USER': os.environ.get('POSTGRES_USER', 'postgres'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', '123'),
         'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),

@@ -12,7 +12,51 @@
     <section class="panel"><div class="panel-heading"><h2>Đơn đang giao</h2><span class="badge badge-blue">{{ delivery_in_transit|length }}</span></div>{% for order in delivery_in_transit %}<div class="queue-line"><div><strong>{{ order.order_code }}</strong><small>{{ order.delivery_address }}</small><small>{{ order.shipping_code }}</small></div><form method="post" action="{% url 'complete_delivery' order.id %}">{% csrf_token %}<button class="secondary-btn" type="submit">Giao xong</button></form></div>{% empty %}<p class="empty-state">Không có đơn đang giao.</p>{% endfor %}</section>
 </div><div>
     <section class="panel" id="queue"><div class="panel-heading"><div><h2>Hàng đợi hiện tại</h2><p>Đón khách theo thứ tự lấy số.</p></div><span class="badge badge-orange">{{ waiting_tickets|length }}</span></div><form method="post" action="{% url 'call_next_queue' %}" class="queue-call-form">{% csrf_token %}<label for="queueTable" class="sr-only">Bàn trống để gọi khách</label><select class="form-input" name="table_id" id="queueTable" required><option value="">Chọn bàn trống</option>{% for table in available_tables %}<option value="{{ table.id }}">Bàn {{ table.table_number }}</option>{% endfor %}</select><button class="primary-btn" type="submit" {% if not available_tables or not waiting_tickets %}disabled{% endif %}>Gọi số tiếp theo</button></form>{% for ticket in waiting_tickets %}<div class="queue-line"><span class="ticket-number">{{ ticket.ticket_number }}</span><div><strong>{% if ticket.customer %}{{ ticket.customer.display_name }}{% else %}{{ ticket.guest_name|default:'Khách' }}{% endif %}</strong><small>Lấy số lúc {{ ticket.created_at|date:'H:i' }}</small></div><span class="badge badge-orange">Đang chờ</span></div>{% empty %}<p class="empty-state">Mọi vị khách đều đã có chỗ.</p>{% endfor %}</section>
-    <section class="panel"><div class="panel-heading"><div><h2>Sơ đồ bàn</h2><p>{{ available_tables|length }} bàn trống / {{ tables|length }} bàn</p></div></div><div class="table-map">{% for table in tables %}<div class="table-tile table-{{ table.status }}">{% include 'pho_app/includes/icon.html' with name='table' %}<strong>Bàn {{ table.table_number }}</strong><small>{{ table.get_status_display }}</small>{% if table.status == 'OCCUPIED' or table.status == 'CLEANING' %}<form method="post" action="{% url 'free_table' table.id %}">{% csrf_token %}<button class="ghost-btn" type="submit">Khách ăn xong</button></form>{% endif %}</div>{% empty %}<p class="empty-state">Chưa có bàn.</p>{% endfor %}</div></section>
+    <section class="panel" id="dining-tables">
+        <div class="panel-heading">
+            <div>
+                <h2>Bàn đang phục vụ & khách dùng bữa</h2>
+                <p>Giải phóng chỗ theo từng nhóm khách (trả lại đúng số tô phở trống cho bàn ghép).</p>
+            </div>
+            <span class="badge badge-orange">{{ occupied_tables|length }} bàn</span>
+        </div>
+        {% for table in occupied_tables %}
+        <div class="dining-group">
+            <div class="dining-group-head">
+                <div>
+                    <strong>Bàn {{ table.table_number }}</strong>
+                    <span class="badge {% if table.remaining_capacity == 0 %}badge-orange{% else %}badge-green{% endif %}">
+                        Đang dùng: {{ table.current_pho_bowls }}/{{ table.capacity }} tô phở {% if table.remaining_capacity > 0 %}(còn trống {{ table.remaining_capacity }} tô){% else %}(Hết chỗ){% endif %}
+                    </span>
+                </div>
+                <form method="post" action="{% url 'free_table' table.id %}" onsubmit="return confirm('Dọn sạch toàn bộ Bàn {{ table.table_number }} và giải phóng tất cả khách?');">
+                    {% csrf_token %}
+                    <button class="ghost-btn dining-clear-all" type="submit" title="Dọn sạch toàn bộ bàn">Dọn sạch cả bàn</button>
+                </form>
+            </div>
+            <div class="dining-orders">
+                {% for order in table.active_orders %}
+                <div class="dining-order">
+                    <div>
+                        <strong>Đơn {{ order.order_code }}</strong>
+                        <span>{% if order.customer %}{{ order.customer.display_name }}{% else %}{{ order.guest_name|default:'Khách tại bàn' }}{% endif %}</span>
+                        <span class="badge badge-blue">{{ order.pho_count }} tô phở</span>
+                    </div>
+                    <form method="post" action="{% url 'free_order_table' order.id %}">
+                        {% csrf_token %}
+                        <button class="primary-btn dining-clear-order" type="submit">
+                            {% include 'pho_app/includes/icon.html' with name='check' %} Khách ăn xong (Trả {{ order.pho_count }} tô)
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% empty %}
+        <p class="empty-state">Hiện tại chưa có khách đang ngồi ăn tại các bàn.</p>
+        {% endfor %}
+    </section>
+    <section class="panel"><div class="panel-heading"><div><h2>Sơ đồ bàn</h2><p>{{ available_tables|length }} bàn trống / {{ tables|length }} bàn</p></div></div><div class="table-map">{% for table in tables %}<div class="table-tile table-{{ table.status }}">{% include 'pho_app/includes/icon.html' with name='table' %}<strong>Bàn {{ table.table_number }}</strong><small>{{ table.current_pho_bowls }}/{{ table.capacity }} tô phở</small>{% if table.status == 'OCCUPIED' or table.status == 'CLEANING' %}<form method="post" action="{% url 'free_table' table.id %}">{% csrf_token %}<button class="ghost-btn" type="submit">Dọn bàn</button></form>{% endif %}</div>{% empty %}<p class="empty-state">Chưa có bàn.</p>{% endfor %}</div></section>
 </div></div>
 </main>
 {% endblock %}

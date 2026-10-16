@@ -3,6 +3,22 @@
 {% block breadcrumb %}Tổng quan{% endblock %}
 {% block admin_content %}
 <div class="page-heading"><div><span class="eyebrow">MỘT NGÀY MỚI, MỘT KHỞI ĐẦU NGON</span><h1>Tổng quan cửa hàng {% include 'pho_app/includes/icon.html' with name='sun' class='heading-sun' %}</h1><p>Chào {{ user.display_name }}, cùng xem cửa hàng của bạn đang hoạt động thế nào nhé.</p></div><div class="heading-actions"><span class="secondary-btn">{% include 'pho_app/includes/icon.html' with name='calendar' %}{% now 'd/m/Y' %}</span><a class="primary-btn" href="#revenue-section">{% include 'pho_app/includes/icon.html' with name='chart' %} Xem báo cáo</a></div></div>
+{% if low_stock_count %}
+<div class="panel alert-banner" style="background: #fff8f6; border-left: 4px solid var(--brand, #9b3b2f); padding: 16px 20px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+        <span style="font-size: 26px; line-height: 1;">⚠️</span>
+        <div>
+            <strong style="color: var(--brand, #9b3b2f); font-size: 13.5px; display: block;">Cảnh báo tồn kho: Có {{ low_stock_count }} mặt hàng sắp hết hoặc chạm ngưỡng tối thiểu!</strong>
+            <p style="margin: 4px 0 0; color: var(--muted, #74736c); font-size: 12px;">
+                {% for ing in low_stock_ingredients %}
+                    <span style="display: inline-block; margin-right: 12px;">● <strong>{{ ing.name }}</strong>: còn <span style="color: #c24134; font-weight: 700;">{{ ing.current_stock|floatformat:1 }} {{ ing.unit }}</span> (ngưỡng {{ ing.minimum_stock|floatformat:1 }} {{ ing.unit }})</span>
+                {% endfor %}
+            </p>
+        </div>
+    </div>
+    <a class="primary-btn" href="{% url 'admin_inventory' %}" style="min-height: 38px; padding: 8px 16px; font-size: 11px;">{% include 'pho_app/includes/icon.html' with name='bag' %} Vào kho nhập thêm ngay</a>
+</div>
+{% endif %}
 <section class="stats-grid" aria-label="Chỉ số cửa hàng">
     <article class="stat-card"><div class="stat-top"><span>Doanh thu đã thanh toán</span><span class="stat-icon tone-red">{% include 'pho_app/includes/icon.html' with name='wallet' %}</span></div><strong class="stat-value" data-money="{{ stats.revenue|stringformat:'.0f' }}">{{ stats.revenue }}đ</strong><span class="stat-bottom">Tổng tiền món từ trước đến nay</span></article>
     <article class="stat-card"><div class="stat-top"><span>Tổng đơn hàng</span><span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='bag' %}</span></div><strong class="stat-value">{{ stats.orders }}</strong><span class="stat-bottom">{{ stats.dine_in }} tại bàn · {{ stats.delivery }} giao hàng đã trả tiền</span></article>

@@ -1,0 +1,400 @@
+{% extends 'pho_app/admin/shell.html' %}
+{% load static %}
+{% block title %}Quản lý tồn kho & Định lượng · Phở Nhà{% endblock %}
+{% block breadcrumb %}Quản lý tồn kho{% endblock %}
+
+{% block admin_content %}
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">QUẢN LÝ KHO & NGUYÊN VẬT LIỆU (BOM)</span>
+        <h1>Quản lý tồn kho {% include 'pho_app/includes/icon.html' with name='bag' %}</h1>
+        <p>Theo dõi tồn kho thực tế, định lượng hao phí cho từng món phở và tự động trừ kho khi bán.</p>
+    </div>
+    <div class="heading-actions">
+        <a class="primary-btn" href="{% url 'admin_ingredient_create' %}">
+            {% include 'pho_app/includes/icon.html' with name='plus' %} Thêm nguyên liệu mới
+        </a>
+    </div>
+</div>
+
+{% if low_stock_count %}
+<div class="panel alert-banner" style="background: #fff8f6; border-left: 4px solid var(--brand, #9b3b2f); padding: 16px 20px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+        <span style="font-size: 26px; line-height: 1;">⚠️</span>
+        <div>
+            <strong style="color: var(--brand, #9b3b2f); font-size: 13.5px; display: block;">Cảnh báo tồn kho: Có {{ low_stock_count }} mặt hàng đang chạm hoặc dưới ngưỡng an toàn!</strong>
+            <p style="margin: 4px 0 0; color: var(--muted, #74736c); font-size: 12px;">
+                {% for ing in low_stock_ingredients %}
+                    <span style="display: inline-block; margin-right: 12px;">● <strong>{{ ing.name }}</strong>: còn <span style="color: #c24134; font-weight: 700;">{{ ing.current_stock|floatformat:1 }} {{ ing.unit }}</span> (tối thiểu {{ ing.minimum_stock|floatformat:1 }} {{ ing.unit }})</span>
+                {% endfor %}
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<section class="stats-grid" aria-label="Chỉ số tồn kho">
+    <article class="stat-card">
+        <div class="stat-top"><span>Tổng nguyên liệu</span><span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='grid' %}</span></div>
+        <strong class="stat-value">{{ total_ingredients }} <small>loại</small></strong>
+        <span class="stat-bottom">Nguyên vật liệu đang quản lý</span>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span>Cần nhập thêm</span><span class="stat-icon tone-red">{% include 'pho_app/includes/icon.html' with name='wallet' %}</span></div>
+        <strong class="stat-value" style="color: {% if low_stock_count %}#c24134{% else %}inherit{% endif %};">{{ low_stock_count }} <small>mặt hàng</small></strong>
+        <span class="stat-bottom">Chạm hoặc dưới mức tối thiểu</span>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span>Công thức định lượng</span><span class="stat-icon tone-purple">{% include 'pho_app/includes/icon.html' with name='bowl' %}</span></div>
+        <strong class="stat-value">{{ total_recipes }} <small>công thức</small></strong>
+        <span class="stat-bottom">Quy chuẩn hao phí cho món & topping</span>
+    </article>
+    <article class="stat-card">
+        <div class="stat-top"><span>Biến động kho</span><span class="stat-icon tone-orange">{% include 'pho_app/includes/icon.html' with name='chart' %}</span></div>
+        <strong class="stat-value">{{ recent_transactions|length }} <small>lượt</small></strong>
+        <span class="stat-bottom">Giao dịch xuất bán & nhập gần đây</span>
+    </article>
+</section>
+
+<!-- Tabs Navigation -->
+<div class="toolbar" style="margin-top: 15px; margin-bottom: 20px;">
+    <div class="segmented" role="tablist">
+        <button class="active" type="button" id="tabBtnIngredients" onclick="switchInventoryTab('ingredients')">
+            📦 Danh sách Nguyên liệu ({{ total_ingredients }})
+        </button>
+        <button type="button" id="tabBtnRecipes" onclick="switchInventoryTab('recipes')">
+            🍜 Định lượng công thức món ({{ total_recipes }})
+        </button>
+        <button type="button" id="tabBtnHistory" onclick="switchInventoryTab('history')">
+            📋 Lịch sử Xuất - Nhập kho
+        </button>
+    </div>
+</div>
+
+<!-- TAB 1: DANH SÁCH NGUYÊN LIỆU -->
+<div id="tabIngredientsSection">
+    <div class="panel">
+        <div class="panel-heading" style="flex-wrap: wrap; gap: 12px;">
+            <div>
+                <h2>Kho nguyên vật liệu hiện tại</h2>
+                <p>Số lượng tồn được tự động khấu trừ ngay khi đơn hàng hoàn tất thanh toán.</p>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <label class="search-field" style="margin: 0;">
+                    {% include 'pho_app/includes/icon.html' with name='search' %}
+                    <input type="search" id="ingredientSearchInput" onkeyup="filterIngredientsTable()" placeholder="Tìm nguyên liệu..." aria-label="Tìm nguyên liệu">
+                </label>
+            </div>
+        </div>
+
+        <div class="table-scroll">
+            <table class="data-table" id="ingredientsTable">
+                <thead>
+                    <tr>
+                        <th>Tên nguyên liệu</th>
+                        <th>Đơn vị</th>
+                        <th>Tồn kho hiện tại</th>
+                        <th>Ngưỡng tối thiểu</th>
+                        <th>Tình trạng</th>
+                        <th style="text-align: right;">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ing in ingredients %}
+                    <tr class="ingredient-row {% if ing.current_stock <= ing.minimum_stock %}is-warning{% endif %}">
+                        <td>
+                            <strong style="font-size: 13.5px; display: block; color: var(--ink);">{{ ing.name }}</strong>
+                            <small class="table-person">Mã: NL-{{ ing.id }}</small>
+                        </td>
+                        <td><span class="badge">{{ ing.unit }}</span></td>
+                        <td>
+                            <strong style="font-size: 15px; {% if ing.current_stock <= ing.minimum_stock %}color: #c24134;{% else %}color: #287354;{% endif %}">
+                                {{ ing.current_stock|floatformat:1 }} {{ ing.unit }}
+                            </strong>
+                        </td>
+                        <td>
+                            <span style="color: var(--muted);">{{ ing.minimum_stock|floatformat:1 }} {{ ing.unit }}</span>
+                        </td>
+                        <td>
+                            {% if ing.current_stock <= 0 %}
+                                <span class="badge" style="background: #fde8e8; color: #9b1c1c; font-weight: 700;">Hết hàng</span>
+                            {% elif ing.current_stock <= ing.minimum_stock %}
+                                <span class="badge" style="background: #fff0eb; color: #c24134; font-weight: 700;">⚠️ Sắp hết</span>
+                            {% else %}
+                                <span class="badge badge-green" style="font-weight: 600;">✓ Đủ dùng</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: right;">
+                            <div style="display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end;">
+                                <!-- Quick Import Button / Form -->
+                                <details class="import-dropdown" style="position: relative; display: inline-block;">
+                                    <summary class="primary-btn" style="min-height: 32px; padding: 4px 10px; font-size: 11px; cursor: pointer; list-style: none;">
+                                        + Nhập thêm
+                                    </summary>
+                                    <div style="position: absolute; right: 0; top: 100%; margin-top: 6px; z-index: 50; width: 240px; background: white; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 14px; text-align: left;">
+                                        <h4 style="margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--brand);">Nhập thêm: {{ ing.name }}</h4>
+                                        <form method="post" action="{% url 'admin_ingredient_import' ing.id %}">
+                                            {% csrf_token %}
+                                            <div style="margin-bottom: 8px;">
+                                                <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">Số lượng nhập ({{ ing.unit }}):</label>
+                                                <input type="number" step="any" min="0.1" name="quantity" required style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;" placeholder="Ví dụ: 1000">
+                                            </div>
+                                            <button type="submit" class="primary-btn" style="width: 100%; min-height: 32px; font-size: 11px;">Xác nhận nhập kho</button>
+                                        </form>
+                                    </div>
+                                </details>
+
+                                <a class="secondary-btn" href="{% url 'admin_ingredient_edit' ing.id %}" style="min-height: 32px; padding: 4px 8px;" title="Chỉnh sửa">
+                                    {% include 'pho_app/includes/icon.html' with name='edit' %}
+                                </a>
+
+                                <form method="post" action="{% url 'admin_ingredient_delete' ing.id %}" onsubmit="return confirm('Bạn có chắc chắn muốn xóa nguyên liệu {{ ing.name }}?');" style="display: inline;">
+                                    {% csrf_token %}
+                                    <button class="icon-button danger" type="submit" style="min-width: 32px; min-height: 32px; padding: 0;" aria-label="Xóa {{ ing.name }}" title="Xóa">
+                                        {% include 'pho_app/includes/icon.html' with name='trash' %}
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                {% include 'pho_app/includes/icon.html' with name='bag' %}
+                                <strong>Chưa có nguyên liệu nào trong kho</strong>
+                                Hãy bấm "Thêm nguyên liệu mới" ở phía trên để bắt đầu quản lý.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 2: ĐỊNH LƯỢNG MÓN ĂN (BOM) -->
+<div id="tabRecipesSection" style="display: none;">
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start;">
+        <!-- Recipes Table -->
+        <div class="panel">
+            <div class="panel-heading">
+                <div>
+                    <h2>Công thức định lượng hao phí (BOM)</h2>
+                    <p>Mỗi khi bán 1 tô phở hoặc topping, hệ thống sẽ tự động trừ kho theo định lượng dưới đây.</p>
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Sản phẩm / Topping bán</th>
+                            <th>Nguyên liệu kho tiêu hao</th>
+                            <th>Định lượng / 1 đơn vị bán</th>
+                            <th style="text-align: right;">Xóa</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in recipes %}
+                        <tr>
+                            <td>
+                                {% if r.menu_item %}
+                                    <span style="font-weight: 700; color: var(--brand);">🍜 {{ r.menu_item.name }}</span>
+                                    <small class="table-person">Món chính</small>
+                                {% elif r.topping %}
+                                    <span style="font-weight: 700; color: var(--orange);">➕ Topping: {{ r.topping.name }}</span>
+                                    <small class="table-person">Topping thêm</small>
+                                {% else %}
+                                    <span>N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ r.ingredient.name }}</strong>
+                            </td>
+                            <td>
+                                <span class="badge" style="background: var(--blue-soft, #edf3f9); color: var(--blue, #3f6c8e); font-weight: 700;">
+                                    - {{ r.quantity_required|floatformat:1 }} {{ r.ingredient.unit }}
+                                </span>
+                            </td>
+                            <td style="text-align: right;">
+                                <form method="post" action="{% url 'admin_recipe_delete' r.id %}" onsubmit="return confirm('Xóa công thức định lượng này?');" style="display: inline;">
+                                    {% csrf_token %}
+                                    <button class="icon-button danger" type="submit" style="min-width: 30px; min-height: 30px; padding: 0;" title="Xóa công thức">
+                                        {% include 'pho_app/includes/icon.html' with name='trash' %}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4">
+                                <div class="empty-state">
+                                    {% include 'pho_app/includes/icon.html' with name='bowl' %}
+                                    <strong>Chưa có công thức định lượng nào</strong>
+                                    Dùng biểu mẫu bên phải để thiết lập công thức tiêu hao cho từng món.
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Add Recipe Form -->
+        <div class="panel">
+            <div class="panel-heading">
+                <div>
+                    <h2>Thêm định lượng mới</h2>
+                    <p>Liên kết món với nguyên liệu kho</p>
+                </div>
+            </div>
+            <form method="post" action="{% url 'admin_recipe_create' %}">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="recipeTargetType">Áp dụng cho:</label>
+                    <select id="recipeTargetType" class="form-input" onchange="toggleRecipeTarget(this.value)">
+                        <option value="menu_item">Món chính trong thực đơn</option>
+                        <option value="topping">Topping gọi thêm</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="menuItemSelectGroup">
+                    <label for="menuItemSelect">Chọn món chính:</label>
+                    <select id="menuItemSelect" name="menu_item_id" class="form-input">
+                        {% for item in menu_items %}
+                        <option value="{{ item.id }}">{{ item.name }} ({{ item.base_price|floatformat:0 }}đ)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group" id="toppingSelectGroup" style="display: none;">
+                    <label for="toppingSelect">Chọn topping:</label>
+                    <select id="toppingSelect" name="topping_id" class="form-input">
+                        <option value="">-- Chọn topping --</option>
+                        {% for top in toppings %}
+                        <option value="{{ top.id }}">{{ top.name }} ({{ top.price|floatformat:0 }}đ)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="ingredientSelect">Nguyên liệu kho tiêu hao:</label>
+                    <select id="ingredientSelect" name="ingredient_id" class="form-input" required>
+                        {% for ing in ingredients %}
+                        <option value="{{ ing.id }}">{{ ing.name }} (Đơn vị: {{ ing.unit }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="quantityRequired">Số lượng tiêu hao / 1 đơn vị:</label>
+                    <input type="number" step="any" min="0.01" class="form-input" id="quantityRequired" name="quantity_required" placeholder="Ví dụ: 150 (gram) hoặc 1 (lon)" required>
+                </div>
+
+                <button class="primary-btn full" type="submit" style="margin-top: 10px;">
+                    {% include 'pho_app/includes/icon.html' with name='plus' %} Lưu công thức định lượng
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 3: LỊCH SỬ XUẤT - NHẬP KHO -->
+<div id="tabHistorySection" style="display: none;">
+    <div class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Lịch sử biến động kho gần đây</h2>
+                <p>Theo dõi mọi hoạt động tự động xuất bán theo đơn hàng và nhập thêm hàng của quản lý.</p>
+            </div>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Thời gian</th>
+                        <th>Nguyên liệu</th>
+                        <th>Loại biến động</th>
+                        <th>Số lượng thay đổi</th>
+                        <th>Người thực hiện / Ghi chú</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tx in recent_transactions %}
+                    <tr>
+                        <td>{{ tx.created_at|date:"d/m/Y H:i:s" }}</td>
+                        <td><strong>{{ tx.ingredient.name }}</strong></td>
+                        <td>
+                            {% if tx.transaction_type == 'EXPORT' %}
+                                <span class="badge" style="background: #fff0eb; color: #c24134; font-weight: 600;">Xuất bán (Tự động)</span>
+                            {% elif tx.transaction_type == 'IMPORT' %}
+                                <span class="badge badge-green" style="font-weight: 600;">Nhập kho</span>
+                            {% else %}
+                                <span class="badge" style="background: #edf3f9; color: #3f6c8e; font-weight: 600;">Điều chỉnh</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong style="{% if tx.quantity_changed > 0 %}color: #287354;{% else %}color: #c24134;{% endif %}">
+                                {% if tx.quantity_changed > 0 %}+{% endif %}{{ tx.quantity_changed|floatformat:1 }} {{ tx.ingredient.unit }}
+                            </strong>
+                        </td>
+                        <td>
+                            {% if tx.created_by %}
+                                {{ tx.created_by.display_name }} ({{ tx.created_by.get_role_display }})
+                            {% else %}
+                                <span class="muted">Hệ thống đơn hàng</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5">
+                            <div class="empty-state">
+                                {% include 'pho_app/includes/icon.html' with name='orders' %}
+                                <strong>Chưa có biến động kho nào</strong>
+                                Lịch sử xuất nhập sẽ tự động ghi lại tại đây khi phát sinh giao dịch.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function switchInventoryTab(tabName) {
+    document.getElementById('tabIngredientsSection').style.display = tabName === 'ingredients' ? 'block' : 'none';
+    document.getElementById('tabRecipesSection').style.display = tabName === 'recipes' ? 'block' : 'none';
+    document.getElementById('tabHistorySection').style.display = tabName === 'history' ? 'block' : 'none';
+
+    document.getElementById('tabBtnIngredients').classList.toggle('active', tabName === 'ingredients');
+    document.getElementById('tabBtnRecipes').classList.toggle('active', tabName === 'recipes');
+    document.getElementById('tabBtnHistory').classList.toggle('active', tabName === 'history');
+}
+
+function toggleRecipeTarget(val) {
+    const isMenu = val === 'menu_item';
+    document.getElementById('menuItemSelectGroup').style.display = isMenu ? 'block' : 'none';
+    document.getElementById('toppingSelectGroup').style.display = isMenu ? 'none' : 'block';
+    
+    if (isMenu) {
+        document.getElementById('toppingSelect').value = '';
+    }
+}
+
+function filterIngredientsTable() {
+    const q = document.getElementById('ingredientSearchInput').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('#ingredientsTable tbody tr.ingredient-row');
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+    });
+}
+</script>
+{% endblock %}
