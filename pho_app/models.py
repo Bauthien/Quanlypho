@@ -84,6 +84,7 @@ class QueueTicket(models.Model):
     customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Khách hàng")
     guest_name = models.CharField(max_length=100, blank=True, verbose_name="Tên khách (không đăng nhập)")
     ticket_number = models.CharField(max_length=50, verbose_name="Số thứ tự (VD: P-015)")
+    people_count = models.PositiveIntegerField(default=1, verbose_name="Số người")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING, verbose_name="Trạng thái hàng đợi")
     table = models.ForeignKey('Table', on_delete=models.SET_NULL, null=True, blank=True, related_name='queue_tickets', verbose_name="Bàn được gọi")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian lấy số")

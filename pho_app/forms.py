@@ -1,7 +1,8 @@
 from django import forms
+from django.contrib.auth import authenticate
 from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
 from .models import MenuItem, Order, Topping, User
 
@@ -39,10 +40,10 @@ class OrderFilterForm(forms.Form):
 
 class StyledAuthForm(AuthenticationForm):
     username = forms.CharField(
-        label='Tên đăng nhập',
+        label='Tên đăng nhập hoặc Số điện thoại',
         widget=forms.TextInput(attrs={
             'class': 'form-input',
-            'placeholder': 'Tên đăng nhập',
+            'placeholder': 'Tên đăng nhập hoặc SĐT',
             'autofocus': True,
         }),
     )
@@ -54,11 +55,36 @@ class StyledAuthForm(AuthenticationForm):
         }),
     )
 
+    error_messages = {
+        'invalid_login': 'Tên đăng nhập (hoặc số điện thoại) hoặc mật khẩu chưa đúng. Vui lòng thử lại.',
+        'inactive': 'Tài khoản này hiện đang bị khóa.',
+    }
+
+    def clean(self):
+        username = self.cleaned_data.get('username', '').strip()
+        password = self.cleaned_data.get('password')
+
+        if username and password:
+            user = User.objects.filter(
+                Q(username__iexact=username) | Q(phone_number=username)
+            ).first()
+            if user:
+                self.user_cache = authenticate(self.request, username=user.username, password=password)
+            else:
+                self.user_cache = authenticate(self.request, username=username, password=password)
+
+            if self.user_cache is None:
+                raise self.get_invalid_login_error()
+            else:
+                self.confirm_login_allowed(self.user_cache)
+
+        return self.cleaned_data
+
 
 class RegisterForm(forms.ModelForm):
     password1 = forms.CharField(
         label='Mật khẩu',
-        widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Mật khẩu'}),
+        widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Mật khẩu (tối thiểu 4 ký tự)'}),
     )
     password2 = forms.CharField(
         label='Nhập lại mật khẩu',
@@ -79,18 +105,25 @@ class RegisterForm(forms.ModelForm):
             'phone_number': 'Số điện thoại',
         }
 
+    def clean_username(self):
+        username = self.cleaned_data.get('username', '').strip()
+        if not username:
+            raise ValidationError('Vui lòng nhập tên đăng nhập.')
+        if User.objects.filter(username__iexact=username).exists():
+            raise ValidationError('Tên đăng nhập này đã có người sử dụng. Vui lòng chọn tên khác.')
+        return username
+
+    def clean_password1(self):
+        password1 = self.cleaned_data.get('password1', '')
+        if len(password1) < 4:
+            raise ValidationError('Mật khẩu cần có ít nhất 4 ký tự.')
+        return password1
+
     def clean_password2(self):
         password1 = self.cleaned_data.get('password1')
         password2 = self.cleaned_data.get('password2')
         if password1 and password2 and password1 != password2:
             raise ValidationError('Mật khẩu nhập lại không khớp.')
-        if password1:
-            candidate = User(
-                username=self.cleaned_data.get('username', ''),
-                full_name=self.cleaned_data.get('full_name', ''),
-                phone_number=self.cleaned_data.get('phone_number', ''),
-            )
-            validate_password(password1, candidate)
         return password2
 
     def save(self, commit=True):

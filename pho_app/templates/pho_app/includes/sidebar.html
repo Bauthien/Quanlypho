@@ -14,6 +14,7 @@
         {% endif %}
         {% if user.is_staff_role or user.is_admin_role %}
         <a href="{% url 'staff_home' %}" {% if request.resolver_match.url_name == 'staff_home' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='wallet' %}<span>Thu ngân</span></a>
+        <a href="{% url 'staff_table_map' %}" {% if request.resolver_match.url_name == 'staff_table_map' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='table' %}<span>Sơ đồ bàn</span></a>
         {% endif %}
         {% if user.is_kitchen or user.is_admin_role %}<a href="{% url 'kitchen_home' %}" {% if request.resolver_match.url_name == 'kitchen_home' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='chef' %}<span>Màn hình bếp</span></a>{% endif %}
     </nav>

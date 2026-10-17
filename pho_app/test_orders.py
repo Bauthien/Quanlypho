@@ -256,6 +256,142 @@ class OrderManagementTests(TestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.payment_status, Order.PaymentStatus.PENDING)
 
+    def test_kitchen_can_only_open_orders_in_kitchen_workflow(self):
+        kitchen = User.objects.create_user(username='scoped-kitchen', role=User.Role.KITCHEN)
+        self.client.force_login(kitchen)
+
+        self.assertRedirects(
+            self.client.get(reverse('order_detail', args=[self.order.pk])),
+            reverse('menu'),
+            fetch_redirect_response=False,
+        )
+        Order.objects.filter(pk=self.order.pk).update(
+            payment_status=Order.PaymentStatus.PAID,
+            order_status=Order.OrderStatus.PENDING_KITCHEN,
+        )
+        self.assertEqual(self.client.get(reverse('order_detail', args=[self.order.pk])).status_code, 200)
+        Order.objects.filter(pk=self.order.pk).update(order_status=Order.OrderStatus.COMPLETED)
+        self.assertRedirects(
+            self.client.get(reverse('order_detail', args=[self.order.pk])),
+            reverse('menu'),
+            fetch_redirect_response=False,
+        )
+
+    def test_staff_cannot_clear_table_with_unfinished_order(self):
+        order = self.make_order(code='UNFINISHED-TABLE', table=self.table, order_status=Order.OrderStatus.COOKING)
+        self.client.force_login(self.staff)
+
+        response = self.client.post(reverse('free_table', args=[self.table.pk]))
+
+        self.assertRedirects(response, reverse('staff_home'))
+        order.refresh_from_db()
+        self.table.refresh_from_db()
+        self.assertFalse(order.is_cleared)
+        self.assertEqual(self.table.status, Table.Status.OCCUPIED)
+
+    def test_staff_cannot_clear_individual_order_before_completion(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.post(reverse('free_order_table', args=[self.order.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.order.refresh_from_db()
+        self.assertFalse(self.order.is_cleared)
+
+    def test_table_assignment_rejects_wrong_order_type_and_insufficient_capacity(self):
+        self.client.force_login(self.staff)
+        delivery_order = self.make_order(code='DELIVERY-NO-TABLE', order_type=Order.OrderType.DELIVERY)
+        response = self.client.post(reverse('assign_order_table', args=[delivery_order.pk]), {'table_id': self.table.pk})
+        self.assertRedirects(response, reverse('staff_home'))
+        delivery_order.refresh_from_db()
+        self.assertIsNone(delivery_order.table_id)
+
+        three_bowls_order = self.make_order(code='THREE-BOWLS', order_type=Order.OrderType.DINE_IN)
+        OrderItem.objects.create(order=three_bowls_order, menu_item=self.menu, quantity=5, item_price=50000)
+        small_table = Table.objects.create(table_number='SMALL', capacity=4, status=Table.Status.AVAILABLE)
+        response = self.client.post(reverse('assign_order_table', args=[three_bowls_order.pk]), {'table_id': small_table.pk})
+        self.assertRedirects(response, reverse('staff_home'))
+        three_bowls_order.refresh_from_db()
+        small_table.refresh_from_db()
+        self.assertIsNone(three_bowls_order.table_id)
+        self.assertEqual(small_table.status, Table.Status.AVAILABLE)
+
+    def test_table_assignment_releases_paid_dine_in_order_to_kitchen(self):
+        order = self.make_order(
+            code='WAITING-FOR-SEAT', order_type=Order.OrderType.DINE_IN,
+            payment_status=Order.PaymentStatus.PAID,
+            order_status=Order.OrderStatus.PENDING_KITCHEN,
+        )
+        OrderItem.objects.create(order=order, menu_item=self.menu, quantity=2, item_price=50000)
+        available_table = Table.objects.create(table_number='AVAILABLE-2', capacity=4)
+        self.client.force_login(self.staff)
+
+        cashier_page = self.client.get(reverse('staff_home'))
+        queued_order = next(row for row in cashier_page.context['paid_unassigned_orders'] if row.pk == order.pk)
+        self.assertEqual(queued_order.pho_count, 2)
+        self.assertIn(available_table, queued_order.suitable_tables)
+        response = self.client.post(reverse('assign_order_table', args=[order.pk]), {'table_id': available_table.pk})
+
+        self.assertRedirects(response, reverse('staff_home'))
+        order.refresh_from_db()
+        available_table.refresh_from_db()
+        self.assertEqual(order.table_id, available_table.pk)
+        self.assertEqual(available_table.status, Table.Status.OCCUPIED)
+        self.client.force_login(self.kitchen)
+        kitchen_page = self.client.get(reverse('kitchen_home'))
+        self.assertIn(order, kitchen_page.context['orders'])
+
+    def test_cashier_must_choose_table_with_capacity_before_cash_confirmation(self):
+        order = self.make_order(
+            code='CASH-NEEDS-TABLE', order_type=Order.OrderType.DINE_IN,
+            payment_method=Order.PaymentMethod.CASH,
+            payment_status=Order.PaymentStatus.PENDING,
+            order_status=Order.OrderStatus.CART,
+        )
+        OrderItem.objects.create(order=order, menu_item=self.menu, quantity=2, item_price=50000)
+        too_small = Table.objects.create(table_number='CAP-1', capacity=1)
+        suitable = Table.objects.create(table_number='CAP-2', capacity=2)
+        self.client.force_login(self.staff)
+
+        missing = self.client.post(reverse('confirm_cash', args=[order.pk]))
+        self.assertRedirects(missing, reverse('staff_home'))
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
+
+        rejected = self.client.post(reverse('confirm_cash', args=[order.pk]), {'table_id': too_small.pk})
+        self.assertRedirects(rejected, reverse('staff_home'))
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PENDING)
+        self.assertIsNone(order.table_id)
+
+        accepted = self.client.post(reverse('confirm_cash', args=[order.pk]), {'table_id': suitable.pk})
+        self.assertRedirects(accepted, reverse('staff_home'))
+        order.refresh_from_db()
+        self.assertEqual(order.payment_status, Order.PaymentStatus.PAID)
+        self.assertEqual(order.order_status, Order.OrderStatus.PENDING_KITCHEN)
+        self.assertEqual(order.table_id, suitable.pk)
+
+    def test_two_of_four_bowls_can_be_cleared_from_cashier_table_map(self):
+        table = Table.objects.create(table_number='TABLE-8-TEST', capacity=4, status=Table.Status.OCCUPIED)
+        order = self.make_order(
+            code='TWO-OF-FOUR', table=table,
+            order_type=Order.OrderType.DINE_IN,
+            payment_status=Order.PaymentStatus.PAID,
+            order_status=Order.OrderStatus.COMPLETED,
+        )
+        OrderItem.objects.create(order=order, menu_item=self.menu, quantity=2, item_price=50000)
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse('staff_table_map'))
+        self.assertContains(response, '2 / 4 tô đang dùng')
+        cleared = self.client.post(reverse('free_table', args=[table.pk]))
+
+        self.assertRedirects(cleared, reverse('staff_home'))
+        order.refresh_from_db()
+        table.refresh_from_db()
+        self.assertTrue(order.is_cleared)
+        self.assertEqual(table.status, Table.Status.AVAILABLE)
+
     def test_repeated_cash_confirmation_across_screens_deducts_inventory_once(self):
         self.action('confirm_cash')
         self.action('confirm_cash')
@@ -342,6 +478,39 @@ class OrderManagementTests(TestCase):
 
 class ConcurrentOrderPaymentTests(TransactionTestCase):
     @skipUnlessDBFeature('has_select_for_update')
+    def test_checkout_locks_table_inside_atomic_transaction(self):
+        customer = User.objects.create_user(username='checkout-lock-customer', password='password123')
+        table = Table.objects.create(table_number='LOCK-1', capacity=4, status=Table.Status.AVAILABLE)
+        menu_item = MenuItem.objects.create(
+            name='Phở kiểm tra transaction',
+            base_price=50000,
+            category=MenuItem.Category.PHO,
+            image_primary='pho.jpg',
+        )
+        options = {}
+        for option in CustomizationOption.objects.all():
+            options.setdefault(option.category, option.pk)
+        self.assertEqual(set(options), set(CustomizationOption.Category.values))
+
+        client = Client()
+        client.force_login(customer)
+        response = client.post(reverse('place_order'), {
+            'cart': json.dumps([{
+                'id': menu_item.pk,
+                'qty': 1,
+                'toppings': [],
+                'customizations': list(options.values()),
+            }]),
+            'order_type': Order.OrderType.DINE_IN,
+            'payment_method': Order.PaymentMethod.VIETQR,
+            'table_id': table.pk,
+        })
+
+        order = Order.objects.get(customer=customer)
+        self.assertRedirects(response, f'{reverse("order_detail", args=[order.pk])}?placed=1')
+        self.assertEqual(order.table_id, table.pk)
+
+    @skipUnlessDBFeature('has_select_for_update')
     def test_two_cash_confirmations_deduct_inventory_once(self):
         from .services import InvalidOrderTransition, apply_order_action
         ingredient = Ingredient.objects.create(name='Bò thử', unit='kg', current_stock=10)
@@ -368,3 +537,109 @@ class ConcurrentOrderPaymentTests(TransactionTestCase):
         ingredient.refresh_from_db()
         self.assertEqual(ingredient.current_stock, 9)
         self.assertEqual(InventoryTransaction.objects.count(), 1)
+
+
+class CustomerOrderingAndTableWorkflowTests(TestCase):
+    def setUp(self):
+        self.customer = User.objects.create_user(username='khach1', password='password123', role=User.Role.CUSTOMER)
+        self.staff = User.objects.create_user(username='thungan1', password='password123', role=User.Role.STAFF)
+        self.table = Table.objects.create(table_number='9', capacity=4, status=Table.Status.AVAILABLE)
+        self.menu_item = MenuItem.objects.create(name='Phở Tái Lăn', base_price=60000, category=MenuItem.Category.PHO, image_primary='pho.jpg')
+        options = {}
+        for option in CustomizationOption.objects.all():
+            options.setdefault(option.category, option.pk)
+        self.options = list(options.values())
+
+    def test_place_order_without_table_cash_and_vietqr(self):
+        self.client.force_login(self.customer)
+        # 1. Place order with CASH and without table
+        res_cash = self.client.post(reverse('place_order'), {
+            'cart': json.dumps([{'id': self.menu_item.pk, 'qty': 1, 'toppings': [], 'customizations': self.options}]),
+            'order_type': Order.OrderType.DINE_IN,
+            'payment_method': Order.PaymentMethod.CASH,
+            'table_id': '',
+        })
+        cash_order = Order.objects.filter(customer=self.customer, payment_method=Order.PaymentMethod.CASH).first()
+        self.assertIsNotNone(cash_order)
+        self.assertIsNone(cash_order.table)
+        self.assertRedirects(res_cash, f"{reverse('order_detail', args=[cash_order.pk])}?placed=1")
+
+        # 2. Place order with VIETQR and without table
+        res_qr = self.client.post(reverse('place_order'), {
+            'cart': json.dumps([{'id': self.menu_item.pk, 'qty': 2, 'toppings': [], 'customizations': self.options}]),
+            'order_type': Order.OrderType.DINE_IN,
+            'payment_method': Order.PaymentMethod.VIETQR,
+            'table_id': '',
+        })
+        qr_order = Order.objects.filter(customer=self.customer, payment_method=Order.PaymentMethod.VIETQR).first()
+        self.assertIsNotNone(qr_order)
+        self.assertIsNone(qr_order.table)
+        self.assertRedirects(res_qr, f"{reverse('order_detail', args=[qr_order.pk])}?placed=1")
+
+        # 3. Cashier directs cash customer to table upon payment confirmation
+        self.client.force_login(self.staff)
+        res_confirm = self.client.post(reverse('confirm_cash', args=[cash_order.pk]), {
+            'table_id': self.table.pk,
+        })
+        self.assertRedirects(res_confirm, reverse('staff_home'))
+        cash_order.refresh_from_db()
+        self.assertEqual(cash_order.table_id, self.table.pk)
+        self.assertEqual(cash_order.payment_status, Order.PaymentStatus.PAID)
+        self.table.refresh_from_db()
+        self.assertEqual(self.table.status, Table.Status.OCCUPIED)
+
+        # 4. Cashier assigns table to QR order
+        qr_order.payment_status = Order.PaymentStatus.PAID
+        qr_order.order_status = Order.OrderStatus.PENDING_KITCHEN
+        qr_order.save(update_fields=['payment_status', 'order_status'])
+        qr_table = Table.objects.create(table_number='10', capacity=4, status=Table.Status.AVAILABLE)
+        res_assign = self.client.post(reverse('assign_order_table', args=[qr_order.pk]), {
+            'table_id': qr_table.pk,
+        })
+        self.assertRedirects(res_assign, reverse('staff_home'))
+        qr_order.refresh_from_db()
+        self.assertEqual(qr_order.table_id, qr_table.pk)
+
+    def test_public_reviews_page_does_not_redirect_to_login(self):
+        response = self.client.get(reverse('reviews_list'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_staff_can_view_menu(self):
+        self.client.force_login(self.staff)
+        response = self.client.get(reverse('menu'))
+        self.assertEqual(response.status_code, 200)
+
+    def test_customer_registration_and_login_by_username_or_phone(self):
+        # 1. Register new customer with simple password
+        res_reg = self.client.post(reverse('register'), {
+            'username': 'khachmoi_test',
+            'full_name': 'Khách Mới',
+            'phone_number': '0988776655',
+            'password1': '123456',
+            'password2': '123456',
+        })
+        self.assertRedirects(res_reg, reverse('menu'))
+        new_user = User.objects.filter(username='khachmoi_test').first()
+        self.assertIsNotNone(new_user)
+        self.assertEqual(new_user.role, User.Role.CUSTOMER)
+
+        # 2. Logout via POST
+        res_logout = self.client.post(reverse('logout'))
+        self.assertRedirects(res_logout, reverse('login'))
+
+        # 3. Login using mixed-case username
+        res_login_username = self.client.post(reverse('login'), {
+            'username': 'KhachMoi_Test',
+            'password': '123456',
+        })
+        self.assertRedirects(res_login_username, reverse('menu'))
+
+        # 4. Logout and login using phone number
+        self.client.post(reverse('logout'))
+        res_login_phone = self.client.post(reverse('login'), {
+            'username': '0988776655',
+            'password': '123456',
+        })
+        self.assertRedirects(res_login_phone, reverse('menu'))
+
+

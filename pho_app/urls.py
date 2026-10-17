@@ -18,6 +18,7 @@ urlpatterns = [
     path('thanh-toan/vietqr/simulate/<int:order_id>/', views.simulate_vietqr_payment, name='simulate_vietqr_payment'),
 
     path('thu-ngan/', views.staff_home, name='staff_home'),
+    path('thu-ngan/so-do-ban/', views.staff_table_map, name='staff_table_map'),
     path('thu-ngan/xac-nhan-tien-mat/<int:order_id>/', views.confirm_cash_payment, name='confirm_cash'),
     path('thu-ngan/huy-don/<int:order_id>/', views.cancel_cash_order, name='cancel_order'),
     path('thu-ngan/goi-so/', views.call_next_queue, name='call_next_queue'),
@@ -26,6 +27,7 @@ urlpatterns = [
     path('thu-ngan/phuc-vu-xong/<int:order_id>/', views.complete_dine_in, name='complete_dine_in'),
     path('thu-ngan/ban/<int:table_id>/da-don/', views.free_table, name='free_table'),
     path('thu-ngan/don/<int:order_id>/da-an-xong/', views.free_order_table, name='free_order_table'),
+    path('thu-ngan/don/<int:order_id>/dieu-huong-ban/', views.assign_order_table, name='assign_order_table'),
 
     path('bep/', views.kitchen_home, name='kitchen_home'),
     path('bep/bat-dau/<int:order_id>/', views.kitchen_start, name='kitchen_start'),

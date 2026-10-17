@@ -104,7 +104,7 @@
       return `<div class="cart-item"><img src="${escape(image(item))}" data-image-fallback="${escape(fallbackImage(item))}" alt=""><div><div class="cart-item-name">${escape(item.name)}</div><small>${escape(details)}</small><div class="cart-item-price">${money(linePrice(entry) * entry.qty)}</div></div><div class="qty-controls"><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="-1" aria-label="Giảm số lượng ${escape(item.name)}">−</button><span>${entry.qty}</span><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="1" aria-label="Tăng số lượng ${escape(item.name)}">+</button></div></div>`;
     }).join('') || `<div class="empty-state">${icon('bag')}<strong>Giỏ hàng đang chờ món ngon</strong>Chọn một tô phở yêu thích để bắt đầu nhé.</div>`;
     const waiting = orderType.value === 'QUEUE_CART' && queueStatus !== 'CALLED';
-    const full = orderType.value === 'DINE_IN' && phoCount > remainingCapacity;
+    const full = orderType.value === 'DINE_IN' && remainingCapacity < 999 && phoCount > remainingCapacity;
     const blocked = orderType.value === 'DELIVERY' && !deliveryAllowed;
     $('#checkoutBtn').disabled = !count || waiting || full || blocked;
     $('#checkoutBtn').textContent = waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
@@ -137,8 +137,8 @@
   function updateMode() {
     const delivery = orderType.value === 'DELIVERY', queue = orderType.value === 'QUEUE_CART';
     $('#addressField').hidden = !delivery;
-    $('#tableField').hidden = delivery || queue;
-    tableSelect.required = !delivery && !queue;
+    if ($('#tableField')) $('#tableField').hidden = delivery || queue;
+    if (tableSelect) tableSelect.required = false;
     address.required = delivery && !($('#customerLat').value && $('#customerLng').value);
     if (delivery) payment.value = 'VIETQR';
     payment.disabled = delivery;
@@ -147,7 +147,7 @@
   }
   document.querySelectorAll('[data-order-mode]').forEach((button) => button.addEventListener('click', () => { orderType.value = button.dataset.orderMode; updateMode(); if (orderType.value === 'DELIVERY') window.phoToast?.('Chọn món trước, sau đó nhập địa chỉ trong giỏ hàng nhé.'); }));
   orderType.addEventListener('change', updateMode);
-  tableSelect.addEventListener('change', () => { remainingCapacity = Number(tableSelect.selectedOptions[0]?.dataset.remaining || 999); renderCart(); });
+  if (tableSelect) { tableSelect.addEventListener('change', () => { remainingCapacity = Number(tableSelect.selectedOptions[0]?.dataset.remaining || 999); renderCart(); }); }
 
   async function quoteFee(lat, lng) {
     const request = ++feeRequest;
@@ -204,10 +204,29 @@
     } catch (_) { /* Preserve the current state during temporary network failures. */ }
   }
   if (config.queueStatus) { pollQueue(); setInterval(() => { if (!document.hidden) pollQueue(); }, 8000); }
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
   form.addEventListener('submit', (event) => {
     if ($('#checkoutBtn').disabled || !cart.length) { event.preventDefault(); return; }
     $('#cartPayload').value = JSON.stringify(cart.map(({ id, qty, customizations, toppings, note }) => ({ id, qty, customizations, toppings, note })));
     payment.disabled = false;
+    const csrfToken = getCookie('csrftoken');
+    const csrfInput = form.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfToken && csrfInput) {
+      csrfInput.value = csrfToken;
+    }
   });
   if (new URLSearchParams(location.search).get('mode') === 'delivery') orderType.value = 'DELIVERY';
   renderMenu(); updateMode();
