@@ -1,0 +1,15 @@
+{% load static order_format %}
+{% if category == 'drink' %}{% static 'pho_app/images/nuoc-uong.jpg' as fallback_image %}{% else %}{% static 'pho_app/images/pho-tai.jpg' as fallback_image %}{% endif %}
+<article class="panel management-menu-card catalog-card" data-filter-item="{{ entry.name }}" data-filter-category="{{ category }}">
+    <div class="dish-image{% if category == 'topping' and not photo %} catalog-topping-placeholder{% endif %}">
+        {% if photo %}<img src="{{ photo.url }}" data-image-fallback="{{ fallback_image }}" width="400" height="220" alt="{{ entry.name }}" loading="lazy">
+        {% elif category == 'topping' %}{% include 'pho_app/includes/icon.html' with name='bowl' %}<span>Thêm chút ngon cho tô phở</span>
+        {% else %}<img src="{{ fallback_image }}" width="400" height="220" alt="{{ entry.name }}" loading="lazy">{% endif %}
+        <span class="badge catalog-category-badge">{{ category_label }}</span>
+    </div>
+    <div class="dish-content"><span class="eyebrow">{{ category_label }}</span><h2>{{ entry.name }}</h2><p>{% if category == 'topping' %}Thêm hương vị cho từng tô phở.{% elif category == 'drink' %}Một thức uống cho bữa ăn trọn vị.{% else %}Một tô phở nóng, đậm vị nhà.{% endif %}</p>
+        <div class="actions"><strong class="dish-price">{{ price|vnd }}</strong><a class="catalog-edit-btn" href="{% url edit_route entry.pk %}" aria-label="Sửa {{ entry.name }}">{% include 'pho_app/includes/icon.html' with name='edit' %} Sửa</a>
+            <form method="post" action="{% url delete_route entry.pk %}" data-catalog-delete data-confirm="Xóa {{ entry.name }} khỏi thực đơn?">{% csrf_token %}<input type="hidden" name="category" value="all"><button class="catalog-delete-btn" type="submit" aria-label="Xóa {{ entry.name }}">{% include 'pho_app/includes/icon.html' with name='trash' %} Xóa</button></form>
+        </div>
+    </div>
+</article>

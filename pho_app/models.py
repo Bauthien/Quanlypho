@@ -84,6 +84,7 @@ class QueueTicket(models.Model):
     customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Khách hàng")
     guest_name = models.CharField(max_length=100, blank=True, verbose_name="Tên khách (không đăng nhập)")
     ticket_number = models.CharField(max_length=50, verbose_name="Số thứ tự (VD: P-015)")
+    people_count = models.PositiveIntegerField(default=1, verbose_name="Số người")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING, verbose_name="Trạng thái hàng đợi")
     table = models.ForeignKey('Table', on_delete=models.SET_NULL, null=True, blank=True, related_name='queue_tickets', verbose_name="Bàn được gọi")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian lấy số")
@@ -101,7 +102,12 @@ class QueueTicket(models.Model):
 # 3. MODULE QUẢN LÝ THỰC ĐƠN (MENU MANAGEMENT)
 # ==========================================
 class MenuItem(models.Model):
+    class Category(models.TextChoices):
+        PHO = 'PHO', 'Phở'
+        DRINK = 'DRINK', 'Đồ uống'
+
     name = models.CharField(max_length=255, verbose_name="Tên món (VD: Phở Tái)")
+    category = models.CharField(max_length=10, choices=Category.choices, default=Category.PHO, verbose_name='Nhóm món')
     base_price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá gốc (VNĐ)")
     is_active = models.BooleanField(default=True, verbose_name="Còn kinh doanh")
 
@@ -120,6 +126,7 @@ class MenuItem(models.Model):
 
 class Topping(models.Model):
     name = models.CharField(max_length=255, verbose_name="Tên Topping (VD: Trứng chần)")
+    is_active = models.BooleanField(default=True, verbose_name='Còn kinh doanh')
     price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá tính thêm (VNĐ)")
     image_thumbnail = models.ImageField(upload_to='toppings/', blank=True, null=True, verbose_name="Ảnh minh họa nhỏ")
 
@@ -290,3 +297,24 @@ class InventoryTransaction(models.Model):
 
     def __str__(self):
         return f"[{self.get_transaction_type_display()}] {self.ingredient.name}: {self.quantity_changed} {self.ingredient.unit}"
+
+
+# ==========================================
+# 6. MODULE ĐÁNH GIÁ KHÁCH HÀNG (REVIEWS)
+# ==========================================
+class Review(models.Model):
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reviews', verbose_name="Khách hàng")
+    menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE, related_name='reviews', blank=True, null=True, verbose_name="Món ăn (nếu có)")
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='reviews', blank=True, null=True, verbose_name="Đơn hàng")
+    rating = models.IntegerField(choices=[(1, '1★'), (2, '2★'), (3, '3★'), (4, '4★'), (5, '5★')], verbose_name="Đánh giá")
+    comment = models.TextField(blank=True, verbose_name="Nhận xét")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian")
+
+    class Meta:
+        verbose_name = "Đánh giá"
+        verbose_name_plural = "Danh sách Đánh giá"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        item_name = self.menu_item.name if self.menu_item else 'Đơn hàng'
+        return f"{self.customer.display_name} - {item_name} - {self.rating}★"

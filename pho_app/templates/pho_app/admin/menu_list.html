@@ -1,62 +1,28 @@
-{% extends "pho_app/admin/shell.html" %}
-{% block title %}Thực đơn - Phở Gia Truyền{% endblock %}
+{% extends 'pho_app/admin/shell.html' %}
+{% load static %}
+{% block title %}Thực đơn & topping · Phở Nhà{% endblock %}
+{% block breadcrumb %}Thực đơn & topping{% endblock %}
 {% block admin_content %}
-<div class="page-title">
-    <h1>Thực đơn</h1>
-    <a class="ghost-btn primary" href="{% url 'admin_menu_create' %}"><i class="fa-solid fa-plus"></i> Thêm món</a>
-</div>
-<div class="panel">
-    <table class="data-table">
-        <thead>
-            <tr><th>Món</th><th>Giá</th><th>Trạng thái</th><th></th></tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>{{ item.name }}</td>
-                <td>{{ item.base_price }}đ</td>
-                <td>{% if item.is_active %}Đang bán{% else %}Ẩn{% endif %}</td>
-                <td>
-                    <a class="nav-link" href="{% url 'admin_menu_edit' item.id %}">Sửa</a>
-                    <form method="post" action="{% url 'admin_menu_delete' item.id %}" style="display:inline;" onsubmit="return confirm('Xóa món này?');">
-                        {% csrf_token %}
-                        <button class="ghost-btn" type="submit">Xóa</button>
-                    </form>
-                </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="4" class="empty-state">Chưa có món. Hãy thêm món để khách đặt.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<div class="page-title">
-    <h1>Topping</h1>
-    <a class="ghost-btn primary" href="{% url 'admin_topping_create' %}"><i class="fa-solid fa-plus"></i> Thêm topping</a>
-</div>
-<div class="panel">
-    <table class="data-table">
-        <thead>
-            <tr><th>Tên</th><th>Giá thêm</th><th></th></tr>
-        </thead>
-        <tbody>
-            {% for topping in toppings %}
-            <tr>
-                <td>{{ topping.name }}</td>
-                <td>+{{ topping.price }}đ</td>
-                <td>
-                    <a class="nav-link" href="{% url 'admin_topping_edit' topping.id %}">Sửa</a>
-                    <form method="post" action="{% url 'admin_topping_delete' topping.id %}" style="display:inline;" onsubmit="return confirm('Xóa topping này?');">
-                        {% csrf_token %}
-                        <button class="ghost-btn" type="submit">Xóa</button>
-                    </form>
-                </td>
-            </tr>
-            {% empty %}
-            <tr><td colspan="3" class="empty-state">Chưa có topping.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<div class="page-heading catalog-heading"><div><span class="eyebrow">PHỞ NHÀ · QUẢN LÝ THÔNG MINH</span><h1>Thực đơn</h1><p>Chăm chút từng món ngon, cập nhật thực đơn của cửa hàng.</p></div><div class="heading-actions"><a class="secondary-btn" href="{% url 'admin_topping_create' %}">{% include 'pho_app/includes/icon.html' with name='plus' %} Thêm topping</a><a class="primary-btn" href="{% url 'admin_menu_create' %}">{% include 'pho_app/includes/icon.html' with name='plus' %} Thêm món mới</a></div></div>
+<section data-filter-root aria-label="Danh sách và bộ lọc thực đơn">
+    <div class="catalog-toolbar">
+        <div class="catalog-tabs" role="group" aria-label="Lọc theo nhóm thực đơn">
+            <button class="active" type="button" data-filter-group="all" aria-pressed="true" aria-controls="catalog-grid">Tất cả</button>
+            <button type="button" data-filter-group="pho" aria-pressed="false" aria-controls="catalog-grid">Phở</button>
+            <button type="button" data-filter-group="drink" aria-pressed="false" aria-controls="catalog-grid">Đồ uống</button>
+            <button type="button" data-filter-group="topping" aria-pressed="false" aria-controls="catalog-grid">Topping</button>
+        </div>
+        <label class="search-field catalog-search" for="menu-search">{% include 'pho_app/includes/icon.html' with name='search' %}<input id="menu-search" type="search" data-filter-search placeholder="Tìm món hoặc topping..." aria-label="Tìm món hoặc topping" autocomplete="off"></label>
+    </div>
+    <p class="catalog-result-count" data-filter-count role="status" aria-live="polite">{{ catalog_count }} món trong thực đơn</p>
+    <div id="catalog-grid" class="management-menu-grid" data-filter-grid>
+        {% for item in items %}
+        {% include 'pho_app/includes/catalog_card.html' with entry=item category=item.category|lower category_label=item.get_category_display price=item.base_price photo=item.image_primary edit_route='admin_menu_edit' delete_route='admin_menu_delete' %}
+        {% endfor %}
+        {% for topping in toppings %}
+        {% include 'pho_app/includes/catalog_card.html' with entry=topping category='topping' category_label='Topping' price=topping.price photo=topping.image_thumbnail edit_route='admin_topping_edit' delete_route='admin_topping_delete' %}
+        {% endfor %}
+    </div>
+    <div class="panel empty-state" data-filter-empty hidden><strong>Chưa có món phù hợp</strong><p>Thử từ khóa khác, chọn Tất cả hoặc thêm món mới vào nhóm này.</p></div>
+</section>
 {% endblock %}

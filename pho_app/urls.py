@@ -18,6 +18,7 @@ urlpatterns = [
     path('thanh-toan/vietqr/simulate/<int:order_id>/', views.simulate_vietqr_payment, name='simulate_vietqr_payment'),
 
     path('thu-ngan/', views.staff_home, name='staff_home'),
+    path('thu-ngan/so-do-ban/', views.staff_table_map, name='staff_table_map'),
     path('thu-ngan/xac-nhan-tien-mat/<int:order_id>/', views.confirm_cash_payment, name='confirm_cash'),
     path('thu-ngan/huy-don/<int:order_id>/', views.cancel_cash_order, name='cancel_order'),
     path('thu-ngan/goi-so/', views.call_next_queue, name='call_next_queue'),
@@ -25,6 +26,8 @@ urlpatterns = [
     path('thu-ngan/giao-xong/<int:order_id>/', views.complete_delivery, name='complete_delivery'),
     path('thu-ngan/phuc-vu-xong/<int:order_id>/', views.complete_dine_in, name='complete_dine_in'),
     path('thu-ngan/ban/<int:table_id>/da-don/', views.free_table, name='free_table'),
+    path('thu-ngan/don/<int:order_id>/da-an-xong/', views.free_order_table, name='free_order_table'),
+    path('thu-ngan/don/<int:order_id>/dieu-huong-ban/', views.assign_order_table, name='assign_order_table'),
 
     path('bep/', views.kitchen_home, name='kitchen_home'),
     path('bep/bat-dau/<int:order_id>/', views.kitchen_start, name='kitchen_start'),
@@ -32,6 +35,9 @@ urlpatterns = [
     path('bep/tem-giao-hang/<int:order_id>/', views.delivery_labels, name='delivery_labels'),
 
     path('quan-ly/', views.admin_home, name='admin_home'),
+    path('quan-ly/don-hang/', views.admin_orders, name='admin_orders'),
+    path('quan-ly/don-hang/<int:order_id>/', views.admin_order_detail, name='admin_order_detail'),
+    path('quan-ly/don-hang/<int:order_id>/xu-ly/', views.admin_order_action, name='admin_order_action'),
     path('quan-ly/ban/', views.admin_table_list, name='admin_table_list'),
     path('quan-ly/ban/them/', views.admin_table_create, name='admin_table_create'),
     path('quan-ly/ban/<int:table_id>/sua/', views.admin_table_edit, name='admin_table_edit'),
@@ -45,4 +51,19 @@ urlpatterns = [
     path('quan-ly/topping/them/', views.admin_topping_create, name='admin_topping_create'),
     path('quan-ly/topping/<int:topping_id>/sua/', views.admin_topping_edit, name='admin_topping_edit'),
     path('quan-ly/topping/<int:topping_id>/xoa/', views.admin_topping_delete, name='admin_topping_delete'),
+
+    path('danh-gia/', views.reviews_list, name='reviews_list'),
+    path('danh-gia/viet/', views.review_form, name='review_form'),
+    path('danh-gia/submit/', views.submit_review, name='submit_review'),
+    path('quan-ly/danh-gia/', views.review_list_all, name='review_list_all'),
+
+    path('quan-ly/ton-kho/', views.admin_inventory, name='admin_inventory'),
+    path('quan-ly/ton-kho/them/', views.admin_ingredient_create, name='admin_ingredient_create'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/sua/', views.admin_ingredient_edit, name='admin_ingredient_edit'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/xoa/', views.admin_ingredient_delete, name='admin_ingredient_delete'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/nhap-kho/', views.admin_ingredient_import, name='admin_ingredient_import'),
+    path('quan-ly/ton-kho/dinh-luong/them/', views.admin_recipe_create, name='admin_recipe_create'),
+    path('quan-ly/ton-kho/dinh-luong/<int:recipe_id>/xoa/', views.admin_recipe_delete, name='admin_recipe_delete'),
+
+    path('404/', views.custom_404_view, name='custom_404'),
 ]

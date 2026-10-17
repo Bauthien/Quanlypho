@@ -2,14 +2,105 @@ import math
 from decimal import Decimal
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import F, Q, Sum
 from django.db.models.functions import Coalesce
 
-from .models import Order, OrderItem, QueueTicket, Table
+from .models import MenuItem, Order, OrderItem, QueueTicket, Table
+
+
+class InvalidOrderTransition(ValueError):
+    """The current persisted order no longer permits this action."""
+
+
+ORDER_ACTION_LABELS = {
+    'confirm_cash': 'Xác nhận đã nhận tiền mặt',
+    'cancel_cash': 'Hủy đơn tiền mặt',
+    'start_cooking': 'Bắt đầu chế biến',
+    'finish_cooking': 'Đánh dấu món đã xong',
+    'handover_delivery': 'Bàn giao cho đơn vị giao hàng',
+    'complete_delivery': 'Hoàn tất giao hàng',
+    'complete_dine_in': 'Đã phục vụ cho khách',
+}
+
+
+def available_order_actions(order):
+    """One set of rules for both the interface and all mutation endpoints."""
+    actions = []
+    supported_type = order.order_type in (Order.OrderType.DINE_IN, Order.OrderType.DELIVERY)
+    if (order.payment_method == Order.PaymentMethod.CASH
+            and order.payment_status == Order.PaymentStatus.PENDING
+            and order.order_status == Order.OrderStatus.CART):
+        if supported_type:
+            actions.append('confirm_cash')
+        actions.append('cancel_cash')
+    if order.payment_status == Order.PaymentStatus.PAID and supported_type:
+        if order.order_status == Order.OrderStatus.PENDING_KITCHEN:
+            actions.append('start_cooking')
+        # Existing kitchen workflow also allows finishing directly from PENDING_KITCHEN.
+        if order.order_status in (Order.OrderStatus.PENDING_KITCHEN, Order.OrderStatus.COOKING):
+            actions.append('finish_cooking')
+        if order.order_status == Order.OrderStatus.READY:
+            actions.append('handover_delivery' if order.order_type == Order.OrderType.DELIVERY else 'complete_dine_in')
+        if order.order_type == Order.OrderType.DELIVERY and order.order_status == Order.OrderStatus.DELIVERING:
+            actions.append('complete_delivery')
+    return actions
+
+
+@transaction.atomic
+def apply_order_action(order_id, action):
+    """Serialize changes before checking state; payment signals remain the sole stock writer.
+
+    Cancellation locks the table before the order, matching checkout/table cleaning,
+    so another checkout cannot occupy the table between checking and releasing it.
+    """
+    if action == 'cancel_cash':
+        table_id = Order.objects.values_list('table_id', flat=True).get(pk=order_id)
+        if table_id:
+            Table.objects.select_for_update().filter(pk=table_id).first()
+    order = Order.objects.select_for_update().get(pk=order_id)
+    if action not in available_order_actions(order):
+        raise InvalidOrderTransition(
+            'Thao tác không hợp lệ với loại đơn hoặc trạng thái hiện tại. '
+            'Đơn có thể vừa được người khác xử lý; vui lòng kiểm tra trạng thái mới nhất.'
+        )
+    fields = ['order_status', 'updated_at']
+    if action == 'confirm_cash':
+        order.payment_status = Order.PaymentStatus.PAID
+        order.order_status = Order.OrderStatus.PENDING_KITCHEN
+        fields.append('payment_status')
+    elif action == 'cancel_cash':
+        order.payment_status = Order.PaymentStatus.FAILED
+        order.order_status = Order.OrderStatus.CANCELLED
+        fields.append('payment_status')
+    else:
+        order.order_status = {
+            'start_cooking': Order.OrderStatus.COOKING,
+            'finish_cooking': Order.OrderStatus.READY,
+            'handover_delivery': Order.OrderStatus.DELIVERING,
+            'complete_delivery': Order.OrderStatus.COMPLETED,
+            'complete_dine_in': Order.OrderStatus.COMPLETED,
+        }[action]
+    if action == 'finish_cooking' and order.order_type == Order.OrderType.DELIVERY and not order.shipping_code:
+        order.shipping_code = f'VD-{order.pk:05d}'
+        fields.append('shipping_code')
+    order.save(update_fields=fields)
+    if action == 'cancel_cash' and order.table_id:
+        # Completed diners still occupy their places until the separate cleaning action.
+        occupied = Order.objects.filter(table_id=order.table_id, is_cleared=False).exclude(
+            order_status=Order.OrderStatus.CANCELLED,
+        ).exists()
+        if not occupied:
+            Table.objects.filter(pk=order.table_id).update(status=Table.Status.AVAILABLE)
+    return order
 
 
 def active_orders_q():
-    return Q(order__is_cleared=False) & ~Q(order__order_status=Order.OrderStatus.CANCELLED)
+    return (
+        Q(order__is_cleared=False)
+        & ~Q(order__order_status=Order.OrderStatus.CANCELLED)
+        & Q(order__items__menu_item__category=MenuItem.Category.PHO)
+    )
 
 
 def tables_with_capacity():
@@ -25,7 +116,11 @@ def tables_are_full():
 
 def used_bowls(table):
     return (
-        OrderItem.objects.filter(order__table=table, order__is_cleared=False)
+        OrderItem.objects.filter(
+            order__table=table,
+            order__is_cleared=False,
+            menu_item__category=MenuItem.Category.PHO,
+        )
         .exclude(order__order_status=Order.OrderStatus.CANCELLED)
         .aggregate(total=Sum('quantity'))['total']
         or 0

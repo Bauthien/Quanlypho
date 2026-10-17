@@ -1,317 +1,233 @@
-const CART_KEY = 'pho-order-cart-v1-' + (typeof currentUserId !== 'undefined' ? currentUserId : 'guest');
-let cart = [];
-try {
-    cart = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-    if (!Array.isArray(cart)) cart = [];
-} catch (_error) {
-    cart = [];
-}
+/* Customer menu, customization dialog, persistent cart and existing Django endpoints. */
+(() => {
+  'use strict';
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const readJSON = (id) => JSON.parse(document.getElementById(id).textContent);
+  const config = readJSON('menu-config');
+  const menuItems = readJSON('menu-data');
+  const customizationOptions = readJSON('customization-data');
+  const toppings = readJSON('topping-data');
+  const CART_KEY = `pho-order-cart-v1-${config.userId || 'guest'}`;
+  const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const money = (value) => new Intl.NumberFormat('vi-VN').format(Number(value)) + 'đ';
+  const icon = (name) => `<svg class="icon" width="20" height="20" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
+  const normalize = (value) => String(value).toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  const category = (item) => item.category === 'drink' ? 'drink' : 'pho';
+  const fallbackImage = (item) => {
+    const name = normalize(item.name);
+    const filename = category(item) === 'drink' ? 'nuoc-uong.jpg' : name.includes('dac biet') ? 'pho-dac-biet.jpg' : name.includes('nam') ? 'pho-nam.jpg' : 'pho-tai.jpg';
+    return config.imageBase + filename;
+  };
+  const image = (item) => item.image || fallbackImage(item);
+  const grid = $('#menuGrid'), cartDialog = $('#cartSidebar'), customDialog = $('#customizeDialog');
+  const form = $('#checkoutForm'), orderType = $('#orderType'), payment = $('#paymentMethod');
+  const tableSelect = $('#tableSelect'), address = $('#deliveryAddress');
+  let cart = [], activeCategory = 'all', customItem = null, customQuantity = 1;
+  let remainingCapacity = config.remainingCapacity, queueStatus = config.queueStatus;
+  let deliveryAllowed = true, feeRequest = 0;
+  try {
+    const saved = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
+    if (Array.isArray(saved)) cart = saved.filter((entry) => entry && menuItems.some((item) => item.id === entry.id) && Number.isInteger(entry.qty) && entry.qty > 0 && Array.isArray(entry.customizations) && Array.isArray(entry.toppings)).map((entry) => ({ ...entry, qty: Math.min(99, entry.qty) }));
+  } catch (_) { cart = []; }
+  function save() { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) { window.phoToast?.('Giỏ hàng được giữ trong phiên này; trình duyệt đang tắt lưu trữ.'); } }
+  const product = (entry) => menuItems.find((item) => item.id === entry.id);
+  const linePrice = (entry) => Number(product(entry)?.price || 0) + entry.toppings.reduce((total, id) => total + Number(toppings.find((topping) => topping.id === id)?.price || 0), 0);
 
-const menuGrid = document.getElementById('menuGrid');
-const cartSidebar = document.getElementById('cartSidebar');
-const cartOverlay = document.getElementById('cartOverlay');
-const openCartBtn = document.getElementById('openCartBtn');
-const closeCartBtn = document.getElementById('closeCartBtn');
-const cartItemsList = document.getElementById('cartItemsList');
-const cartBadge = document.getElementById('cartBadge');
-const cartTotalAmount = document.getElementById('cartTotalAmount');
-const checkoutBtn = document.getElementById('checkoutBtn');
-const searchInput = document.getElementById('searchInput');
-const checkoutForm = document.getElementById('checkoutForm');
-const cartPayload = document.getElementById('cartPayload');
-const orderType = document.getElementById('orderType');
-const paymentMethod = document.getElementById('paymentMethod');
-const addressField = document.getElementById('addressField');
-const tableField = document.getElementById('tableField');
-const tableSelect = document.getElementById('tableSelect');
-const locateBtn = document.getElementById('locateBtn');
-const deliveryFeeHint = document.getElementById('deliveryFeeHint');
-const customerLat = document.getElementById('customerLat');
-const customerLng = document.getElementById('customerLng');
-let currentQueueStatus = typeof queueTicketStatus !== 'undefined' ? queueTicketStatus : '';
-let deliveryAllowed = true;
+  function renderMenu() {
+    const query = normalize($('#searchInput').value.trim());
+    const items = menuItems.filter((item) => (activeCategory === 'all' || category(item) === activeCategory) && normalize(item.name).includes(query));
+    $('#menuResultCount').textContent = `${items.length} món dành cho bạn`;
+    grid.innerHTML = items.map((item) => `<article class="food-card" data-menu-id="${item.id}">
+      <div class="food-img-wrapper"><img src="${escape(image(item))}" data-image-fallback="${escape(fallbackImage(item))}" width="360" height="240" alt="${escape(item.name)}" loading="lazy"></div>
+      <div class="food-info"><span class="eyebrow">${category(item) === 'drink' ? 'MÁT LÀNH, THẢNH THƠI' : 'PHỞ NHÀ · ĐẬM VỊ VIỆT'}</span><h2 class="food-title">${escape(item.name)}</h2><p class="food-desc">${category(item) === 'drink' ? 'Một chút mát lành cho bữa ăn thêm trọn vị.' : 'Nước dùng đậm đà, thịt tươi và rau thơm. Chọn khẩu vị theo cách của bạn.'}</p><div class="food-footer"><span class="food-price">${money(item.price)}</span><button class="add-btn" type="button" data-customize="${item.id}" aria-label="Chọn ${escape(item.name)}">${icon('plus')} Chọn món</button></div></div></article>`).join('') || `<div class="panel empty-state">${icon('search')}<strong>Chưa tìm thấy món phù hợp</strong>Thử tên món khác hoặc chọn tất cả món nhé.</div>`;
+  }
 
-const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-}[char]));
-const formatMoney = (value) => `${Number(value).toLocaleString('vi-VN')}đ`;
-const categoryLabels = { BROTH: 'Nước dùng', VEGGIE: 'Hành / giá', NOODLE: 'Bánh phở' };
-
-function optionsMarkup(item) {
-    const optionGroups = ['BROTH', 'VEGGIE', 'NOODLE'].map((category) => {
-        const choices = customizationOptions.filter((option) => option.category === category);
-        return `<fieldset class="choice-group"><legend>${categoryLabels[category]} <span>*</span></legend>${choices.map((option) => `
-            <label><input type="checkbox" data-customization-id="${option.id}" data-category="${category}"> ${escapeHtml(option.name)}</label>
-        `).join('')}</fieldset>`;
-    }).join('');
-    const toppingChoices = toppings.map((topping) => `
-        <label><input type="checkbox" data-topping-id="${topping.id}"> ${escapeHtml(topping.name)} (+${formatMoney(topping.price)})</label>
-    `).join('');
-    return `<details class="food-options"><summary>Tùy chỉnh món <small>(bắt buộc chọn 1 mục mỗi nhóm)</small></summary>
-        ${optionGroups}
-        ${toppingChoices ? `<fieldset class="choice-group"><legend>Topping thêm</legend>${toppingChoices}</fieldset>` : ''}
-        <label class="note-label">Ghi chú <input class="form-input item-note" maxlength="500" placeholder="VD: ít cay"></label>
-    </details>`;
-}
-
-function renderMenu(items) {
-    if (!items.length) {
-        menuGrid.innerHTML = '<p class="empty-state">Chưa có món trên thực đơn. Quản lý hãy thêm món trong trang Quản lý.</p>';
-        return;
-    }
-    menuGrid.innerHTML = items.map((item) => `
-        <article class="food-card" data-menu-id="${item.id}">
-            <div class="food-img-wrapper"><img src="${escapeHtml(item.image || 'https://placehold.co/300x200?text=Pho+Viet')}" alt="${escapeHtml(item.name)}"></div>
-            <div class="food-info">
-                <h3 class="food-title">${escapeHtml(item.name)}</h3>
-                <p class="food-desc">${escapeHtml(item.desc)}</p>
-                ${optionsMarkup(item)}
-                <div class="food-footer">
-                    <span class="food-price">${formatMoney(item.price)}</span>
-                    <button class="add-btn" type="button" data-add-item="${item.id}"><i class="fa-solid fa-plus"></i> Thêm</button>
-                </div>
-            </div>
-        </article>
-    `).join('');
-}
-
-function persistCart() {
-    localStorage.setItem(CART_KEY, JSON.stringify(cart));
-}
-
-function addToCart(id, card) {
-    const item = menuItems.find((product) => product.id === id);
-    if (!item) return;
-    const customizations = [...card.querySelectorAll('[data-customization-id]:checked')].map((input) => Number(input.dataset.customizationId)).sort();
-    const selectedCategories = [...card.querySelectorAll('[data-customization-id]:checked')].map((input) => input.dataset.category);
-    if (['BROTH', 'VEGGIE', 'NOODLE'].some((category) => selectedCategories.filter((value) => value === category).length !== 1)) {
-        alert('Vui lòng chọn đúng một mục cho nước dùng, hành/giá và bánh phở.');
-        return;
-    }
-    const selectedToppings = [...card.querySelectorAll('[data-topping-id]:checked')].map((input) => Number(input.dataset.toppingId)).sort();
-    const note = card.querySelector('.item-note')?.value.trim() || '';
-    const variantKey = JSON.stringify([item.id, customizations, selectedToppings, note]);
-    const existing = cart.find((entry) => entry.variantKey === variantKey);
-    if (existing) existing.qty = Math.min(existing.qty + 1, 99);
-    else cart.push({
-        id: item.id, name: item.name, basePrice: item.price, qty: 1,
-        customizations, toppings: selectedToppings, note, variantKey,
-    });
-    persistCart();
-    renderCart();
-}
-
-function changeQty(variantKey, delta) {
-    const existing = cart.find((entry) => entry.variantKey === variantKey);
-    if (!existing) return;
-    existing.qty += delta;
-    if (existing.qty <= 0) cart = cart.filter((entry) => entry.variantKey !== variantKey);
-    persistCart();
-    renderCart();
-}
-
-function getLinePrice(item) {
-    const toppingTotal = item.toppings.reduce((sum, id) => sum + Number(toppings.find((topping) => topping.id === id)?.price || 0), 0);
-    return Number(item.basePrice) + toppingTotal;
-}
-
-function renderCart() {
-    const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
-    const foodTotal = cart.reduce((sum, item) => sum + item.qty * getLinePrice(item), 0);
-    const deliveryFee = orderType.value === 'DELIVERY' ? Number(cartTotalAmount.dataset.deliveryFee || 0) : 0;
-    const total = foodTotal + deliveryFee;
-    cartBadge.textContent = totalQty;
-    cartTotalAmount.textContent = formatMoney(total);
-    
-    const currentType = orderType.value;
-    const isTableFull = (typeof remainingCapacity !== 'undefined') && (totalQty > remainingCapacity) && currentType === 'DINE_IN';
-    const waitingQueue = currentType === 'QUEUE_CART' && currentQueueStatus !== 'CALLED';
-    const deliveryBlocked = currentType === 'DELIVERY' && !deliveryAllowed;
-
-    if (waitingQueue) {
-        checkoutBtn.disabled = true;
-        checkoutBtn.textContent = 'Chờ gọi số — chưa thanh toán';
-        checkoutBtn.style.backgroundColor = '';
-    } else if (deliveryBlocked) {
-        checkoutBtn.disabled = true;
-        checkoutBtn.textContent = 'Ngoài phạm vi giao hàng';
-        checkoutBtn.style.backgroundColor = '#dc3545';
-    } else if (isTableFull) {
-        checkoutBtn.disabled = true;
-        checkoutBtn.textContent = 'Quá giới hạn của bàn (' + remainingCapacity + ' phần)';
-        checkoutBtn.style.backgroundColor = '#dc3545';
+  function customPrice() {
+    if (!customItem) return;
+    const extra = [...$('#customOptions').querySelectorAll('[data-topping-id]:checked')].reduce((total, input) => total + Number(toppings.find((item) => item.id === Number(input.dataset.toppingId))?.price || 0), 0);
+    $('#customTotal').textContent = money((Number(customItem.price) + extra) * customQuantity);
+    $('#customQty').textContent = customQuantity;
+  }
+  function customize(id) {
+    customItem = menuItems.find((item) => item.id === id);
+    if (!customItem) return;
+    customQuantity = 1;
+    $('#customizeTitle').textContent = customItem.name;
+    $('#customNote').value = '';
+    $('#customError').hidden = true;
+    $('#customDishIntro').innerHTML = `<img src="${escape(image(customItem))}" data-image-fallback="${escape(fallbackImage(customItem))}" alt="${escape(customItem.name)}"><div><span class="muted">Một món ngon, đúng khẩu vị</span><strong>${money(customItem.price)}</strong></div>`;
+    const isDrink = category(customItem) === 'drink';
+    if (isDrink) {
+      $('#customOptions').innerHTML = `<div style="padding: 14px 12px; background: var(--blue-soft, #edf3f9); border-radius: 8px; color: var(--blue, #3f6c8e); font-size: 12.5px; margin-bottom: 8px;">🥤 Đồ uống ướp lạnh mát giải khát. Bạn có thể ghi chú thêm yêu cầu phục vụ (ví dụ: dùng kèm ly đá, ít đá...) ở ô bên dưới.</div>`;
     } else {
-        checkoutBtn.disabled = totalQty === 0;
-        checkoutBtn.textContent = 'Tiến Hành Đặt Món';
-        checkoutBtn.style.backgroundColor = '';
+      const groups = { BROTH: 'Nước dùng', VEGGIE: 'Hành / giá', NOODLE: 'Bánh phở' };
+      $('#customOptions').innerHTML = Object.entries(groups).map(([key, label]) => {
+        const options = customizationOptions.filter((option) => option.category === key);
+        return options.length ? `<fieldset class="choice-group"><legend>${label} <small>· chọn 1</small></legend>${options.map((option, index) => `<label><input type="radio" name="custom-${key}" value="${option.id}" data-category="${key}" ${index === 0 ? 'checked' : ''} required>${escape(option.name)}</label>`).join('')}</fieldset>` : '';
+      }).join('') + (toppings.length ? `<fieldset class="choice-group"><legend>Thêm chút topping <small>· không bắt buộc</small></legend>${toppings.map((topping) => `<label><input type="checkbox" data-topping-id="${topping.id}">${escape(topping.name)}<span>+${money(topping.price)}</span></label>`).join('')}</fieldset>` : '');
     }
+    customPrice();
+    customDialog.showModal();
+  }
+  grid.addEventListener('click', (event) => { const button = event.target.closest('[data-customize]'); if (button) customize(Number(button.dataset.customize)); });
+  $('#customOptions').addEventListener('change', customPrice);
+  document.querySelectorAll('[data-custom-qty]').forEach((button) => button.addEventListener('click', () => { customQuantity = Math.min(99, Math.max(1, customQuantity + Number(button.dataset.customQty))); customPrice(); }));
+  $('[data-close-customize]').addEventListener('click', () => customDialog.close());
+  $('#customizeForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!customItem) return;
+    const choices = [...$('#customOptions').querySelectorAll('input[type="radio"]:checked')].map((input) => Number(input.value)).sort((a, b) => a - b);
+    const extras = [...$('#customOptions').querySelectorAll('[data-topping-id]:checked')].map((input) => Number(input.dataset.toppingId)).sort((a, b) => a - b);
+    const note = $('#customNote').value.trim();
+    const variantKey = JSON.stringify([customItem.id, choices, extras, note]);
+    const entry = cart.find((item) => item.variantKey === variantKey);
+    if (entry) entry.qty = Math.min(99, entry.qty + customQuantity);
+    else cart.push({ id: customItem.id, qty: customQuantity, customizations: choices, toppings: extras, note, variantKey });
+    save(); renderCart(); customDialog.close();
+    window.phoToast?.(`Đã thêm ${customItem.name} vào giỏ hàng.`);
+  });
 
-    cartItemsList.innerHTML = cart.map((item) => {
-        const selected = item.customizations.map((id) => customizationOptions.find((option) => option.id === id)?.name).filter(Boolean);
-        const extras = item.toppings.map((id) => toppings.find((topping) => topping.id === id)?.name).filter(Boolean);
-        const details = [...selected, ...extras, item.note].filter(Boolean).join(' · ');
-        return `<div class="cart-item">
-            <div><div class="cart-item-name">${escapeHtml(item.name)}</div>
-                <small>${escapeHtml(details)}</small>
-                <div class="cart-item-price">${formatMoney(getLinePrice(item) * item.qty)}</div></div>
-            <div class="qty-controls"><button class="qty-btn" type="button" data-qty-key="${escapeHtml(item.variantKey)}" data-delta="-1">-</button>
-                <span>${item.qty}</span><button class="qty-btn" type="button" data-qty-key="${escapeHtml(item.variantKey)}" data-delta="1">+</button></div>
-        </div>`;
-    }).join('') || '<p class="empty-state">Chưa có món trong giỏ.</p>';
-}
-
-function openCart() {
-    cartSidebar.classList.add('active');
-    cartOverlay.classList.add('active');
-}
-
-function closeCart() {
-    cartSidebar.classList.remove('active');
-    cartOverlay.classList.remove('active');
-}
-
-openCartBtn.addEventListener('click', openCart);
-closeCartBtn.addEventListener('click', closeCart);
-cartOverlay.addEventListener('click', closeCart);
-menuGrid.addEventListener('click', (event) => {
-    const addButton = event.target.closest('[data-add-item]');
-    if (addButton) addToCart(Number(addButton.dataset.addItem), addButton.closest('.food-card'));
-});
-cartItemsList.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-qty-key]');
-    if (button) changeQty(button.dataset.qtyKey, Number(button.dataset.delta));
-});
-menuGrid.addEventListener('change', (event) => {
-    const input = event.target;
-    if (!input.matches('[data-customization-id]') || !input.checked) return;
-    menuGrid.querySelectorAll(`[data-menu-id="${input.closest('.food-card').dataset.menuId}"] [data-category="${input.dataset.category}"]`).forEach((other) => {
-        if (other !== input) other.checked = false;
+  function renderCart() {
+    const count = cart.reduce((total, entry) => total + entry.qty, 0);
+    const phoCount = cart.reduce((total, entry) => {
+      const item = product(entry);
+      return (item && category(item) === 'pho') ? total + entry.qty : total;
+    }, 0);
+    const subtotal = cart.reduce((total, entry) => total + linePrice(entry) * entry.qty, 0);
+    const fee = orderType.value === 'DELIVERY' ? Number($('#cartTotalAmount').dataset.deliveryFee || 0) : 0;
+    const badge = $('#cartBadge');
+    if (badge) { badge.textContent = count; badge.setAttribute('aria-label', `${count} món trong giỏ`); }
+    $('#cartTotalAmount').textContent = money(subtotal + (count ? fee : 0));
+    $('#cartItemsList').innerHTML = cart.map((entry, index) => {
+      const item = product(entry);
+      const details = [...entry.customizations.map((id) => customizationOptions.find((option) => option.id === id)?.name), ...entry.toppings.map((id) => toppings.find((option) => option.id === id)?.name), entry.note].filter(Boolean).join(' · ');
+      return `<div class="cart-item"><img src="${escape(image(item))}" data-image-fallback="${escape(fallbackImage(item))}" alt=""><div><div class="cart-item-name">${escape(item.name)}</div><small>${escape(details)}</small><div class="cart-item-price">${money(linePrice(entry) * entry.qty)}</div></div><div class="qty-controls"><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="-1" aria-label="Giảm số lượng ${escape(item.name)}">−</button><span>${entry.qty}</span><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="1" aria-label="Tăng số lượng ${escape(item.name)}">+</button></div></div>`;
+    }).join('') || `<div class="empty-state">${icon('bag')}<strong>Giỏ hàng đang chờ món ngon</strong>Chọn một tô phở yêu thích để bắt đầu nhé.</div>`;
+    const waiting = orderType.value === 'QUEUE_CART' && queueStatus !== 'CALLED';
+    const full = orderType.value === 'DINE_IN' && remainingCapacity < 999 && phoCount > remainingCapacity;
+    const blocked = orderType.value === 'DELIVERY' && !deliveryAllowed;
+    $('#checkoutBtn').disabled = !count || waiting || full || blocked;
+    $('#checkoutBtn').textContent = waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
+  }
+  $('#cartItemsList').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-cart-index]');
+    if (!button) return;
+    const entry = cart[Number(button.dataset.cartIndex)];
+    entry.qty = Math.min(99, entry.qty + Number(button.dataset.delta));
+    cart = cart.filter((item) => item.qty > 0);
+    save(); renderCart();
+  });
+  function openCart() { if (!cartDialog.open) cartDialog.showModal(); }
+  $('#openCartBtn')?.addEventListener('click', openCart);
+  $('#closeCartBtn').addEventListener('click', () => cartDialog.close());
+  [cartDialog, customDialog].forEach((dialog) => dialog.addEventListener('click', (event) => {
+    if (event.target !== dialog) return;
+    const bounds = dialog.getBoundingClientRect();
+    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+  }));
+  $('#searchInput').addEventListener('input', renderMenu);
+  document.querySelectorAll('[data-category]').forEach((button) => {
+    if (!button.matches('button')) return;
+    button.addEventListener('click', () => {
+      activeCategory = button.dataset.category;
+      document.querySelectorAll('.filter-btn').forEach((item) => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); });
+      renderMenu();
     });
-});
-
-searchInput.addEventListener('input', () => {
-    const keyword = searchInput.value.toLowerCase().trim();
-    renderMenu(menuItems.filter((item) => item.name.toLowerCase().includes(keyword)));
-});
-
-orderType.addEventListener('change', () => {
-    const isDelivery = orderType.value === 'DELIVERY';
-    const isQueue = orderType.value === 'QUEUE_CART';
-    addressField.style.display = isDelivery ? 'block' : 'none';
-    tableField.style.display = isDelivery || isQueue ? 'none' : 'block';
-    paymentMethod.value = isDelivery ? 'VIETQR' : paymentMethod.value;
-    paymentMethod.disabled = isDelivery;
+  });
+  function updateMode() {
+    const delivery = orderType.value === 'DELIVERY', queue = orderType.value === 'QUEUE_CART';
+    $('#addressField').hidden = !delivery;
+    if ($('#tableField')) $('#tableField').hidden = delivery || queue;
+    if (tableSelect) tableSelect.required = false;
+    address.required = delivery && !($('#customerLat').value && $('#customerLng').value);
+    if (delivery) payment.value = 'VIETQR';
+    payment.disabled = delivery;
+    document.querySelectorAll('[data-order-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.orderMode === orderType.value)));
     renderCart();
-});
+  }
+  document.querySelectorAll('[data-order-mode]').forEach((button) => button.addEventListener('click', () => { orderType.value = button.dataset.orderMode; updateMode(); if (orderType.value === 'DELIVERY') window.phoToast?.('Chọn món trước, sau đó nhập địa chỉ trong giỏ hàng nhé.'); }));
+  orderType.addEventListener('change', updateMode);
+  if (tableSelect) { tableSelect.addEventListener('change', () => { remainingCapacity = Number(tableSelect.selectedOptions[0]?.dataset.remaining || 999); renderCart(); }); }
 
-async function quoteDeliveryFee(lat, lng) {
-    if (!deliveryFeeQuoteUrl) return;
+  async function quoteFee(lat, lng) {
+    const request = ++feeRequest;
     const params = new URLSearchParams();
-    if (lat != null && lng != null) {
-        params.set('lat', lat);
-        params.set('lng', lng);
+    if (lat != null && lng != null) { params.set('lat', lat); params.set('lng', lng); }
+    try {
+      const response = await fetch(`${config.deliveryUrl}?${params}`, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('Delivery quote failed');
+      const data = await response.json();
+      if (request !== feeRequest) return;
+      deliveryAllowed = data.ok;
+      $('#cartTotalAmount').dataset.deliveryFee = String(data.ok ? data.fee : 0);
+      $('#deliveryFeeHint').textContent = !data.ok ? `Ngoài phạm vi giao hàng: ${data.distance_km || '?'} km.` : data.fallback ? `Chưa có GPS · phí tạm tính ${money(data.fee)}.` : `Cách quán ${data.distance_km} km · phí giao ${money(data.fee)}.`;
+      renderCart();
+    } catch (_) { window.phoToast?.('Chưa lấy được phí giao hàng. Vui lòng thử lại.'); }
+  }
+  $('#locateBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) { quoteFee(); return; }
+    $('#locateBtn').disabled = true;
+    navigator.geolocation.getCurrentPosition((position) => {
+      $('#locateBtn').disabled = false;
+      $('#customerLat').value = position.coords.latitude;
+      $('#customerLng').value = position.coords.longitude;
+      updateMode();
+      quoteFee(position.coords.latitude, position.coords.longitude);
+    }, () => {
+      $('#locateBtn').disabled = false;
+      $('#customerLat').value = ''; $('#customerLng').value = '';
+      updateMode();
+      quoteFee();
+    }, { enableHighAccuracy: true, timeout: 8000 });
+  });
+
+  async function pollQueue() {
+    try {
+      const response = await fetch(config.queueUrl, { headers: { Accept: 'application/json' } });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data.active) return;
+      const calledNow = queueStatus !== 'CALLED' && data.status === 'CALLED';
+      queueStatus = data.status;
+      if ($('#queueStatusText')) $('#queueStatusText').textContent = `Số ${data.ticket} · ${data.status === 'CALLED' ? 'Đã gọi số' : 'Đang chờ'}`;
+      if (data.status === 'CALLED' && data.table) {
+        if ($('#queueStatusHelp')) $('#queueStatusHelp').textContent = `Đến lượt bạn! Mời bạn vào Bàn ${data.table} và thanh toán giỏ hàng.`;
+        let option = $('option[value="QUEUE_CART"]', orderType);
+        if (!option) { option = new Option('Chờ vào bàn', 'QUEUE_CART'); orderType.add(option); }
+        option.textContent = `Chờ vào bàn · Bàn ${data.table}`;
+        if (calledNow) {
+          window.phoToast?.(`Đến lượt bạn! Mời vào Bàn ${data.table}.`);
+          navigator.vibrate?.([200, 100, 200]);
+        }
+      }
+      renderCart();
+    } catch (_) { /* Preserve the current state during temporary network failures. */ }
+  }
+  if (config.queueStatus) { pollQueue(); setInterval(() => { if (!document.hidden) pollQueue(); }, 8000); }
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
     }
-    const response = await fetch(`${deliveryFeeQuoteUrl}?${params}`, { headers: { Accept: 'application/json' } });
-    const data = await response.json();
-    if (!data.ok) {
-        deliveryAllowed = false;
-        cartTotalAmount.dataset.deliveryFee = '0';
-        if (deliveryFeeHint) {
-            deliveryFeeHint.textContent = `Ngoài phạm vi giao (${data.distance_km || '?'} km > ${data.max_km} km).`;
-        }
-        renderCart();
-        return;
+    return cookieValue;
+  }
+  form.addEventListener('submit', (event) => {
+    if ($('#checkoutBtn').disabled || !cart.length) { event.preventDefault(); return; }
+    $('#cartPayload').value = JSON.stringify(cart.map(({ id, qty, customizations, toppings, note }) => ({ id, qty, customizations, toppings, note })));
+    payment.disabled = false;
+    const csrfToken = getCookie('csrftoken');
+    const csrfInput = form.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfToken && csrfInput) {
+      csrfInput.value = csrfToken;
     }
-    deliveryAllowed = true;
-    cartTotalAmount.dataset.deliveryFee = String(data.fee);
-    if (deliveryFeeHint) {
-        deliveryFeeHint.textContent = data.fallback
-            ? `Chưa có GPS · phí tạm ${Number(data.fee).toLocaleString('vi-VN')}đ. Bấm lấy vị trí để tính chính xác.`
-            : `Cách quán ${data.distance_km} km · phí ship ${Number(data.fee).toLocaleString('vi-VN')}đ.`;
-    }
-    renderCart();
-}
-
-if (locateBtn) {
-    locateBtn.addEventListener('click', () => {
-        if (!navigator.geolocation) {
-            quoteDeliveryFee();
-            return;
-        }
-        locateBtn.disabled = true;
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                locateBtn.disabled = false;
-                if (customerLat) customerLat.value = position.coords.latitude;
-                if (customerLng) customerLng.value = position.coords.longitude;
-                quoteDeliveryFee(position.coords.latitude, position.coords.longitude);
-            },
-            () => {
-                locateBtn.disabled = false;
-                quoteDeliveryFee();
-            },
-            { enableHighAccuracy: true, timeout: 8000 },
-        );
-    });
-}
-
-if (typeof queueStatusUrl !== 'undefined') {
-    let previousQueueState = '';
-    const pollQueueStatus = async () => {
-        try {
-            const response = await fetch(queueStatusUrl, { headers: { 'Accept': 'application/json' } });
-            if (!response.ok) return;
-            const data = await response.json();
-            if (!data.active) return;
-            const state = `${data.ticket}:${data.status}:${data.table || ''}`;
-            const statusText = document.getElementById('queueStatusText');
-            const statusHelp = document.getElementById('queueStatusHelp');
-            if (statusText) statusText.textContent = `Số ${data.ticket} · ${data.status === 'CALLED' ? 'Đã gọi số' : 'Đang chờ'}`;
-            if (data.status === 'CALLED' && data.table) {
-                if (statusHelp) statusHelp.textContent = `Đến lượt bạn, vui lòng vào Bàn ${data.table}. Giỏ hàng đã chọn có thể thanh toán ngay.`;
-                let queueOption = orderType.querySelector('option[value="QUEUE_CART"]');
-                if (!queueOption) {
-                    queueOption = new Option(`Giỏ xếp hàng · Bàn ${data.table}`, 'QUEUE_CART');
-                    orderType.add(queueOption);
-                }
-                queueOption.textContent = `Giỏ xếp hàng · Bàn ${data.table}`;
-                // KHÔNG auto chuyển sang QUEUE_CART - để user tự chọn
-                // Chỉ cập nhật status và thông báo
-                currentQueueStatus = data.status;
-                if (state !== previousQueueState) {
-                    if (navigator.vibrate) navigator.vibrate([250, 100, 250]);
-                    if ('Notification' in window && Notification.permission === 'granted') {
-                        new Notification('Đến lượt bạn!', { body: `Vui lòng vào Bàn ${data.table}.` });
-                    }
-                    renderCart();
-                }
-            }
-            previousQueueState = state;
-        } catch (_error) {
-            // Giữ nguyên giao diện hiện tại nếu mạng tạm thời không khả dụng.
-        }
-    };
-    pollQueueStatus();
-    window.setInterval(pollQueueStatus, 8000);
-}
-
-checkoutForm.addEventListener('submit', () => {
-    cartPayload.value = JSON.stringify(cart.map(({ id, qty, customizations, toppings, note }) => ({ id, qty, customizations, toppings, note })));
-    paymentMethod.disabled = false;
-});
-
-renderMenu(menuItems);
-renderCart();
-orderType.dispatchEvent(new Event('change'));
-
-if (tableSelect) {
-    tableSelect.addEventListener('change', () => {
-        const selectedOption = tableSelect.options[tableSelect.selectedIndex];
-        if (selectedOption && selectedOption.dataset.remaining) {
-            remainingCapacity = parseInt(selectedOption.dataset.remaining, 10);
-        } else {
-            remainingCapacity = 999;
-        }
-        renderCart();
-    });
-}
+  });
+  if (new URLSearchParams(location.search).get('mode') === 'delivery') orderType.value = 'DELIVERY';
+  renderMenu(); updateMode();
+})();

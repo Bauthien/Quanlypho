@@ -1,0 +1,403 @@
+{% extends "pho_app/base.html" %}
+{% load static %}
+{% block title %}Danh Sách Đánh Giá - Quản Lý{% endblock %}
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;500;600;700&family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+{% block content %}
+<style>
+    .admin-reviews-container {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 24px 20px 80px;
+    }
+    
+    .admin-reviews-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: stretch;
+        margin-bottom: 24px;
+        background: #FCF8F1;
+        border-radius: 12px;
+        border: 1px solid #E5D6C5;
+        overflow: hidden;
+        box-shadow: 0 2px 16px rgba(59, 36, 29, 0.06);
+    }
+    
+    .header-left {
+        flex: 1;
+        padding: 36px 32px;
+        background: linear-gradient(135deg, #FCF8F1 0%, #F7F1E7 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    .header-left h1 {
+        font-family: 'Noto Serif', serif;
+        font-size: 2rem;
+        font-weight: 600;
+        color: #3B241D;
+        margin: 0 0 8px 0;
+    }
+    
+    .header-left p {
+        color: #80695A;
+        font-size: 0.95rem;
+        margin: 0;
+    }
+    
+    .rating-summary {
+        background: white;
+        padding: 28px 32px;
+        border-left: 1px solid #E5D6C5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 200px;
+    }
+    
+    .rating-summary .avg-rating {
+        font-family: 'Noto Serif', serif;
+        font-size: 2.8rem;
+        font-weight: 700;
+        color: #C18A35;
+        line-height: 1;
+    }
+    
+    .rating-summary .stars {
+        color: #C18A35;
+        font-size: 1.4rem;
+        margin-top: 8px;
+        letter-spacing: 2px;
+    }
+    
+    .rating-summary .label {
+        color: #80695A;
+        font-size: 0.85rem;
+        margin-top: 8px;
+        font-weight: 500;
+    }
+    
+    .reviews-section {
+        background: #FCF8F1;
+        border-radius: 12px;
+        padding: 40px;
+        border: 1px solid #E5D6C5;
+    }
+    
+    .review-card {
+        background: white;
+        border-radius: 10px;
+        padding: 28px;
+        margin-bottom: 18px;
+        border: 1px solid #E5D6C5;
+        transition: all 220ms ease;
+    }
+    
+    .review-card:hover {
+        box-shadow: 0 4px 16px rgba(59, 36, 29, 0.06);
+        border-color: #D4C4B0;
+    }
+    
+    .review-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #E5D6C5;
+    }
+    
+    .reviewer-info {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    
+    .reviewer-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #C18A35, #A94330);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 1.2rem;
+        font-family: 'Noto Serif', serif;
+    }
+    
+    .reviewer-name {
+        font-weight: 600;
+        font-size: 1rem;
+        color: #3B241D;
+    }
+    
+    .reviewer-role {
+        font-size: 0.85rem;
+        color: #80695A;
+        margin-top: 2px;
+    }
+    
+    .review-date {
+        color: #80695A;
+        font-size: 0.85rem;
+    }
+    
+    .stars {
+        color: #C18A35;
+        font-size: 1.3rem;
+        letter-spacing: 2px;
+    }
+    
+    .stars .empty {
+        color: #E5D6C5;
+    }
+    
+    .review-item {
+        background: #F7F1E7;
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 12px;
+    }
+    
+    .review-item-name {
+        font-weight: 600;
+        color: #A94330;
+        font-size: 0.95rem;
+        margin-bottom: 6px;
+    }
+    
+    .review-item-detail {
+        font-size: 0.85rem;
+        color: #80695A;
+    }
+    
+    .review-comment {
+        color: #3B241D;
+        line-height: 1.7;
+        margin-top: 12px;
+        font-style: italic;
+        padding: 14px;
+        background: #F7F1E7;
+        border-radius: 8px;
+        border-left: 3px solid #C18A35;
+        font-size: 0.95rem;
+    }
+    
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 32px;
+        padding: 16px;
+    }
+    
+    .pagination a, .pagination span {
+        padding: 10px 16px;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #3B241D;
+        background: white;
+        border: 1px solid #E5D6C5;
+        transition: all 220ms ease;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+    
+    .pagination a:hover {
+        background: #A94330;
+        color: white;
+        border-color: #A94330;
+    }
+    
+    .pagination .current {
+        background: #A94330;
+        color: white;
+        border-color: #A94330;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 70px 40px;
+        background: white;
+        border-radius: 10px;
+        border: 1px solid #E5D6C5;
+    }
+    
+    .empty-illustration {
+        margin-bottom: 24px;
+    }
+    
+    .empty-illustration svg {
+        width: 100px;
+        height: 100px;
+    }
+    
+    .empty-title {
+        font-family: 'Noto Serif', serif;
+        font-size: 1.4rem;
+        font-weight: 600;
+        color: #3B241D;
+        margin-bottom: 10px;
+    }
+    
+    .empty-subtitle {
+        color: #80695A;
+        font-size: 0.95rem;
+    }
+    
+    @media (max-width: 968px) {
+        .admin-reviews-header {
+            flex-direction: column;
+        }
+        
+        .header-left {
+            padding: 28px 24px;
+        }
+        
+        .rating-summary {
+            border-left: none;
+            border-top: 1px solid #E5D6C5;
+            padding: 24px;
+            flex-direction: row;
+            gap: 24px;
+        }
+        
+        .rating-summary .avg-rating {
+            font-size: 2.2rem;
+        }
+    }
+    
+    @media (max-width: 640px) {
+        .admin-reviews-container {
+            padding: 16px 16px 60px;
+        }
+        
+        .header-left h1 {
+            font-size: 1.6rem;
+        }
+        
+        .rating-summary {
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .reviews-section {
+            padding: 28px 20px;
+        }
+        
+        .empty-state {
+            padding: 50px 20px;
+        }
+    }
+</style>
+
+<div class="admin-reviews-container">
+    <div class="admin-reviews-header">
+        <div class="header-left">
+            <h1>Danh Sách Đánh Giá</h1>
+            <p>Tất cả đánh giá từ khách hàng</p>
+        </div>
+        <div class="rating-summary">
+            <div class="avg-rating">{{ avg_rating }}</div>
+            <div class="stars">
+                {% for i in "12345" %}
+                    {% if i|add:0 <= avg_rating|add:0 %}
+                        ★
+                    {% else %}
+                        <span class="empty">★</span>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="label">Đánh giá trung bình</div>
+        </div>
+    </div>
+    
+    <div class="reviews-section">
+        {% if page_obj %}
+            {% for review in page_obj %}
+            <div class="review-card">
+                <div class="review-header">
+                    <div class="reviewer-info">
+                        <div class="reviewer-avatar">
+                            {{ review.customer.display_name|first|upper }}
+                        </div>
+                        <div>
+                            <div class="reviewer-name">{{ review.customer.display_name }}</div>
+                            <div class="reviewer-role">{{ review.customer.get_role_display }}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="stars">
+                            {% for i in "12345" %}
+                                {% if i|add:0 <= review.rating %}
+                                    ★
+                                {% else %}
+                                    <span class="empty">★</span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        <div class="review-date">{{ review.created_at|date:"d/m/Y H:i" }}</div>
+                    </div>
+                </div>
+                
+                {% if review.menu_item %}
+                <div class="review-item">
+                    <div class="review-item-name">🍲 {{ review.menu_item.name }}</div>
+                    <div class="review-item-detail">
+                        Giá: {{ review.menu_item.base_price|add:0 }}đ
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if review.order %}
+                <div class="review-item">
+                    <div class="review-item-name">📦 Đơn hàng: {{ review.order.order_code }}</div>
+                    <div class="review-item-detail">
+                        {{ review.order.get_order_type_display }} - {{ review.order.get_status_display }}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if review.comment %}
+                <div class="review-comment">
+                    "{{ review.comment }}"
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            
+            <div class="pagination">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}">← Trước</a>
+                {% endif %}
+                
+                <span class="current">Trang {{ page_obj.number }}</span>
+                
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}">Tiếp →</a>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-illustration">
+                    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="50" cy="45" r="25" fill="#C18A35" fill-opacity="0.1"/>
+                        <path d="M50 25L54 38H68L57 46L61 59L50 51L39 59L43 46L32 38H46L50 25Z" fill="#C18A35" fill-opacity="0.6"/>
+                        <path d="M30 70Q40 62 50 70T70 70" stroke="#C18A35" stroke-width="1.5" fill="none" opacity="0.4"/>
+                        <ellipse cx="50" cy="82" rx="15" ry="5" fill="#C18A35" fill-opacity="0.12"/>
+                    </svg>
+                </div>
+                <h3 class="empty-title">Chưa có đánh giá nào</h3>
+                <p class="empty-subtitle">Chưa có khách hàng đánh giá</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

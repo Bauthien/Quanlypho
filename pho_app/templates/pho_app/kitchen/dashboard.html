@@ -1,66 +1,11 @@
-{% extends "pho_app/base.html" %}
-{% block title %}Bếp - Phở Gia Truyền{% endblock %}
+{% extends 'pho_app/base.html' %}
+{% load static %}
+{% block title %}Màn hình bếp · Phở Nhà{% endblock %}
+{% block breadcrumb %}Màn hình bếp{% endblock %}
 {% block content %}
-<section class="hero-banner">
-    <div class="hero-content">
-        <h1>Màn hình bếp</h1>
-        <p>Chỉ hiển thị món đã thanh toán. Ghi chú tùy chọn được in TO và RÕ.</p>
-    </div>
-</section>
-<div class="workspace">
-    {% for order in orders %}
-    <article class="kitchen-card">
-        <h2>{% if order.order_type == 'DELIVERY' %}<span class="delivery-label">DELIVERY</span>{% endif %} {{ order.order_code }} · {{ order.get_order_type_display }}</h2>
-        <p>{% if order.table %}BÀN {{ order.table.table_number }}{% endif %} · {% if order.customer %}{{ order.customer.display_name }}{% elif order.guest_name %}{{ order.guest_name }}{% else %}Khách{% endif %} · {{ order.get_order_status_display }}</p>
-        {% for item in order.items.all %}
-            <p style="font-size:1.25rem;font-weight:700;margin-top:10px;">{{ item.quantity }} × {{ item.menu_item.name }}</p>
-            {% for topping in item.toppings.all %}<div class="kitchen-note">THÊM {{ topping.topping.name|upper }} × {{ topping.quantity }}</div>{% endfor %}
-            {% for custom in item.customizations.all %}
-                <div class="kitchen-note">{{ custom.customization.name }}</div>
-            {% endfor %}
-            {% if item.note %}<div class="kitchen-note">{{ item.note }}</div>{% endif %}
-        {% endfor %}
-        {% if order.order_status == 'PENDING_KITCHEN' %}
-            <form method="post" action="{% url 'kitchen_start' order.id %}" style="margin-top:14px;">{% csrf_token %}<button class="checkout-btn" type="submit" style="max-width:240px;">Bắt đầu chế biến</button></form>
-        {% else %}
-            <form method="post" action="{% url 'kitchen_complete' order.id %}" style="margin-top:14px;">{% csrf_token %}<button class="checkout-btn" type="submit" style="max-width:240px;">Hoàn tất</button></form>
-        {% endif %}
-    </article>
-    {% empty %}
-    <p class="empty-state">Không có đơn đang chờ bếp.</p>
-    {% endfor %}
-</div>
+<main class="workspace"><div class="page-heading"><div><span class="eyebrow">TỪ BẾP NÓNG · ĐẾN BỮA NGON</span><h1>Màn hình bếp</h1><p>Chỉ nhận đơn đã thanh toán. Chế biến đúng món, đúng yêu cầu.</p></div><span class="badge badge-green" id="kitchenConnection">{% include 'pho_app/includes/icon.html' with name='check' %} Cập nhật mỗi 5 giây</span></div>
+<section id="kitchenOrders" class="kitchen-grid" aria-label="Đơn cần chế biến">
+{% for order in orders %}<article class="panel kitchen-card"><div class="kitchen-card-top"><div><span class="eyebrow">{{ order.order_code }}</span><h2>{% if order.table %}Bàn {{ order.table.table_number }}{% elif order.order_type == 'DELIVERY' %}Giao tận nơi{% else %}Tại quán{% endif %}</h2></div><span class="badge {% if order.order_type == 'DELIVERY' %}badge-blue{% else %}badge-orange{% endif %}">{{ order.get_order_type_display }}</span></div><div class="kitchen-time">{% include 'pho_app/includes/icon.html' with name='clock' %} Nhận lúc {{ order.created_at|date:'H:i' }}<span class="badge status-{{ order.order_status }}">{{ order.get_order_status_display }}</span></div><div class="kitchen-items">{% for item in order.items.all %}<div><strong>{{ item.quantity }} × {{ item.menu_item.name }}</strong>{% for topping in item.toppings.all %}<small>+ {{ topping.topping.name }} × {{ topping.quantity }}</small>{% endfor %}{% for custom in item.customizations.all %}<small>{{ custom.customization.name }}</small>{% endfor %}{% if item.note %}<div class="kitchen-note">LƯU Ý: {{ item.note }}</div>{% endif %}</div>{% endfor %}</div>{% if order.order_type == 'DELIVERY' %}<p class="cart-hint">{% include 'pho_app/includes/icon.html' with name='print' %} Hoàn tất để in 2 tem đóng gói.</p>{% endif %}{% if order.order_status == 'PENDING_KITCHEN' %}<form method="post" action="{% url 'kitchen_start' order.id %}">{% csrf_token %}<button class="primary-btn full" type="submit">{% include 'pho_app/includes/icon.html' with name='chef' %} Bắt đầu chế biến</button></form>{% else %}<form method="post" action="{% url 'kitchen_complete' order.id %}">{% csrf_token %}<button class="primary-btn full" type="submit">{% include 'pho_app/includes/icon.html' with name='check' %} Hoàn tất món</button></form>{% endif %}</article>{% empty %}<div class="panel empty-state kitchen-empty">{% include 'pho_app/includes/icon.html' with name='chef' %}<strong>Bếp đã hoàn tất mọi đơn</strong>Đơn đã thanh toán sẽ tự động xuất hiện tại đây.</div>{% endfor %}
+</section></main>
 {% endblock %}
-{% block extra_js %}
-<script>
-    function pollKitchen() {
-        fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(res => res.text())
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const newWorkspace = doc.querySelector('.workspace');
-                const currentWorkspace = document.querySelector('.workspace');
-                
-                if (newWorkspace && currentWorkspace && newWorkspace.innerHTML !== currentWorkspace.innerHTML) {
-                    currentWorkspace.innerHTML = newWorkspace.innerHTML;
-                    
-                    // Flash notification effect
-                    const cards = currentWorkspace.querySelectorAll('.kitchen-card');
-                    if (cards.length > 0) {
-                        cards[0].style.transition = 'box-shadow 0.5s';
-                        cards[0].style.boxShadow = '0 0 20px #28a745';
-                        setTimeout(() => cards[0].style.boxShadow = '', 2000);
-                    }
-                    
-                    if (navigator.vibrate) navigator.vibrate([250, 100, 250]);
-                }
-            })
-            .catch(err => console.error('Polling error:', err))
-            .finally(() => {
-                setTimeout(pollKitchen, 5000);
-            });
-    }
-    setTimeout(pollKitchen, 5000);
-</script>
-{% endblock %}
+{% block extra_js %}<script src="{% static 'pho_app/js/kitchen.js' %}" defer></script>{% endblock %}
