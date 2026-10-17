@@ -89,7 +89,7 @@ WSGI_APPLICATION = 'core_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis', # Dùng engine GIS
-        'NAME': os.environ.get('POSTGRES_DB', 'quanlypho'),
+        'NAME': os.environ.get('POSTGRES_DB', 'Quanlypho'),
         'USER': os.environ.get('POSTGRES_USER', 'postgres'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', '123'),
         'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
