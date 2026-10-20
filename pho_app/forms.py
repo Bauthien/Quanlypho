@@ -1,10 +1,64 @@
+from decimal import Decimal
+
 from django import forms
 from django.contrib.auth import authenticate
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
-from .models import MenuItem, Order, Topping, User
+from .models import Ingredient, MenuItem, Order, Table, Topping, User
+
+
+class TableForm(forms.ModelForm):
+    capacity = forms.IntegerField(
+        label='Sức chứa tối đa (tô)', min_value=1, max_value=2147483647, initial=4,
+        error_messages={'min_value': 'Sức chứa phải từ 1 tô trở lên.', 'invalid': 'Sức chứa phải là số nguyên hợp lệ.'},
+        widget=forms.NumberInput(attrs={'class': 'form-input', 'min': 1}),
+    )
+
+    class Meta:
+        model = Table
+        fields = ['table_number', 'capacity']
+        labels = {'table_number': 'Số bàn / tên bàn'}
+        widgets = {'table_number': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Ví dụ: 1, 2, VIP1'})}
+
+    def clean_table_number(self):
+        number = self.cleaned_data['table_number']
+        if Table.objects.filter(table_number__iexact=number).exclude(pk=self.instance.pk).exists():
+            raise ValidationError('Tên bàn đã tồn tại. Vui lòng chọn tên khác.')
+        return number
+
+
+class IngredientForm(forms.ModelForm):
+    class Meta:
+        model = Ingredient
+        fields = ['name', 'unit', 'current_stock', 'minimum_stock']
+        labels = {'name': 'Tên nguyên liệu / vật tư', 'unit': 'Đơn vị tính',
+                  'current_stock': 'Số lượng tồn kho hiện tại', 'minimum_stock': 'Ngưỡng cảnh báo tối thiểu'}
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-input'}),
+            'unit': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'gram, ml, kg, lít, lon...'}),
+            'current_stock': forms.NumberInput(attrs={'class': 'form-input', 'min': 0, 'step': '0.01'}),
+            'minimum_stock': forms.NumberInput(attrs={'class': 'form-input', 'min': 0, 'step': '0.01'}),
+        }
+        help_texts = {'unit': 'Nên dùng cùng đơn vị với công thức định lượng (ví dụ gram hoặc ml).'}
+
+
+class RecipeForm(forms.Form):
+    menu_item_id = forms.ModelChoiceField(queryset=MenuItem.objects.filter(is_active=True), required=False)
+    topping_id = forms.ModelChoiceField(queryset=Topping.objects.filter(is_active=True), required=False)
+    ingredient_id = forms.ModelChoiceField(queryset=Ingredient.objects.all())
+    quantity_required = forms.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.01'))
+
+    def clean(self):
+        data = super().clean()
+        if bool(data.get('menu_item_id')) == bool(data.get('topping_id')):
+            raise ValidationError('Vui lòng chọn đúng một món chính hoặc topping cần định lượng.')
+        return data
+
+
+class IngredientImportForm(forms.Form):
+    quantity = forms.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.01'))
 
 
 class OrderFilterForm(forms.Form):

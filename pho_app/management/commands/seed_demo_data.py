@@ -9,6 +9,7 @@ from django.utils import timezone
 from pho_app.models import (
     User,
     Table,
+    QueueTicket,
     MenuItem,
     Topping,
     CustomizationOption,
@@ -39,6 +40,7 @@ class Command(BaseCommand):
         CustomizationOption.objects.all().delete()
         Topping.objects.all().delete()
         MenuItem.objects.all().delete()
+        QueueTicket.objects.all().delete()
         Table.objects.all().delete()
 
         self.stdout.write('Khởi tạo thư mục media và sao chép ảnh mẫu...')

@@ -1,6 +1,9 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import AbstractUser
 from django.contrib.gis.db import models as gis_models
-from django.db import models
+from django.core.validators import MinValueValidator
+from django.db import models, router, transaction
 
 
 # ==========================================
@@ -61,7 +64,7 @@ class Table(models.Model):
         OCCUPIED = 'OCCUPIED', 'Đang có khách'
         CLEANING = 'CLEANING', 'Đang dọn dẹp'
     table_number = models.CharField(max_length=50, unique=True, verbose_name="Số bàn")
-    capacity = models.IntegerField(default=4, verbose_name="Số lượng chỗ (Tô) tối đa")
+    capacity = models.IntegerField(default=4, validators=[MinValueValidator(1)], verbose_name="Số lượng chỗ (Tô) tối đa")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.AVAILABLE, verbose_name="Trạng thái bàn")
     qr_code_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="Đường dẫn QR")
     qr_code_image = models.ImageField(upload_to='qr_codes/', blank=True, null=True, verbose_name="Ảnh mã QR")
@@ -69,6 +72,7 @@ class Table(models.Model):
     class Meta:
         verbose_name = "Bàn ăn"
         verbose_name_plural = "Danh sách Bàn ăn"
+        constraints = [models.CheckConstraint(condition=models.Q(capacity__gte=1), name='table_capacity_positive')]
 
     def __str__(self):
         return f"Bàn số {self.table_number} - {self.get_status_display()}"
@@ -86,7 +90,7 @@ class QueueTicket(models.Model):
     ticket_number = models.CharField(max_length=50, verbose_name="Số thứ tự (VD: P-015)")
     people_count = models.PositiveIntegerField(default=1, verbose_name="Số người")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.WAITING, verbose_name="Trạng thái hàng đợi")
-    table = models.ForeignKey('Table', on_delete=models.SET_NULL, null=True, blank=True, related_name='queue_tickets', verbose_name="Bàn được gọi")
+    table = models.ForeignKey('Table', on_delete=models.PROTECT, null=True, blank=True, related_name='queue_tickets', verbose_name="Bàn được gọi")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian lấy số")
 
     class Meta:
@@ -187,7 +191,7 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
     guest_name = models.CharField(max_length=100, blank=True, verbose_name="Tên khách (nếu không đăng nhập)")
     queue_ticket = models.ForeignKey(QueueTicket, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders', verbose_name="Vé xếp hàng")
     order_type = models.CharField(max_length=20, choices=OrderType.choices, default=OrderType.DINE_IN, verbose_name="Loại đơn")
-    table = models.ForeignKey(Table, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Bàn số")
+    table = models.ForeignKey(Table, on_delete=models.PROTECT, null=True, blank=True, verbose_name="Bàn số")
 
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.VIETQR, verbose_name="Phương thức thanh toán")
     payment_status = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDING, verbose_name="Trạng thái thanh toán")
@@ -212,6 +216,13 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
 
     def __str__(self):
         return f"Đơn {self.order_code} - {self.get_order_status_display()}"
+
+    def save(self, *args, **kwargs):
+        # Payment and the inventory signal must commit or roll back together,
+        # including direct saves outside the payment views.
+        using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
+        with transaction.atomic(using=using):
+            return super().save(*args, **kwargs)
 
 
 class OrderItem(models.Model):
@@ -252,13 +263,17 @@ class OrderItemCustomization(models.Model):
 class Ingredient(models.Model):
     name = models.CharField(max_length=255, verbose_name="Tên nguyên liệu (VD: Bánh phở, Thịt bò)")
     unit = models.CharField(max_length=50, verbose_name="Đơn vị tính (kg, gram, lít...)")
-    current_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Số lượng tồn hiện tại")
-    minimum_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Ngưỡng cảnh báo hết hàng")
+    current_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)], verbose_name="Số lượng tồn hiện tại")
+    minimum_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)], verbose_name="Ngưỡng cảnh báo hết hàng")
     ingredient_image = models.ImageField(upload_to='ingredients/', blank=True, null=True, verbose_name="Ảnh minh họa")
 
     class Meta:
         verbose_name = "Nguyên liệu kho"
         verbose_name_plural = "Danh mục Nguyên liệu"
+        constraints = [
+            models.CheckConstraint(condition=models.Q(current_stock__gte=0), name='ingredient_stock_nonnegative'),
+            models.CheckConstraint(condition=models.Q(minimum_stock__gte=0), name='ingredient_minimum_nonnegative'),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.current_stock} {self.unit})"
@@ -267,12 +282,20 @@ class Ingredient(models.Model):
 class Recipe(models.Model):
     menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE, blank=True, null=True, related_name='recipes', verbose_name="Dùng cho Món chính")
     topping = models.ForeignKey(Topping, on_delete=models.CASCADE, blank=True, null=True, related_name='recipes', verbose_name="Dùng cho Topping")
-    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, verbose_name="Nguyên liệu hao phí")
-    quantity_required = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Định lượng hao phí/1 đơn vị bán")
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, verbose_name="Nguyên liệu hao phí")
+    quantity_required = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))], verbose_name="Định lượng hao phí/1 đơn vị bán")
 
     class Meta:
         verbose_name = "Định lượng sản phẩm (BOM)"
         verbose_name_plural = "Công thức Định lượng kho"
+        constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(menu_item__isnull=False, topping__isnull=True)
+                           | models.Q(menu_item__isnull=True, topping__isnull=False)),
+                name='recipe_exactly_one_target',
+                violation_error_message='Mỗi định lượng phải gắn với đúng một món chính hoặc topping.',
+            ),
+        ]
 
     def __str__(self):
         target = self.menu_item.name if self.menu_item else (self.topping.name if self.topping else 'N/A')
@@ -285,7 +308,7 @@ class InventoryTransaction(models.Model):
         EXPORT = 'EXPORT', 'Xuất bán (Tự động)'
         ADJUST = 'ADJUST', 'Điều chỉnh / Khấu hao hư hỏng'
 
-    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, verbose_name="Nguyên liệu")
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, verbose_name="Nguyên liệu")
     transaction_type = models.CharField(max_length=20, choices=TransactionType.choices, verbose_name="Loại giao dịch")
     quantity_changed = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Số lượng thay đổi (+/-)")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Người thực hiện")

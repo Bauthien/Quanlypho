@@ -1,51 +1,43 @@
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.db import transaction
-from .models import Order, Recipe, Ingredient, InventoryTransaction
+from .models import Order, InventoryTransaction
+from .services import ensure_inventory_available, order_inventory_deductions
 
 @receiver(pre_save, sender=Order)
-def cache_previous_payment_status(sender, instance, **kwargs):
+def cache_previous_payment_status(sender, instance, using, raw=False, **kwargs):
+    if raw:
+        return
+    instance._previous_payment_status = None
     if instance.pk:
-        try:
-            previous = Order.objects.get(pk=instance.pk)
-            instance._previous_payment_status = previous.payment_status
-        except Order.DoesNotExist:
-            pass
+        instance._previous_payment_status = (
+            Order.objects.using(using).select_for_update().filter(pk=instance.pk)
+            .values_list('payment_status', flat=True).first()
+        )
 
 @receiver(post_save, sender=Order)
-def deduct_inventory_on_paid(sender, instance, created, **kwargs):
+def deduct_inventory_on_paid(sender, instance, created, using, raw=False, update_fields=None, **kwargs):
+    if raw or (update_fields is not None and 'payment_status' not in update_fields):
+        return
     prev_status = getattr(instance, '_previous_payment_status', None)
-    
-    if instance.payment_status == Order.PaymentStatus.PAID and prev_status != Order.PaymentStatus.PAID:
-        with transaction.atomic():
-            for order_item in instance.items.select_related('menu_item').all():
-                # 1. Deduct for main menu item
-                recipes = Recipe.objects.filter(menu_item=order_item.menu_item).select_related('ingredient')
-                for recipe in recipes:
-                    deduct_amount = recipe.quantity_required * order_item.quantity
-                    ingredient = Ingredient.objects.select_for_update().get(pk=recipe.ingredient_id)
-                    ingredient.current_stock -= deduct_amount
-                    ingredient.save(update_fields=['current_stock'])
-                    
-                    InventoryTransaction.objects.create(
-                        ingredient=ingredient,
-                        transaction_type=InventoryTransaction.TransactionType.EXPORT,
-                        quantity_changed=-deduct_amount,
-                        created_by=instance.customer,
-                    )
-                
-                # 2. Deduct for toppings
-                for item_topping in order_item.toppings.select_related('topping').all():
-                    topping_recipes = Recipe.objects.filter(topping=item_topping.topping).select_related('ingredient')
-                    for tr in topping_recipes:
-                        deduct_amount = tr.quantity_required * item_topping.quantity
-                        ingredient = Ingredient.objects.select_for_update().get(pk=tr.ingredient_id)
-                        ingredient.current_stock -= deduct_amount
-                        ingredient.save(update_fields=['current_stock'])
-                        
-                        InventoryTransaction.objects.create(
-                            ingredient=ingredient,
-                            transaction_type=InventoryTransaction.TransactionType.EXPORT,
-                            quantity_changed=-deduct_amount,
-                            created_by=instance.customer,
-                        )
+    if instance.payment_status != Order.PaymentStatus.PAID or prev_status == Order.PaymentStatus.PAID:
+        return
+
+    with transaction.atomic(using=using):
+        deductions = order_inventory_deductions(instance, using=using)
+        # Lock all shared ingredients in a consistent order and check the entire
+        # order before writing any stock balance or export transaction.
+        ingredients, required = ensure_inventory_available(deductions, using=using, lock=True)
+
+        for ingredient in ingredients:
+            ingredient.current_stock -= required[ingredient.pk]
+            ingredient.save(using=using, update_fields=['current_stock'])
+        InventoryTransaction.objects.using(using).bulk_create([
+            InventoryTransaction(
+                ingredient_id=ingredient_id,
+                transaction_type=InventoryTransaction.TransactionType.EXPORT,
+                quantity_changed=-amount,
+                created_by_id=instance.customer_id,
+            )
+            for ingredient_id, amount in deductions
+        ])

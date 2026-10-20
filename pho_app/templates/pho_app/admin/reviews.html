@@ -75,6 +75,21 @@
         letter-spacing: 2px;
     }
     
+    .rating-summary .rating-stars {
+        display: inline-block;
+        position: relative;
+        white-space: nowrap;
+        color: #80695A;
+    }
+
+    .rating-stars-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        overflow: hidden;
+        white-space: nowrap;
+        color: #C18A35;
+    }
+
     .rating-summary .label {
         color: #80695A;
         font-size: 0.85rem;
@@ -305,15 +320,10 @@
             <p>Tất cả đánh giá từ khách hàng</p>
         </div>
         <div class="rating-summary">
-            <div class="avg-rating">{{ avg_rating }}</div>
-            <div class="stars">
-                {% for i in "12345" %}
-                    {% if i|add:0 <= avg_rating|add:0 %}
-                        ★
-                    {% else %}
-                        <span class="empty">★</span>
-                    {% endif %}
-                {% endfor %}
+            <div class="avg-rating">{{ avg_rating|floatformat:1 }}</div>
+            <div class="stars rating-stars" role="img" aria-label="{{ avg_rating|floatformat:1 }} trên 5 sao">
+                <span aria-hidden="true">★★★★★</span>
+                <span class="rating-stars-fill" style="width: {{ avg_rating_percent|floatformat:'-2u' }}%" aria-hidden="true">★★★★★</span>
             </div>
             <div class="label">Đánh giá trung bình</div>
         </div>
@@ -360,7 +370,7 @@
                 <div class="review-item">
                     <div class="review-item-name">📦 Đơn hàng: {{ review.order.order_code }}</div>
                     <div class="review-item-detail">
-                        {{ review.order.get_order_type_display }} - {{ review.order.get_status_display }}
+                        {{ review.order.get_order_type_display }} - {{ review.order.get_order_status_display }}
                     </div>
                 </div>
                 {% endif %}

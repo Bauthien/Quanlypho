@@ -1,16 +1,113 @@
 import math
+from collections import defaultdict
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F, Prefetch, Q, Sum, prefetch_related_objects
 from django.db.models.functions import Coalesce
 
-from .models import MenuItem, Order, OrderItem, QueueTicket, Table
+from .models import Ingredient, MenuItem, Order, OrderItem, QueueTicket, Recipe, Table, Topping
 
 
 class InvalidOrderTransition(ValueError):
     """The current persisted order no longer permits this action."""
+
+
+class InsufficientStock(InvalidOrderTransition):
+    """The complete order cannot be exported without making stock negative."""
+
+    def __init__(self, shortages):
+        self.shortages = shortages
+        details = '; '.join(
+            f'{ingredient.name}: cần {required:g} {ingredient.unit}, còn {ingredient.current_stock:g} {ingredient.unit}'
+            for ingredient, required in shortages
+        )
+        super().__init__(f'Không đủ tồn kho. {details}. Vui lòng giảm số lượng, chọn món khác hoặc liên hệ nhân viên.')
+
+
+def _prefetch_inventory_recipes(products, using):
+    for model in (MenuItem, Topping):
+        group = [product for product in products if isinstance(product, model)]
+        if group:
+            prefetch_related_objects(group, Prefetch('recipes', queryset=Recipe.objects.using(using).order_by('pk')))
+
+
+def inventory_deductions(lines, using='default'):
+    """Resolve (product, quantity, [(topping, total_quantity)]) into exact exports.
+
+    Checkout and saved orders use the same rules. Topping quantities on saved
+    order lines already include the number of bowls and must not be multiplied again.
+    """
+    lines = list(lines)
+    products = [product for product, _, _ in lines]
+    products.extend(topping for _, _, extras in lines for topping, _ in extras)
+    _prefetch_inventory_recipes(products, using)
+    deductions = []
+
+    def add_product(product, quantity):
+        recipes = list(product.recipes.all())
+        if not recipes and isinstance(product, MenuItem) and product.category == MenuItem.Category.PHO:
+            raise InvalidOrderTransition(f'Món {product.name} hiện chưa thể phục vụ. Vui lòng chọn món khác hoặc liên hệ nhân viên.')
+        for recipe in recipes:
+            amount = recipe.quantity_required * quantity
+            if not amount.is_finite() or amount <= 0:
+                raise InvalidOrderTransition(f'Món {product.name} hiện chưa thể phục vụ. Vui lòng liên hệ nhân viên.')
+            deductions.append((recipe.ingredient_id, amount))
+
+    for product, quantity, extras in lines:
+        add_product(product, quantity)
+        for topping, topping_quantity in extras:
+            add_product(topping, topping_quantity)
+    return deductions
+
+
+def order_inventory_deductions(order, using=None):
+    using = using or order._state.db or 'default'
+    items = order.items.using(using).select_related('menu_item').prefetch_related('toppings__topping')
+    return inventory_deductions([
+        (item.menu_item, item.quantity, [(extra.topping, extra.quantity) for extra in item.toppings.all()])
+        for item in items
+    ], using=using)
+
+
+def inventory_totals(deductions):
+    required = defaultdict(Decimal)
+    for ingredient_id, amount in deductions:
+        required[ingredient_id] += amount
+    return required
+
+
+def ensure_inventory_available(deductions, *, using='default', lock=False):
+    required = inventory_totals(deductions)
+    ingredients = Ingredient.objects.using(using).filter(pk__in=required).order_by('pk')
+    if lock:
+        ingredients = ingredients.select_for_update()
+    ingredients = list(ingredients)
+    if len(ingredients) != len(required):
+        raise InvalidOrderTransition('Món đã chọn hiện chưa thể phục vụ. Vui lòng tải lại thực đơn.')
+    shortages = [(ingredient, required[ingredient.pk]) for ingredient in ingredients
+                 if ingredient.current_stock < required[ingredient.pk]]
+    if shortages:
+        raise InsufficientStock(shortages)
+    return ingredients, required
+
+
+def catalog_stock_limits(products, using='default'):
+    """Display limits are a snapshot; checkout and payment check fresh balances."""
+    products = list(products)
+    _prefetch_inventory_recipes(products, using)
+    ingredient_ids = {recipe.ingredient_id for product in products for recipe in product.recipes.all()}
+    balances = dict(Ingredient.objects.using(using).filter(pk__in=ingredient_ids).values_list('pk', 'current_stock'))
+    limits = {}
+    for product in products:
+        try:
+            required = inventory_totals(inventory_deductions([(product, 1, [])], using=using))
+        except InvalidOrderTransition:
+            limits[product.pk] = 0
+        else:
+            limits[product.pk] = max(0, min([99] + [int(balances.get(pk, 0) // amount) for pk, amount in required.items()]))
+    return limits
 
 
 ORDER_ACTION_LABELS = {

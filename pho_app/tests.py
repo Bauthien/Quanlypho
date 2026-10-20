@@ -6,7 +6,7 @@ import json
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from .models import CustomizationOption, MenuItem, Order, OrderItem, QueueTicket, Table, Topping, User
+from .models import CustomizationOption, Ingredient, MenuItem, Order, OrderItem, QueueTicket, Recipe, Table, Topping, User
 
 
 class AuthAndRoleTests(TestCase):
@@ -177,6 +177,8 @@ class AuthAndRoleTests(TestCase):
         customer = User.objects.create_user(username='qr-customer', password='pass12345')
         table = Table.objects.create(table_number=5)
         item = MenuItem.objects.create(name='Phở Tái', base_price=50000, image_primary='menu_items/pho.jpg')
+        ingredient = Ingredient.objects.create(name='Bánh phở kiểm thử QR', unit='kg', current_stock=10)
+        Recipe.objects.create(menu_item=item, ingredient=ingredient, quantity_required='0.20')
         topping = Topping.objects.create(name='Trứng chần', price=5000)
         options_by_category = {}
         for option in CustomizationOption.objects.all().order_by('category', 'id'):
@@ -421,6 +423,8 @@ class AuthAndRoleTests(TestCase):
     def test_delivery_fee_uses_distance_and_requires_vietqr(self):
         customer = User.objects.create_user(username='ship-c', password='pass12345')
         item = MenuItem.objects.create(name='Phở Gà', base_price=40000, image_primary='menu_items/pho.jpg')
+        ingredient = Ingredient.objects.create(name='Bánh phở kiểm thử giao hàng', unit='kg', current_stock=10)
+        Recipe.objects.create(menu_item=item, ingredient=ingredient, quantity_required='0.20')
         options = {}
         for option in CustomizationOption.objects.all().order_by('category', 'id'):
             options.setdefault(option.category, option)

@@ -39,18 +39,18 @@
     $('#menuResultCount').textContent = `${items.length} món dành cho bạn`;
     grid.innerHTML = items.map((item) => `<article class="food-card" data-menu-id="${item.id}">
       <div class="food-img-wrapper"><img src="${escape(image(item))}" data-image-fallback="${escape(fallbackImage(item))}" width="360" height="240" alt="${escape(item.name)}" loading="lazy"></div>
-      <div class="food-info"><span class="eyebrow">${category(item) === 'drink' ? 'MÁT LÀNH, THẢNH THƠI' : 'PHỞ NHÀ · ĐẬM VỊ VIỆT'}</span><h2 class="food-title">${escape(item.name)}</h2><p class="food-desc">${category(item) === 'drink' ? 'Một chút mát lành cho bữa ăn thêm trọn vị.' : 'Nước dùng đậm đà, thịt tươi và rau thơm. Chọn khẩu vị theo cách của bạn.'}</p><div class="food-footer"><span class="food-price">${money(item.price)}</span><button class="add-btn" type="button" data-customize="${item.id}" aria-label="Chọn ${escape(item.name)}">${icon('plus')} Chọn món</button></div></div></article>`).join('') || `<div class="panel empty-state">${icon('search')}<strong>Chưa tìm thấy món phù hợp</strong>Thử tên món khác hoặc chọn tất cả món nhé.</div>`;
+      <div class="food-info"><span class="eyebrow">${category(item) === 'drink' ? 'MÁT LÀNH, THẢNH THƠI' : 'PHỞ NHÀ · ĐẬM VỊ VIỆT'}</span><h2 class="food-title">${escape(item.name)}</h2><p class="food-desc">${category(item) === 'drink' ? 'Một chút mát lành cho bữa ăn thêm trọn vị.' : 'Nước dùng đậm đà, thịt tươi và rau thơm. Chọn khẩu vị theo cách của bạn.'}</p><div class="food-footer"><span class="food-price">${money(item.price)}</span><button class="add-btn" type="button" data-customize="${item.id}" ${item.is_available === false ? 'disabled' : ''} aria-label="${item.is_available === false ? 'Tạm hết món' : 'Chọn'} ${escape(item.name)}">${icon('plus')} ${item.is_available === false ? 'Tạm hết món' : 'Chọn món'}</button></div></div></article>`).join('') || `<div class="panel empty-state">${icon('search')}<strong>Chưa tìm thấy món phù hợp</strong>Thử tên món khác hoặc chọn tất cả món nhé.</div>`;
   }
 
   function customPrice() {
-    if (!customItem) return;
+    if (!customItem || customItem.is_available === false) return;
     const extra = [...$('#customOptions').querySelectorAll('[data-topping-id]:checked')].reduce((total, input) => total + Number(toppings.find((item) => item.id === Number(input.dataset.toppingId))?.price || 0), 0);
     $('#customTotal').textContent = money((Number(customItem.price) + extra) * customQuantity);
     $('#customQty').textContent = customQuantity;
   }
   function customize(id) {
     customItem = menuItems.find((item) => item.id === id);
-    if (!customItem) return;
+    if (!customItem || customItem.is_available === false) return;
     customQuantity = 1;
     $('#customizeTitle').textContent = customItem.name;
     $('#customNote').value = '';
@@ -71,11 +71,17 @@
   }
   grid.addEventListener('click', (event) => { const button = event.target.closest('[data-customize]'); if (button) customize(Number(button.dataset.customize)); });
   $('#customOptions').addEventListener('change', customPrice);
-  document.querySelectorAll('[data-custom-qty]').forEach((button) => button.addEventListener('click', () => { customQuantity = Math.min(99, Math.max(1, customQuantity + Number(button.dataset.customQty))); customPrice(); }));
+  document.querySelectorAll('[data-custom-qty]').forEach((button) => button.addEventListener('click', () => { customQuantity = Math.min(customItem?.max_quantity ?? 99, Math.max(1, customQuantity + Number(button.dataset.customQty))); customPrice(); }));
   $('[data-close-customize]').addEventListener('click', () => customDialog.close());
   $('#customizeForm').addEventListener('submit', (event) => {
     event.preventDefault();
     if (!customItem) return;
+    const alreadyInCart = cart.filter((entry) => entry.id === customItem.id).reduce((total, entry) => total + entry.qty, 0);
+    if (customItem.is_available === false || alreadyInCart + customQuantity > (customItem.max_quantity ?? 99)) {
+      $('#customError').textContent = 'Món này không còn đủ số lượng. Vui lòng giảm số lượng hoặc chọn món khác.';
+      $('#customError').hidden = false;
+      return;
+    }
     const choices = [...$('#customOptions').querySelectorAll('input[type="radio"]:checked')].map((input) => Number(input.value)).sort((a, b) => a - b);
     const extras = [...$('#customOptions').querySelectorAll('[data-topping-id]:checked')].map((input) => Number(input.dataset.toppingId)).sort((a, b) => a - b);
     const note = $('#customNote').value.trim();
@@ -106,8 +112,16 @@
     const waiting = orderType.value === 'QUEUE_CART' && queueStatus !== 'CALLED';
     const full = orderType.value === 'DINE_IN' && remainingCapacity < 999 && phoCount > remainingCapacity;
     const blocked = orderType.value === 'DELIVERY' && !deliveryAllowed;
-    $('#checkoutBtn').disabled = !count || waiting || full || blocked;
-    $('#checkoutBtn').textContent = waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
+    const quantities = new Map();
+    cart.forEach(entry => quantities.set(entry.id, (quantities.get(entry.id) || 0) + entry.qty));
+    const unavailable = cart.find(entry => {
+      const item = product(entry);
+      return item?.is_available === false || quantities.get(entry.id) > (item?.max_quantity ?? 99);
+    });
+    $('#checkoutError').hidden = !unavailable;
+    $('#checkoutError').textContent = unavailable ? `${product(unavailable).name} không còn đủ số lượng. Vui lòng giảm số lượng hoặc chọn món khác.` : '';
+    $('#checkoutBtn').disabled = !count || waiting || full || blocked || Boolean(unavailable);
+    $('#checkoutBtn').textContent = unavailable ? 'Món trong giỏ không còn đủ' : waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
   }
   $('#cartItemsList').addEventListener('click', (event) => {
     const button = event.target.closest('[data-cart-index]');

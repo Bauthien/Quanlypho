@@ -4,7 +4,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from .forms import MenuItemForm
-from .models import CustomizationOption, MenuItem, Order, OrderItem, OrderItemTopping, Topping, User
+from .models import CustomizationOption, Ingredient, MenuItem, Order, OrderItem, OrderItemTopping, Recipe, Topping, User
 
 
 @override_settings(PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
@@ -16,6 +16,8 @@ class MenuManagementTests(TestCase):
         cls.staff = User.objects.create_user(username='menu-staff', role=User.Role.STAFF)
         cls.kitchen = User.objects.create_user(username='menu-kitchen', role=User.Role.KITCHEN)
         cls.pho = MenuItem.objects.create(name='Phở bò', base_price=55000, image_primary='pho.jpg')
+        ingredient = Ingredient.objects.create(name='Bánh phở kiểm thử thực đơn', unit='kg', current_stock=100)
+        Recipe.objects.create(menu_item=cls.pho, ingredient=ingredient, quantity_required='0.20')
         cls.drink = MenuItem.objects.create(name='Món uống đặt tên riêng', base_price=20000, category='DRINK', image_primary='drink.jpg')
         cls.topping = Topping.objects.create(name='Trứng chần', price=5000)
 

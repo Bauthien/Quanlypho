@@ -487,6 +487,8 @@ class ConcurrentOrderPaymentTests(TransactionTestCase):
             category=MenuItem.Category.PHO,
             image_primary='pho.jpg',
         )
+        ingredient = Ingredient.objects.create(name='Bánh phở kiểm thử khóa bàn', unit='kg', current_stock=10)
+        Recipe.objects.create(menu_item=menu_item, ingredient=ingredient, quantity_required='0.20')
         options = {}
         for option in CustomizationOption.objects.all():
             options.setdefault(option.category, option.pk)
@@ -545,6 +547,8 @@ class CustomerOrderingAndTableWorkflowTests(TestCase):
         self.staff = User.objects.create_user(username='thungan1', password='password123', role=User.Role.STAFF)
         self.table = Table.objects.create(table_number='9', capacity=4, status=Table.Status.AVAILABLE)
         self.menu_item = MenuItem.objects.create(name='Phở Tái Lăn', base_price=60000, category=MenuItem.Category.PHO, image_primary='pho.jpg')
+        ingredient = Ingredient.objects.create(name='Bánh phở kiểm thử xếp bàn', unit='kg', current_stock=10)
+        Recipe.objects.create(menu_item=self.menu_item, ingredient=ingredient, quantity_required='0.20')
         options = {}
         for option in CustomizationOption.objects.all():
             options.setdefault(option.category, option.pk)

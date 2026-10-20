@@ -58,21 +58,21 @@
 
 <!-- Tabs Navigation -->
 <div class="toolbar" style="margin-top: 15px; margin-bottom: 20px;">
-    <div class="segmented" role="tablist">
-        <button class="active" type="button" id="tabBtnIngredients" onclick="switchInventoryTab('ingredients')">
+    <div class="segmented" role="tablist" aria-label="Quản lý tồn kho">
+        <button class="active" type="button" id="tabBtnIngredients" role="tab" aria-selected="true" aria-controls="tabIngredientsSection" tabindex="0" onclick="switchInventoryTab('ingredients')">
             📦 Danh sách Nguyên liệu ({{ total_ingredients }})
         </button>
-        <button type="button" id="tabBtnRecipes" onclick="switchInventoryTab('recipes')">
+        <button type="button" id="tabBtnRecipes" role="tab" aria-selected="false" aria-controls="tabRecipesSection" tabindex="-1" onclick="switchInventoryTab('recipes')">
             🍜 Định lượng công thức món ({{ total_recipes }})
         </button>
-        <button type="button" id="tabBtnHistory" onclick="switchInventoryTab('history')">
+        <button type="button" id="tabBtnHistory" role="tab" aria-selected="false" aria-controls="tabHistorySection" tabindex="-1" onclick="switchInventoryTab('history')">
             📋 Lịch sử Xuất - Nhập kho
         </button>
     </div>
 </div>
 
 <!-- TAB 1: DANH SÁCH NGUYÊN LIỆU -->
-<div id="tabIngredientsSection">
+<div id="tabIngredientsSection" role="tabpanel" aria-labelledby="tabBtnIngredients" tabindex="0">
     <div class="panel">
         <div class="panel-heading" style="flex-wrap: wrap; gap: 12px;">
             <div>
@@ -137,7 +137,7 @@
                                             {% csrf_token %}
                                             <div style="margin-bottom: 8px;">
                                                 <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px;">Số lượng nhập ({{ ing.unit }}):</label>
-                                                <input type="number" step="any" min="0.1" name="quantity" required style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;" placeholder="Ví dụ: 1000">
+                                                <input type="number" step="0.01" min="0.01" name="quantity" required style="width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px;" placeholder="Ví dụ: 1000">
                                             </div>
                                             <button type="submit" class="primary-btn" style="width: 100%; min-height: 32px; font-size: 11px;">Xác nhận nhập kho</button>
                                         </form>
@@ -175,7 +175,7 @@
 </div>
 
 <!-- TAB 2: ĐỊNH LƯỢNG MÓN ĂN (BOM) -->
-<div id="tabRecipesSection" style="display: none;">
+<div id="tabRecipesSection" role="tabpanel" aria-labelledby="tabBtnRecipes" tabindex="0" hidden>
     <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; align-items: start;">
         <!-- Recipes Table -->
         <div class="panel">
@@ -262,16 +262,16 @@
 
                 <div class="form-group" id="menuItemSelectGroup">
                     <label for="menuItemSelect">Chọn món chính:</label>
-                    <select id="menuItemSelect" name="menu_item_id" class="form-input">
+                    <select id="menuItemSelect" name="menu_item_id" class="form-input" required>
                         {% for item in menu_items %}
                         <option value="{{ item.id }}">{{ item.name }} ({{ item.base_price|floatformat:0 }}đ)</option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <div class="form-group" id="toppingSelectGroup" style="display: none;">
+                <div class="form-group" id="toppingSelectGroup" hidden>
                     <label for="toppingSelect">Chọn topping:</label>
-                    <select id="toppingSelect" name="topping_id" class="form-input">
+                    <select id="toppingSelect" name="topping_id" class="form-input" disabled>
                         <option value="">-- Chọn topping --</option>
                         {% for top in toppings %}
                         <option value="{{ top.id }}">{{ top.name }} ({{ top.price|floatformat:0 }}đ)</option>
@@ -281,16 +281,17 @@
 
                 <div class="form-group">
                     <label for="ingredientSelect">Nguyên liệu kho tiêu hao:</label>
-                    <select id="ingredientSelect" name="ingredient_id" class="form-input" required>
+                    <select id="ingredientSelect" name="ingredient_id" class="form-input" required onchange="updateRecipeUnit()">
                         {% for ing in ingredients %}
-                        <option value="{{ ing.id }}">{{ ing.name }} (Đơn vị: {{ ing.unit }})</option>
+                        <option value="{{ ing.id }}" data-unit="{{ ing.unit }}">{{ ing.name }} (Đơn vị: {{ ing.unit }})</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label for="quantityRequired">Số lượng tiêu hao / 1 đơn vị:</label>
-                    <input type="number" step="any" min="0.01" class="form-input" id="quantityRequired" name="quantity_required" placeholder="Ví dụ: 150 (gram) hoặc 1 (lon)" required>
+                    <input type="number" step="0.01" min="0.01" class="form-input" id="quantityRequired" name="quantity_required" aria-describedby="quantityRequiredUnit" placeholder="Nhập theo đơn vị nguyên liệu" required>
+                    <small id="quantityRequiredUnit">Định lượng phải dùng cùng đơn vị với nguyên liệu đã chọn.</small>
                 </div>
 
                 <button class="primary-btn full" type="submit" style="margin-top: 10px;">
@@ -302,7 +303,7 @@
 </div>
 
 <!-- TAB 3: LỊCH SỬ XUẤT - NHẬP KHO -->
-<div id="tabHistorySection" style="display: none;">
+<div id="tabHistorySection" role="tabpanel" aria-labelledby="tabBtnHistory" tabindex="0" hidden>
     <div class="panel">
         <div class="panel-heading">
             <div>
@@ -369,23 +370,57 @@
 {% block extra_js %}
 <script>
 function switchInventoryTab(tabName) {
-    document.getElementById('tabIngredientsSection').style.display = tabName === 'ingredients' ? 'block' : 'none';
-    document.getElementById('tabRecipesSection').style.display = tabName === 'recipes' ? 'block' : 'none';
-    document.getElementById('tabHistorySection').style.display = tabName === 'history' ? 'block' : 'none';
-
-    document.getElementById('tabBtnIngredients').classList.toggle('active', tabName === 'ingredients');
-    document.getElementById('tabBtnRecipes').classList.toggle('active', tabName === 'recipes');
-    document.getElementById('tabBtnHistory').classList.toggle('active', tabName === 'history');
+    const tabs = {ingredients: 'Ingredients', recipes: 'Recipes', history: 'History'};
+    if (!Object.hasOwn(tabs, tabName)) return;
+    Object.entries(tabs).forEach(([name, suffix]) => {
+        const selected = name === tabName;
+        const button = document.getElementById(`tabBtn${suffix}`);
+        document.getElementById(`tab${suffix}Section`).hidden = !selected;
+        button.classList.toggle('active', selected);
+        button.setAttribute('aria-selected', String(selected));
+        button.tabIndex = selected ? 0 : -1;
+    });
 }
+
+const inventoryTabs = [...document.querySelectorAll('[role="tablist"] [role="tab"]')];
+inventoryTabs.forEach((button, index) => {
+    button.addEventListener('keydown', event => {
+        let next;
+        if (event.key === 'ArrowRight') next = (index + 1) % inventoryTabs.length;
+        else if (event.key === 'ArrowLeft') next = (index + inventoryTabs.length - 1) % inventoryTabs.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = inventoryTabs.length - 1;
+        else return;
+        event.preventDefault();
+        inventoryTabs[next].click();
+        inventoryTabs[next].focus();
+    });
+});
 
 function toggleRecipeTarget(val) {
     const isMenu = val === 'menu_item';
-    document.getElementById('menuItemSelectGroup').style.display = isMenu ? 'block' : 'none';
-    document.getElementById('toppingSelectGroup').style.display = isMenu ? 'none' : 'block';
-    
-    if (isMenu) {
-        document.getElementById('toppingSelect').value = '';
-    }
+    const menu = document.getElementById('menuItemSelect');
+    const topping = document.getElementById('toppingSelect');
+    document.getElementById('menuItemSelectGroup').hidden = !isMenu;
+    document.getElementById('toppingSelectGroup').hidden = isMenu;
+    menu.disabled = !isMenu;
+    menu.required = isMenu;
+    topping.disabled = isMenu;
+    topping.required = !isMenu;
+    (isMenu ? topping : menu).value = '';
+}
+
+window.addEventListener('pageshow', () => {
+    toggleRecipeTarget(document.getElementById('recipeTargetType').value);
+    updateRecipeUnit();
+});
+
+function updateRecipeUnit() {
+    const option = document.getElementById('ingredientSelect').selectedOptions[0];
+    const unit = option?.dataset.unit;
+    document.getElementById('quantityRequiredUnit').textContent = unit
+        ? `Đơn vị định lượng: ${unit}.` + (unit.trim().toLowerCase() === 'kg' ? ' Ví dụ: 300 gram = 0.3 kg.' : '')
+        : 'Hãy chọn nguyên liệu để xác định đơn vị định lượng.';
 }
 
 function filterIngredientsTable() {
