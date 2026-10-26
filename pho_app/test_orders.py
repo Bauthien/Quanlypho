@@ -398,17 +398,17 @@ class OrderManagementTests(TestCase):
         self.client.post(reverse('confirm_cash', args=[self.order.pk]))
         self.ingredient.refresh_from_db()
         self.assertEqual(self.ingredient.current_stock, Decimal('99.50'))
-        self.assertEqual(InventoryTransaction.objects.count(), 2)
+        self.assertEqual(InventoryTransaction.objects.count(), 1)
         self.action('start_cooking')
         self.action('start_cooking')
         self.order.refresh_from_db()
         self.assertEqual(self.order.order_status, Order.OrderStatus.COOKING)
-        self.assertEqual(InventoryTransaction.objects.count(), 2)
+        self.assertEqual(InventoryTransaction.objects.count(), 1)
 
     @override_settings(PAYMENT_WEBHOOK_SECRET='orders-test-secret')
     def test_vietqr_verified_callback_is_still_required_and_idempotent(self):
         Order.objects.filter(pk=self.order.pk).update(payment_method='VIETQR', delivery_fee=23000)
-        body = json.dumps({'order_code': self.order.order_code, 'amount': 133000, 'status': 'paid'}).encode()
+        body = json.dumps({'order_code': self.order.order_code, 'amount': 133000, 'status': 'paid', 'transaction_id': 'ORDER-BANK-TX'}).encode()
         self.assertEqual(self.client.post(reverse('vietqr_webhook'), body, content_type='application/json').status_code, 401)
         signature = hmac.new(b'orders-test-secret', body, hashlib.sha256).hexdigest()
         for _ in range(2):
@@ -416,7 +416,7 @@ class OrderManagementTests(TestCase):
             self.assertEqual(response.status_code, 200)
         self.order.refresh_from_db()
         self.assertEqual(self.order.order_status, Order.OrderStatus.PENDING_KITCHEN)
-        self.assertEqual(InventoryTransaction.objects.count(), 2)
+        self.assertEqual(InventoryTransaction.objects.count(), 1)
 
     def test_cancel_only_pending_cash_and_releases_empty_table(self):
         self.action('cancel_cash')
@@ -619,8 +619,8 @@ class CustomerOrderingAndTableWorkflowTests(TestCase):
             'username': 'khachmoi_test',
             'full_name': 'Khách Mới',
             'phone_number': '0988776655',
-            'password1': '123456',
-            'password2': '123456',
+            'password1': 'StrongRegister@123',
+            'password2': 'StrongRegister@123',
         })
         self.assertRedirects(res_reg, reverse('menu'))
         new_user = User.objects.filter(username='khachmoi_test').first()
@@ -628,21 +628,23 @@ class CustomerOrderingAndTableWorkflowTests(TestCase):
         self.assertEqual(new_user.role, User.Role.CUSTOMER)
 
         # 2. Logout via POST
-        res_logout = self.client.post(reverse('logout'))
+        res_logout = self.client.post(reverse('logout'), {'account_generation': self.client.get(reverse('browser_context')).json()['generation']})
         self.assertRedirects(res_logout, reverse('login'))
 
         # 3. Login using mixed-case username
         res_login_username = self.client.post(reverse('login'), {
             'username': 'KhachMoi_Test',
-            'password': '123456',
+            'password': 'StrongRegister@123',
+            'account_generation': self.client.get(reverse('browser_context')).json()['generation'],
         })
         self.assertRedirects(res_login_username, reverse('menu'))
 
         # 4. Logout and login using phone number
-        self.client.post(reverse('logout'))
+        self.client.post(reverse('logout'), {'account_generation': self.client.get(reverse('browser_context')).json()['generation']})
         res_login_phone = self.client.post(reverse('login'), {
             'username': '0988776655',
-            'password': '123456',
+            'password': 'StrongRegister@123',
+            'account_generation': self.client.get(reverse('browser_context')).json()['generation'],
         })
         self.assertRedirects(res_login_phone, reverse('menu'))
 

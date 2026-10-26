@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, checkout_views, commerce_views, assistant_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -9,7 +9,26 @@ urlpatterns = [
     path('dang-xuat/', views.logout_view, name='logout'),
 
     path('thuc-don/', views.menu_view, name='menu'),
-    path('thuc-don/dat-mon/', views.place_order, name='place_order'),
+    path('thuc-don/dat-mon/', checkout_views.place_order, name='place_order'),
+    path('thuc-don/bao-gia/', checkout_views.quote_checkout, name='checkout_quote'),
+    path('tro-ly/goi-y/', assistant_views.assistant_reply, name='assistant_reply'),
+    path('tai-khoan/', commerce_views.account_home, name='account'),
+    path('tai-khoan/ngu-canh/', commerce_views.browser_context, name='browser_context'),
+    path('tai-khoan/dia-chi/phi-giao/', commerce_views.address_preview, name='address_preview'),
+    path('tai-khoan/chuyen/', commerce_views.account_switch, name='account_switch'),
+    path('tai-khoan/dia-chi/them/', commerce_views.address_edit, name='address_create'),
+    path('tai-khoan/dia-chi/<int:address_id>/', commerce_views.address_edit, name='address_edit'),
+    path('tai-khoan/dia-chi/<int:address_id>/xu-ly/', commerce_views.address_action, name='address_action'),
+    path('tai-khoan/diem/', commerce_views.loyalty_action, name='loyalty_action'),
+    path('don/<int:order_id>/ho-tro/', commerce_views.order_support, name='order_support'),
+    path('thu-ngan/ho-tro/', commerce_views.service_queue, name='service_queue'),
+    path('thu-ngan/giao-nhan/', commerce_views.service_queue, {'delivery_only': True}, name='delivery_queue'),
+    path('thu-ngan/ho-tro/<int:case_id>/', commerce_views.service_action, name='service_action'),
+    path('thu-ngan/giao-nhan/<int:order_id>/', commerce_views.delivery_update, name='delivery_update'),
+    path('quan-ly/doi-soat/', commerce_views.reconcile_receipt, name='reconcile_receipt'),
+    path('quan-ly/khuyen-mai/', commerce_views.promotions, name='promotions'),
+    path('quan-ly/kho/xu-ly/', commerce_views.stock_operation, name='stock_operation'),
+    path('quan-ly/bao-tri/', commerce_views.maintenance, name='commerce_maintenance'),
     path('thuc-don/don/<int:order_id>/', views.order_detail, name='order_detail'),
     path('hang-doi/lay-so/', views.take_queue_number, name='take_queue'),
     path('hang-doi/trang-thai/', views.queue_status, name='queue_status'),

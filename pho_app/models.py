@@ -20,8 +20,20 @@ class User(AbstractUser):
     phone_number = models.CharField(max_length=20, verbose_name="Số điện thoại", blank=True, null=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.CUSTOMER, verbose_name="Vai trò")
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name="Ảnh đại diện")
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=12, blank=True, choices=[('', 'Không cung cấp'), ('MALE', 'Nam'), ('FEMALE', 'Nữ'), ('OTHER', 'Khác')])
+    profile_version = models.PositiveIntegerField(default=1)
+    auth_epoch = models.PositiveIntegerField(default=1)
+    referral_code = models.CharField(max_length=24, unique=True, null=True, blank=True)
+    referred_by = models.ForeignKey('self', on_delete=models.PROTECT, null=True, blank=True, related_name='referrals')
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values('password', 'role', 'is_active', 'auth_epoch').first()
+            if previous and any(previous[key] != getattr(self, key) for key in ('password', 'role', 'is_active')):
+                self.auth_epoch = previous['auth_epoch'] + 1
+                if kwargs.get('update_fields') is not None:
+                    kwargs['update_fields'] = set(kwargs['update_fields']) | {'auth_epoch'}
         if self.is_superuser and self.role == self.Role.CUSTOMER:
             self.role = self.Role.ADMIN
         super().save(*args, **kwargs)
@@ -114,6 +126,7 @@ class MenuItem(models.Model):
     category = models.CharField(max_length=10, choices=Category.choices, default=Category.PHO, verbose_name='Nhóm món')
     base_price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá gốc (VNĐ)")
     is_active = models.BooleanField(default=True, verbose_name="Còn kinh doanh")
+    inventory_mode = models.CharField(max_length=10, choices=[('BOM', 'Theo định lượng'), ('UNTRACKED', 'Không theo dõi kho')], default='BOM')
 
     # 3 Hình ảnh trực quan cho Món chính
     image_primary = models.ImageField(upload_to='menu_items/', verbose_name="Ảnh đại diện chính")
@@ -131,6 +144,7 @@ class MenuItem(models.Model):
 class Topping(models.Model):
     name = models.CharField(max_length=255, verbose_name="Tên Topping (VD: Trứng chần)")
     is_active = models.BooleanField(default=True, verbose_name='Còn kinh doanh')
+    inventory_mode = models.CharField(max_length=10, choices=[('BOM', 'Theo định lượng'), ('UNTRACKED', 'Không theo dõi kho')], default='BOM')
     price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá tính thêm (VNĐ)")
     image_thumbnail = models.ImageField(upload_to='toppings/', blank=True, null=True, verbose_name="Ảnh minh họa nhỏ")
 
@@ -180,6 +194,7 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
     class OrderStatus(models.TextChoices):
         CART = 'CART', 'Chờ thanh toán'
         DELIVERING = 'DELIVERING', 'Đang giao hàng'
+        DELIVERY_EXCEPTION = 'DELIVERY_EXCEPTION', 'Giao hàng cần xử lý'
         PENDING_KITCHEN = 'PENDING_KITCHEN', 'Đang gửi Bếp'
         COOKING = 'COOKING', 'Bếp đang làm'
         READY = 'READY', 'Đã xong (Chờ bưng/Giao)'
@@ -206,6 +221,20 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=0, default=0, verbose_name="Phí giao hàng (VNĐ)")
     delivery_distance_km = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True, verbose_name="Khoảng cách giao (km)")
     shipping_code = models.CharField(max_length=50, blank=True, verbose_name="Mã vận đơn")
+    checkout_snapshot = models.JSONField(default=dict, blank=True)
+    payable_amount = models.DecimalField(max_digits=12, decimal_places=0, null=True, blank=True)
+    benefits_state = models.CharField(max_length=12, default='LEGACY')
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=1)
+    purpose = models.CharField(max_length=24, default='REGULAR', choices=[('REGULAR', 'Đơn mua hàng'), ('SERVICE_REPLACEMENT', 'Giao bù')])
+    replacement_for = models.ForeignKey('self', on_delete=models.PROTECT, null=True, blank=True, related_name='replacements')
+    delivery_snapshot = models.JSONField(default=dict, blank=True)
+    distance_raw_km = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+
+    @property
+    def amount_due(self):
+        return self.payable_amount if self.payable_amount is not None else self.total_amount + self.delivery_fee
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian tạo")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lần cuối")
@@ -222,6 +251,11 @@ class Order(gis_models.Model):  # Sử dụng gis_models để hỗ trợ PostGI
         # including direct saves outside the payment views.
         using = kwargs.get('using') or router.db_for_write(type(self), instance=self)
         with transaction.atomic(using=using):
+            from django.db import connections
+            connection = connections[using]
+            if connection.vendor == 'postgresql':
+                with connection.cursor() as cursor:
+                    cursor.execute('SELECT pg_advisory_xact_lock(%s)', [70420261023])
             return super().save(*args, **kwargs)
 
 
@@ -332,6 +366,8 @@ class Review(models.Model):
     rating = models.IntegerField(choices=[(1, '1★'), (2, '2★'), (3, '3★'), (4, '4★'), (5, '5★')], verbose_name="Đánh giá")
     comment = models.TextField(blank=True, verbose_name="Nhận xét")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian")
+    is_published = models.BooleanField(default=True)
+    revision = models.PositiveIntegerField(default=1)
 
     class Meta:
         verbose_name = "Đánh giá"
@@ -341,3 +377,7 @@ class Review(models.Model):
     def __str__(self):
         item_name = self.menu_item.name if self.menu_item else 'Đơn hàng'
         return f"{self.customer.display_name} - {item_name} - {self.rating}★"
+
+
+# Kept in a separate module to keep the original catalog and table models readable.
+from .commerce_models import *  # noqa: E402,F403

@@ -15,7 +15,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.models import Avg, Count, F, Prefetch, Q, Sum
-from django.db.models.functions import TruncDate
+from django.db.models.functions import Coalesce, TruncDate
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -44,6 +44,7 @@ from .models import (
     User,
 )
 from .permissions import admin_required, kitchen_or_staff_required, kitchen_required, staff_required
+from .domain import serialized, BusinessError
 from .services import (
     InsufficientStock,
     InvalidOrderTransition,
@@ -66,7 +67,20 @@ from .services import (
 
 def _perform_order_action(request, order_id, action):
     try:
-        order = apply_order_action(order_id, action)
+        if action == 'confirm_cash':
+            order = Order.objects.get(pk=order_id)
+            if action not in available_order_actions(order):
+                raise InvalidOrderTransition('Đơn không còn chờ xác nhận tiền mặt.')
+            from .payments import receive_payment
+            from .domain import audit
+            receipt, _ = receive_payment(order.pk, order.amount_due, 'CASH', f'cash-order:{order.pk}')
+            audit(request.user, 'CASH_RECEIVED', receipt)
+            if not receipt.allocated:
+                messages.error(request, f'Đã lưu phiếu thu, cần đối soát: {receipt.note}')
+                return None
+            order.refresh_from_db()
+        else:
+            order = apply_order_action(order_id, action)
     except Order.DoesNotExist as exc:
         raise Http404('Không tìm thấy đơn hàng.') from exc
     except InvalidOrderTransition as exc:
@@ -80,7 +94,7 @@ def _perform_order_action(request, order_id, action):
 def admin_orders(request):
     filter_form = OrderFilterForm(request.GET)
     orders = Order.objects.select_related('customer', 'table').annotate(
-        grand_total=F('total_amount') + F('delivery_fee'),
+        grand_total=Coalesce('payable_amount', F('total_amount') + F('delivery_fee')),
     )
     sort = 'newest'
     if filter_form.is_valid():
@@ -151,7 +165,7 @@ def admin_order_detail(request, order_id):
     actions = [{'name': action, 'label': ORDER_ACTION_LABELS[action]} for action in available_order_actions(order)]
     return render(request, 'pho_app/admin/order_detail.html', {
         'order': order, 'order_items': order_items, 'order_actions': actions,
-        'grand_total': order.total_amount + order.delivery_fee,
+        'grand_total': order.amount_due,
         'can_print_labels': order.payment_status == Order.PaymentStatus.PAID
             and order.order_type == Order.OrderType.DELIVERY
             and order.order_status in (Order.OrderStatus.READY, Order.OrderStatus.DELIVERING),
@@ -176,11 +190,13 @@ def _generate_order_code():
 
 
 def _vietqr_image_url(order):
-    bank = getattr(settings, 'VIETQR_BANK_ID', '') or '970415'
-    account = getattr(settings, 'VIETQR_ACCOUNT_NO', '') or '113366668888'
-    account_name = getattr(settings, 'VIETQR_ACCOUNT_NAME', '') or 'TEST PHO GIA TRUYEN'
+    bank = getattr(settings, 'VIETQR_BANK_ID', '')
+    account = getattr(settings, 'VIETQR_ACCOUNT_NO', '')
+    account_name = getattr(settings, 'VIETQR_ACCOUNT_NAME', '')
+    if not bank or not account or order.amount_due <= 0:
+        return ''
     query = urlencode({
-        'amount': int(order.total_amount + order.delivery_fee),
+        'amount': int(order.amount_due),
         'addInfo': order.order_code,
         'accountName': account_name,
     })
@@ -209,7 +225,8 @@ def login_view(request):
         return redirect(request.user.home_url_name())
     form = StyledAuthForm(request, data=request.POST or None)
     if request.method == 'POST' and form.is_valid():
-        login(request, form.get_user())
+        from .accounts import remember_login
+        remember_login(request, form.get_user())
         messages.success(request, f'Xin chào {request.user.display_name}!')
         return redirect(request.user.home_url_name())
     return render(request, 'pho_app/auth/login.html', {'form': form})
@@ -222,7 +239,8 @@ def register_view(request):
     form = RegisterForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         user = form.save()
-        login(request, user)
+        from .accounts import remember_login
+        remember_login(request, user)
         messages.success(request, 'Đăng ký thành công. Tài khoản của bạn là khách hàng.')
         return redirect('menu')
     return render(request, 'pho_app/auth/register.html', {'form': form})
@@ -230,13 +248,19 @@ def register_view(request):
 
 @require_POST
 def logout_view(request):
-    logout(request)
+    from .accounts import logout_current
+    logout_current(request)
     messages.info(request, 'Bạn đã đăng xuất thành công.')
     return redirect('login')
 
 
 @ensure_csrf_cookie
 def menu_view(request):
+    from .stock import expire_orders
+    expire_orders()
+    if request.user.is_authenticated and request.user.is_customer():
+        from .loyalty import evaluateAndUpgradeTier
+        evaluateAndUpgradeTier(request.user.pk)
     selected_table = request.GET.get('table', '')
     is_door = request.GET.get('door') == '1'
     items = list(MenuItem.objects.filter(is_active=True))
@@ -302,219 +326,6 @@ def menu_view(request):
     })
 
 
-@require_POST
-def place_order(request):
-    if request.user.is_authenticated and not request.user.is_customer():
-        messages.error(request, 'Tài khoản nhân viên không thể đặt món ở chế độ khách hàng.')
-        return redirect(request.user.home_url_name())
-
-    try:
-        payload = json.loads(request.POST.get('cart', '[]'))
-    except json.JSONDecodeError:
-        messages.error(request, 'Giỏ hàng không hợp lệ.')
-        return redirect('menu')
-
-    if not isinstance(payload, list) or not payload or len(payload) > 50:
-        messages.error(request, 'Giỏ hàng đang trống.')
-        return redirect('menu')
-
-    payment_method = request.POST.get('payment_method', Order.PaymentMethod.VIETQR)
-    order_type = request.POST.get('order_type', Order.OrderType.DINE_IN)
-    table_id = request.POST.get('table_id') or None
-
-    if payment_method not in dict(Order.PaymentMethod.choices):
-        payment_method = Order.PaymentMethod.VIETQR
-    if order_type not in dict(Order.OrderType.choices):
-        order_type = Order.OrderType.DINE_IN
-
-    if order_type == Order.OrderType.DELIVERY:
-        payment_method = Order.PaymentMethod.VIETQR
-
-    total = Decimal('0')
-    resolved_items = []
-    for row in payload:
-        if not isinstance(row, dict):
-            continue
-        raw_topping_ids = row.get('toppings', [])
-        raw_customization_ids = row.get('customizations', [])
-        if not isinstance(raw_topping_ids, list) or not isinstance(raw_customization_ids, list):
-            continue
-        try:
-            menu_id = int(row.get('id'))
-            quantity = int(row.get('qty', 1))
-            topping_ids = [int(value) for value in raw_topping_ids]
-            customization_ids = [int(value) for value in raw_customization_ids]
-        except (TypeError, ValueError):
-            continue
-        menu_item = MenuItem.objects.filter(pk=menu_id, is_active=True).first()
-        if not menu_item:
-            continue
-        if not 1 <= quantity <= 99:
-            continue
-        if len(topping_ids) != len(set(topping_ids)) or len(customization_ids) != len(set(customization_ids)):
-            continue
-        selected_options = list(CustomizationOption.objects.filter(pk__in=customization_ids))
-        if menu_item.category == MenuItem.Category.PHO:
-            if len({option.category for option in selected_options}) != len(selected_options):
-                messages.error(request, f'Chỉ chọn một tùy chọn cho mỗi nhóm của món {menu_item.name}.')
-                return redirect('menu')
-            required_categories = {choice[0] for choice in CustomizationOption.Category.choices}
-            if {option.category for option in selected_options} != required_categories:
-                messages.error(request, f'Vui lòng chọn đủ nước dùng, rau/giá và bánh phở cho món {menu_item.name}.')
-                return redirect('menu')
-            selected_toppings = list(Topping.objects.filter(pk__in=topping_ids, is_active=True))
-            if len(selected_toppings) != len(topping_ids) or len(selected_options) != len(customization_ids):
-                messages.error(request, 'Tùy chọn món không hợp lệ. Vui lòng tải lại thực đơn.')
-                return redirect('menu')
-        else:
-            selected_options = []
-            selected_toppings = []
-        note = str(row.get('note', '')).strip()[:500]
-        item_total = menu_item.base_price + sum((topping.price for topping in selected_toppings), Decimal('0'))
-        resolved_items.append((menu_item, quantity, selected_toppings, selected_options, note, item_total))
-        total += item_total * quantity
-
-    if not resolved_items:
-        messages.error(request, 'Không tìm thấy món hợp lệ.')
-        return redirect('menu')
-
-    address = request.POST.get('delivery_address', '').strip()
-    delivery_fee = Decimal('0')
-    delivery_distance = None
-    location = None
-    ticket = active_queue_ticket(request)
-    is_queue_checkout = order_type == Order.OrderType.QUEUE_CART
-
-    if is_queue_checkout:
-        if not ticket or ticket.status != QueueTicket.Status.CALLED or not ticket.table_id:
-            messages.error(request, 'Giỏ xếp hàng chỉ thanh toán sau khi được gọi số. Bạn vẫn có thể chọn món trước.')
-            return redirect('menu')
-        order_type = Order.OrderType.DINE_IN
-        table_id = str(ticket.table_id)
-    elif ticket and ticket.status == QueueTicket.Status.CALLED and ticket.table_id and order_type == Order.OrderType.DINE_IN:
-        table_id = str(ticket.table_id)
-
-    if order_type == Order.OrderType.DELIVERY:
-        payment_method = Order.PaymentMethod.VIETQR
-        coords = parse_coords(request.POST.get('customer_lat'), request.POST.get('customer_lng'))
-        lat = coords[0] if coords else None
-        lng = coords[1] if coords else None
-
-        # Nếu không có địa chỉ VÀ không có GPS thì mới báo lỗi
-        if not address and not coords:
-            messages.error(request, 'Vui lòng nhập địa chỉ giao hàng hoặc dùng vị trí hiện tại.')
-            return redirect('menu')
-
-        delivery_fee, delivery_distance, in_range = compute_delivery_fee(lat, lng)
-        if not in_range:
-            messages.error(request, f'Địa chỉ nằm ngoài phạm vi giao hàng ({getattr(settings, "DELIVERY_MAX_KM", 10)} km).')
-            return redirect('menu')
-        if coords:
-            location = customer_point(lat, lng)
-
-    customer_user = request.user if (request.user.is_authenticated and request.user.is_customer()) else None
-    guest_name = request.POST.get('guest_name', '').strip()[:100]
-    if not customer_user and not guest_name:
-        if request.user.is_authenticated:
-            guest_name = f"{request.user.display_name} ({request.user.get_role_display()})"
-        else:
-            guest_name = 'Khách tại quán'
-
-    with transaction.atomic():
-        # PostgreSQL requires select_for_update() to run inside an active transaction.
-        # Lock the table before checking capacity so simultaneous checkouts cannot overfill it.
-        table = None
-        if table_id and order_type == Order.OrderType.DINE_IN:
-            try:
-                table_pk = int(table_id)
-                table = Table.objects.select_for_update().filter(
-                    pk=table_pk,
-                    status__in=[Table.Status.AVAILABLE, Table.Status.OCCUPIED],
-                ).first()
-            except (TypeError, ValueError):
-                table = None
-
-        if table and order_type == Order.OrderType.DINE_IN:
-            used_capacity = used_bowls(table)
-            pho_qty = sum(item[1] for item in resolved_items if item[0].category == MenuItem.Category.PHO)
-            if used_capacity + pho_qty > table.capacity:
-                messages.error(request, f'Bàn {table.table_number} chỉ còn tối đa {max(0, table.capacity - used_capacity)} chỗ (tô phở).')
-                return redirect('menu')
-
-        seated_ticket = None
-        if ticket and ticket.status == QueueTicket.Status.CALLED:
-            seated_ticket = QueueTicket.objects.select_for_update().filter(pk=ticket.pk, status=QueueTicket.Status.CALLED).first()
-            if not seated_ticket:
-                if is_queue_checkout:
-                    messages.error(request, 'Trạng thái số xếp hàng vừa thay đổi. Vui lòng tải lại thực đơn trước khi đặt món.')
-                    return redirect('menu')
-                ticket = None
-            elif seated_ticket.table_id != (table.pk if table else None):
-                messages.error(request, 'Bàn được gọi đã thay đổi. Vui lòng tải lại thực đơn trước khi đặt món.')
-                return redirect('menu')
-            else:
-                ticket = seated_ticket
-        elif is_queue_checkout:
-            messages.error(request, 'Số xếp hàng của bạn chưa được gọi. Vui lòng tải lại thực đơn và thử lại sau khi được gọi.')
-            return redirect('menu')
-
-        try:
-            deductions = inventory_deductions([
-                (menu_item, quantity, [(topping, quantity) for topping in selected_toppings])
-                for menu_item, quantity, selected_toppings, _, _, _ in resolved_items
-            ])
-            ensure_inventory_available(deductions, lock=True)
-        except InvalidOrderTransition as exc:
-            messages.error(request, str(exc))
-            return redirect('menu')
-
-        order = Order.objects.create(
-            order_code=_generate_order_code(),
-            customer=customer_user,
-            guest_name=guest_name,
-            order_type=order_type,
-            table=table,
-            queue_ticket=ticket if ticket and ticket.status == QueueTicket.Status.CALLED else None,
-            payment_method=payment_method,
-            payment_status=Order.PaymentStatus.PENDING,
-            order_status=Order.OrderStatus.CART,
-            total_amount=total,
-            delivery_fee=delivery_fee,
-            delivery_address=address or None,
-            delivery_distance_km=delivery_distance,
-            customer_location=location,
-            shipping_code=f'VD-{uuid.uuid4().hex[:6].upper()}' if order_type == Order.OrderType.DELIVERY else '',
-        )
-        for menu_item, quantity, selected_toppings, selected_options, note, item_price in resolved_items:
-            order_item = OrderItem.objects.create(
-                order=order,
-                menu_item=menu_item,
-                quantity=quantity,
-                item_price=item_price,
-                note=note,
-            )
-            OrderItemTopping.objects.bulk_create([
-                OrderItemTopping(order_item=order_item, topping=topping, quantity=quantity)
-                for topping in selected_toppings
-            ])
-            OrderItemCustomization.objects.bulk_create([
-                OrderItemCustomization(order_item=order_item, customization=option)
-                for option in selected_options
-            ])
-        if table and table.status == Table.Status.AVAILABLE:
-            Table.objects.filter(pk=table.pk, status=Table.Status.AVAILABLE).update(status=Table.Status.OCCUPIED)
-        if ticket and ticket.status == QueueTicket.Status.CALLED:
-            ticket.status = QueueTicket.Status.SEATED
-            ticket.save(update_fields=['status'])
-            request.session.pop('queue_ticket_id', None)
-
-    messages.info(request, f'Đơn {order.order_code} đã tạo. Trạng thái: chờ thanh toán.')
-    guest_orders = request.session.get('guest_orders', [])
-    guest_orders.append(order.pk)
-    request.session['guest_orders'] = guest_orders
-    request.session['latest_order_id'] = order.pk
-    return redirect(f"{reverse('order_detail', args=[order.pk])}?placed=1")
-
 
 def order_detail(request, order_id):
     order = get_object_or_404(Order.objects.prefetch_related('items__menu_item', 'items__toppings__topping', 'items__customizations__customization'), pk=order_id)
@@ -523,7 +334,7 @@ def order_detail(request, order_id):
         can_view = True
     elif order.customer and request.user.is_authenticated and order.customer == request.user:
         can_view = True
-    elif order.pk in request.session.get('guest_orders', []):
+    elif order.customer_id is None and order.pk in request.session.get('guest_orders', []):
         can_view = True
     elif request.user.is_authenticated and request.user.is_kitchen():
         can_view = (
@@ -540,7 +351,10 @@ def order_detail(request, order_id):
     inventory_error = ''
     if order.payment_status == Order.PaymentStatus.PENDING and order.order_status != Order.OrderStatus.CANCELLED:
         try:
-            ensure_inventory_available(order_inventory_deductions(order))
+            if order.expires_at and order.expires_at <= timezone.now():
+                raise InvalidOrderTransition('Đơn đã hết thời gian giữ món và ưu đãi. Vui lòng đặt lại đơn.')
+            if order.benefits_state == 'LEGACY':
+                ensure_inventory_available(order_inventory_deductions(order))
         except InvalidOrderTransition as exc:
             inventory_error = str(exc)
 
@@ -548,7 +362,7 @@ def order_detail(request, order_id):
         'order': order,
         'vietqr_image_url': _vietqr_image_url(order) if order.payment_method == Order.PaymentMethod.VIETQR and not inventory_error else '',
         'inventory_error': inventory_error,
-        'grand_total': order.total_amount + order.delivery_fee,
+        'grand_total': order.amount_due,
         'clear_cart': request.GET.get('placed') == '1' and can_view,
     })
 
@@ -559,44 +373,28 @@ def vietqr_webhook(request):
     secret = getattr(settings, 'PAYMENT_WEBHOOK_SECRET', '')
     if not secret:
         return HttpResponse('Payment webhook is not configured.', status=503)
-    supplied_signature = request.headers.get('X-Payment-Signature', '')
-    expected_signature = hmac.new(secret.encode(), request.body, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(supplied_signature, expected_signature):
+    signature = hmac.new(secret.encode(), request.body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(request.headers.get('X-Payment-Signature', ''), signature):
         return HttpResponse('Invalid signature.', status=401)
     try:
         payload = json.loads(request.body)
-        order_code = str(payload['order_code'])
-        paid_amount = Decimal(str(payload['amount']))
-        success = str(payload.get('status', '')).lower() in {'success', 'paid'}
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-        return HttpResponse('Invalid payment payload.', status=400)
-    try:
-        with transaction.atomic():
-            order = Order.objects.select_for_update().filter(order_code=order_code).first()
-            if not order or order.payment_method != Order.PaymentMethod.VIETQR:
-                return HttpResponse('Order not found.', status=404)
-            expected_amount = order.total_amount + order.delivery_fee
-            if paid_amount != expected_amount:
-                return HttpResponse('Payment amount mismatch.', status=400)
-            if order.payment_status == Order.PaymentStatus.PAID:
-                return JsonResponse({'ok': True, 'duplicate': True})
-            if order.payment_status == Order.PaymentStatus.FAILED or order.order_status == Order.OrderStatus.CANCELLED:
-                return JsonResponse({'ok': False, 'error': 'Order is already terminal; manual reconciliation is required.'}, status=409)
-            if not success:
-                order.payment_status = Order.PaymentStatus.FAILED
-                order.order_status = Order.OrderStatus.CANCELLED
-            else:
-                order.payment_status = Order.PaymentStatus.PAID
-                order.order_status = Order.OrderStatus.PENDING_KITCHEN
-            order.save(update_fields=['payment_status', 'order_status', 'updated_at'])
-    except InvalidOrderTransition as exc:
-        return JsonResponse({
-            'ok': False,
-            'error': 'insufficient_stock' if isinstance(exc, InsufficientStock) else 'invalid_inventory_configuration',
-            'detail': str(exc),
-            'requires_reconciliation': True,
-        }, status=409)
-    return JsonResponse({'ok': True})
+        if str(payload.get('status', '')).lower() not in {'success', 'paid'}:
+            # A payment failure notification is not proof that no transfer can arrive.
+            return JsonResponse({'ok': True, 'settled': False})
+        external_id = str(payload.get('transaction_id', '')).strip()
+        if not external_id:
+            return JsonResponse({'ok': False, 'requires_reconciliation': True,
+                'error': 'Cần transaction_id từ ngân hàng; không dùng mã đơn thay mã giao dịch.'}, status=400)
+        order = Order.objects.filter(order_code=payload['order_code'], payment_method='VIETQR').first()
+        if not order:
+            return HttpResponse('Order not found.', status=404)
+        from .payments import receive_payment
+        receipt, duplicate = receive_payment(order.pk, payload['amount'], 'BANK', external_id)
+        return JsonResponse({'ok': receipt.allocated, 'duplicate': duplicate,
+            'requires_reconciliation': receipt.requires_reconciliation, 'detail': receipt.note},
+            status=202 if receipt.requires_reconciliation else 200)
+    except (BusinessError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
 
 @require_POST
@@ -1073,7 +871,8 @@ def delivery_labels(request, order_id):
 
 @admin_required
 def admin_home(request):
-    paid = Order.objects.filter(payment_status=Order.PaymentStatus.PAID)
+    paid = Order.objects.filter(payment_status=Order.PaymentStatus.PAID).annotate(
+        effective_total=Coalesce('payable_amount', F('total_amount') + F('delivery_fee')))
     stats = {
         'users': User.objects.count(),
         'customers': User.objects.filter(role=User.Role.CUSTOMER).count(),
@@ -1082,7 +881,7 @@ def admin_home(request):
         'admins': User.objects.filter(role=User.Role.ADMIN).count(),
         'menu_items': MenuItem.objects.filter(is_active=True).count(),
         'orders': Order.objects.count(),
-        'revenue': paid.aggregate(total=Sum('total_amount'))['total'] or 0,
+        'revenue': paid.aggregate(total=Sum('effective_total'))['total'] or 0,
         'dine_in': paid.filter(order_type=Order.OrderType.DINE_IN).count(),
         'delivery': paid.filter(order_type=Order.OrderType.DELIVERY).count(),
         'waiting': QueueTicket.objects.filter(status=QueueTicket.Status.WAITING).count(),
@@ -1094,7 +893,7 @@ def admin_home(request):
         row['day']: row['total']
         for row in paid.filter(created_at__date__gte=first_day)
         .annotate(day=TruncDate('created_at')).values('day')
-        .annotate(total=Sum('total_amount'))
+        .annotate(total=Sum('effective_total'))
     }
     revenue_chart = [
         {'label': (first_day + timedelta(days=index)).strftime('%d/%m'),
@@ -1242,7 +1041,7 @@ def simulate_vietqr_payment(request, order_id):
     can_pay = False
     if order.customer and request.user.is_authenticated and order.customer == request.user:
         can_pay = True
-    elif order.pk in request.session.get('guest_orders', []):
+    elif order.customer_id is None and order.pk in request.session.get('guest_orders', []):
         can_pay = True
 
     if not can_pay:
@@ -1256,6 +1055,10 @@ def simulate_vietqr_payment(request, order_id):
         except InvalidOrderTransition as exc:
             messages.error(request, str(exc))
             return redirect('order_detail', order_id=order.pk)
+        from .models import PaymentReceipt
+        PaymentReceipt.objects.get_or_create(provider='SIMULATED', external_id=f'dev-order:{order.pk}', defaults={
+            'order': order, 'amount': int(order.amount_due), 'allocated': True,
+            'received_at': timezone.now(), 'note': 'Mô phỏng ở môi trường phát triển, không phải giao dịch ngân hàng.'})
         messages.success(request, 'Đã mô phỏng thanh toán thành công! Đơn đã chuyển xuống bếp.')
     return redirect('order_detail', order_id=order.pk)
 
@@ -1344,7 +1147,7 @@ def review_form(request):
     
     # Lấy menu items và recent orders cho dropdown
     menu_items = MenuItem.objects.all().order_by('name')
-    recent_orders = Order.objects.filter(customer=request.user).order_by('-created_at')[:10]
+    recent_orders = Order.objects.filter(customer=request.user, order_status='COMPLETED', purpose='REGULAR').order_by('-created_at')[:20]
     
     return render(request, 'pho_app/customer/review_form.html', {
         'menu_items': menu_items,
@@ -1399,13 +1202,17 @@ def submit_review(request):
         messages.error(request, 'Món ăn hoặc đơn hàng không hợp lệ.')
         return redirect('reviews_list')
     
-    Review.objects.create(
-        customer=request.user,
-        menu_item=menu_item,
-        order=order,
-        rating=int(rating),
-        comment=comment,
-    )
+    if order and (order.order_status != 'COMPLETED' or order.purpose != 'REGULAR' or (menu_item and not order.items.filter(menu_item=menu_item).exists())):
+        messages.error(request, 'Chỉ đánh giá món thuộc đơn mua hàng đã hoàn tất.')
+        return redirect('reviews_list')
+    review = Review.objects.filter(customer=request.user, menu_item=menu_item, order=order).order_by('-pk').first()
+    if review:
+        review.rating, review.comment, review.revision = int(rating), comment, review.revision + 1
+        review.save(update_fields=['rating', 'comment', 'revision'])
+    else:
+        review = Review.objects.create(customer=request.user, menu_item=menu_item, order=order, rating=int(rating), comment=comment)
+    from .loyalty import reward_review
+    reward_review(review)
     
     messages.success(request, 'Cảm ơn bạn đã đánh giá!')
     return redirect('reviews_list')
@@ -1422,16 +1229,27 @@ def custom_404_view(request, exception=None):
 @admin_required
 def admin_inventory(request):
     """Trang quản lý kho nguyên liệu, công thức định lượng và lịch sử biến động kho."""
-    ingredients = Ingredient.objects.all().order_by('name')
+    ingredients = list(Ingredient.objects.all().order_by('name'))
+    from .stock import reserved_totals, available_balances
+    from .models import InventoryIncident, InventoryRequirement, StockReservation
+    held, available = reserved_totals(), available_balances()
+    for ingredient in ingredients:
+        ingredient.held_stock = held.get(ingredient.pk, 0)
+        ingredient.available_stock = available.get(ingredient.pk, 0)
     recipes = Recipe.objects.select_related('menu_item', 'topping', 'ingredient').all().order_by('menu_item__name', 'topping__name')
     recent_transactions = InventoryTransaction.objects.select_related('ingredient', 'created_by').order_by('-created_at')[:40]
 
-    total_ingredients = ingredients.count()
+    total_ingredients = len(ingredients)
     low_stock_count = Ingredient.objects.filter(current_stock__lte=F('minimum_stock')).count()
     total_recipes = recipes.count()
 
     menu_items = MenuItem.objects.filter(is_active=True).order_by('name')
     toppings = Topping.objects.filter(is_active=True).order_by('name')
+
+    stock_orders = list(Order.objects.filter(stock_reservation__state='CONSUMED').order_by('-created_at')[:100])
+    stock_order_options = {str(order.pk): [] for order in stock_orders}
+    for line in InventoryRequirement.objects.filter(reservation__order__in=stock_orders).select_related('reservation'):
+        stock_order_options[str(line.reservation.order_id)].append(line.ingredient_id)
 
     return render(request, 'pho_app/admin/inventory_list.html', {
         'ingredients': ingredients,
@@ -1442,6 +1260,10 @@ def admin_inventory(request):
         'total_recipes': total_recipes,
         'menu_items': menu_items,
         'toppings': toppings,
+        'stock_incidents': InventoryIncident.objects.filter(resolved=False).select_related('ingredient'),
+        'stock_request_key': uuid.uuid4().hex,
+        'stock_orders': stock_orders, 'stock_order_options': stock_order_options,
+        'stock_holds': StockReservation.objects.filter(state='ACTIVE', expires_at__gt=timezone.now()).select_related('order').prefetch_related('lines__ingredient')[:8],
     })
 
 
@@ -1471,6 +1293,7 @@ def admin_ingredient_edit(request, ingredient_id):
     """Chỉnh sửa thông tin nguyên liệu và điều chỉnh kho."""
     ingredient = get_object_or_404(Ingredient.objects.select_for_update(), pk=ingredient_id)
     previous_stock = ingredient.current_stock
+    previous_unit = ingredient.unit
     form = IngredientForm(request.POST if request.method == 'POST' else None, instance=ingredient)
     if request.method == 'POST' and form.is_valid():
         diff = form.cleaned_data['current_stock'] - previous_stock
@@ -1478,7 +1301,16 @@ def admin_ingredient_edit(request, ingredient_id):
         if abs(diff) > Decimal('99999999.99'):
             form.add_error('current_stock', 'Mức điều chỉnh vượt giới hạn. Vui lòng điều chỉnh thành nhiều lần.')
             return render(request, 'pho_app/admin/ingredient_form.html', {'ingredient': ingredient, 'form': form})
+        from .stock import reserved_totals
+        held = reserved_totals().get(ingredient.pk, 0)
+        if form.cleaned_data['unit'] != previous_unit and (ingredient.recipes.exists() or ingredient.inventorytransaction_set.exists()):
+            form.add_error('unit', 'Nguyên liệu đã có lịch sử: cần quy đổi có kiểm toán, không chỉ đổi nhãn đơn vị.')
+            return render(request, 'pho_app/admin/ingredient_form.html', {'ingredient': ingredient, 'form': form})
         ingredient = form.save()
+        if ingredient.current_stock < held:
+            from .models import InventoryIncident
+            InventoryIncident.objects.create(ingredient=ingredient, detail=f'Kiểm kê {ingredient.current_stock}, đang giữ {held}; đã khóa nhận đơn/xuất kho cho nguyên liệu này.')
+            messages.warning(request, 'Tồn thực tế thấp hơn lượng cam kết. Đã khóa nguyên liệu để xử lý chênh lệch.')
         if diff != 0:
             InventoryTransaction.objects.create(
                 ingredient=ingredient,
@@ -1519,6 +1351,15 @@ def admin_ingredient_import(request, ingredient_id):
     qty = form.cleaned_data['quantity']
     with transaction.atomic():
         ingredient = get_object_or_404(Ingredient.objects.select_for_update(), pk=ingredient_id)
+        from .stock import convert_stock_units
+        from .domain import audit
+        entered_qty = qty
+        entered_unit = form.cleaned_data.get('input_unit') or ingredient.unit
+        try:
+            qty = convert_stock_units(qty, entered_unit, ingredient.unit)
+        except BusinessError as exc:
+            messages.error(request, str(exc))
+            return redirect('admin_inventory')
         if ingredient.current_stock + qty < 0:
             messages.error(request, f'Tồn kho cũ đang âm {abs(ingredient.current_stock):g} {ingredient.unit}. Hãy kiểm kê và cập nhật tồn thực tế trước khi nhập thêm.')
             return redirect('admin_inventory')
@@ -1533,6 +1374,8 @@ def admin_ingredient_import(request, ingredient_id):
             quantity_changed=qty,
             created_by=request.user,
         )
+        audit(request.user, 'STOCK_IMPORT', ingredient, input_quantity=str(entered_qty), input_unit=entered_unit,
+              stock_quantity=str(qty), stock_unit=ingredient.unit)
     messages.success(request, f'Đã nhập thêm +{qty:g} {ingredient.unit} cho nguyên liệu "{ingredient.name}".')
     return redirect('admin_inventory')
 
@@ -1569,3 +1412,10 @@ def admin_recipe_delete(request, recipe_id):
     recipe.delete()
     messages.success(request, 'Đã xóa công thức định lượng thành công.')
     return redirect('admin_inventory')
+
+
+# All legacy stock/role/order mutation paths share the transaction gate.
+for _name in ('confirm_cash_payment', 'assign_order_table', 'free_table', 'free_order_table',
+              'admin_ingredient_create', 'admin_ingredient_edit', 'admin_ingredient_import',
+              'admin_recipe_create', 'admin_recipe_delete', 'admin_update_role', 'submit_review', 'simulate_vietqr_payment'):
+    globals()[_name] = serialized(globals()[_name])

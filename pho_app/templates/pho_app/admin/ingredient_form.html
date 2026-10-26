@@ -1,35 +1,9 @@
 {% extends 'pho_app/admin/shell.html' %}
-{% load static %}
-{% block title %}{% if ingredient %}Chỉnh sửa nguyên liệu: {{ ingredient.name }}{% else %}Thêm nguyên liệu mới{% endif %} · Phở Nhà{% endblock %}
+{% block title %}{% if ingredient %}Sửa {{ ingredient.name }}{% else %}Thêm nguyên liệu{% endif %} · Phở Nhà{% endblock %}
 {% block breadcrumb %}Quản lý tồn kho / {% if ingredient %}Chỉnh sửa{% else %}Thêm mới{% endif %}{% endblock %}
-
-{% block admin_content %}
-<div class="page-heading">
-    <div>
-        <span class="eyebrow">QUẢN LÝ KHO & NGUYÊN VẬT LIỆU</span>
-        <h1>{% if ingredient %}Chỉnh sửa nguyên liệu: {{ ingredient.name }}{% else %}Thêm nguyên liệu mới vào kho{% endif %}</h1>
-        <p>Thiết lập thông tin tên, đơn vị tính và ngưỡng cảnh báo để hệ thống tự động nhắc nhở khi sắp hết hàng.</p>
-    </div>
-</div>
-
-<form class="panel editor-card" method="post" style="max-width: 650px;">
-    {% csrf_token %}
-    {{ form.non_field_errors }}
-    {% for field in form %}
-    <div class="form-group">
-        <label for="{{ field.id_for_label }}">{{ field.label }} (*)</label>
-        {{ field }}
-        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-        {{ field.errors }}
-    </div>
-    {% endfor %}
-
-    <div class="actions" style="margin-top: 24px;">
-        <a class="secondary-btn" href="{% url 'admin_inventory' %}">Quay lại danh sách</a>
-        <button class="primary-btn" type="submit">
-            {% include 'pho_app/includes/icon.html' with name='check' %}
-            {% if ingredient %}Cập nhật nguyên liệu{% else %}Lưu nguyên liệu mới{% endif %}
-        </button>
-    </div>
-</form>
-{% endblock %}
+{% block admin_content %}<div class="commerce-page figma-module">
+  <a class="text-button back-link" href="{% url 'admin_inventory' %}">← Danh sách nguyên liệu</a>
+  <header class="page-heading"><div><span class="eyebrow">NGUYÊN LIỆU & ĐỊNH LƯỢNG</span><h1>{% if ingredient %}Chỉnh sửa nguyên liệu{% else %}Thêm nguyên liệu mới{% endif %}</h1><p>{% if ingredient %}{{ ingredient.name }} · NL-{{ ingredient.pk }}{% else %}Lưu thông tin và lượng tồn ban đầu để bắt đầu theo dõi kho.{% endif %}</p></div></header>
+  <div class="support-layout"><form class="panel commerce-form" method="post">{% csrf_token %}{{ form.non_field_errors }}<div class="form-section"><h3>Thông tin nguyên liệu</h3><div class="form-grid">{% include 'pho_app/includes/commerce_field.html' with field=form.name %}{% include 'pho_app/includes/commerce_field.html' with field=form.unit %}</div></div><div class="form-section"><h3>Số lượng & ngưỡng cảnh báo</h3><div class="form-grid">{% include 'pho_app/includes/commerce_field.html' with field=form.current_stock %}{% include 'pho_app/includes/commerce_field.html' with field=form.minimum_stock %}</div></div><div class="form-actions"><a class="secondary-btn" href="{% url 'admin_inventory' %}">Quay lại danh sách</a><button class="primary-btn">{% include 'pho_app/includes/icon.html' with name='check' %} {% if ingredient %}Cập nhật nguyên liệu{% else %}Lưu nguyên liệu mới{% endif %}</button></div></form>
+  <aside class="commerce-stack"><article class="panel"><span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='bag' %}</span><h3>Thống nhất đơn vị từ đầu</h3><p class="commerce-muted">Dùng gram hoặc ml cho nguyên liệu cần định lượng nhỏ. Công thức của món và số tồn đều dùng đơn vị lưu kho này.</p><hr class="commerce-divider"><h3>Khi nào cần nhập thêm?</h3><p class="commerce-muted">Nguyên liệu chạm ngưỡng tối thiểu sẽ được đánh dấu ở danh sách kho để cửa hàng chủ động bổ sung.</p></article>{% if ingredient %}<div class="notice notice-warm">Thay đổi tồn thực tế được ghi vào lịch sử điều chỉnh. Nguyên liệu đã có công thức hoặc lịch sử sử dụng sẽ giữ nguyên đơn vị gốc.</div>{% endif %}</aside></div>
+</div>{% endblock %}

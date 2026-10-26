@@ -8,9 +8,10 @@ from django.db.models import F, Prefetch, Q, Sum, prefetch_related_objects
 from django.db.models.functions import Coalesce
 
 from .models import Ingredient, MenuItem, Order, OrderItem, QueueTicket, Recipe, Table, Topping
+from .domain import serialized, BusinessError
 
 
-class InvalidOrderTransition(ValueError):
+class InvalidOrderTransition(BusinessError):
     """The current persisted order no longer permits this action."""
 
 
@@ -46,8 +47,12 @@ def inventory_deductions(lines, using='default'):
     deductions = []
 
     def add_product(product, quantity):
+        if product.inventory_mode == 'UNTRACKED':
+            if isinstance(product, MenuItem) and product.category == MenuItem.Category.PHO:
+                raise InvalidOrderTransition('Món phở bắt buộc có định lượng nguyên liệu.')
+            return
         recipes = list(product.recipes.all())
-        if not recipes and isinstance(product, MenuItem) and product.category == MenuItem.Category.PHO:
+        if not recipes:
             raise InvalidOrderTransition(f'Món {product.name} hiện chưa thể phục vụ. Vui lòng chọn món khác hoặc liên hệ nhân viên.')
         for recipe in recipes:
             amount = recipe.quantity_required * quantity
@@ -64,6 +69,10 @@ def inventory_deductions(lines, using='default'):
 
 def order_inventory_deductions(order, using=None):
     using = using or order._state.db or 'default'
+    from .models import StockReservation
+    reservation = StockReservation.objects.filter(order=order).first()
+    if reservation:
+        return list(reservation.lines.values_list('ingredient_id', 'quantity'))
     items = order.items.using(using).select_related('menu_item').prefetch_related('toppings__topping')
     return inventory_deductions([
         (item.menu_item, item.quantity, [(extra.topping, extra.quantity) for extra in item.toppings.all()])
@@ -79,6 +88,8 @@ def inventory_totals(deductions):
 
 
 def ensure_inventory_available(deductions, *, using='default', lock=False):
+    from .stock import reserved_totals
+    from .models import InventoryIncident
     required = inventory_totals(deductions)
     ingredients = Ingredient.objects.using(using).filter(pk__in=required).order_by('pk')
     if lock:
@@ -86,8 +97,11 @@ def ensure_inventory_available(deductions, *, using='default', lock=False):
     ingredients = list(ingredients)
     if len(ingredients) != len(required):
         raise InvalidOrderTransition('Món đã chọn hiện chưa thể phục vụ. Vui lòng tải lại thực đơn.')
+    held = reserved_totals()
+    if InventoryIncident.objects.filter(ingredient_id__in=required, resolved=False).exists():
+        raise InvalidOrderTransition('Nguyên liệu đang có chênh lệch kiểm kê chưa xử lý.')
     shortages = [(ingredient, required[ingredient.pk]) for ingredient in ingredients
-                 if ingredient.current_stock < required[ingredient.pk]]
+                 if ingredient.current_stock - held.get(ingredient.pk, 0) < required[ingredient.pk]]
     if shortages:
         raise InsufficientStock(shortages)
     return ingredients, required
@@ -98,7 +112,8 @@ def catalog_stock_limits(products, using='default'):
     products = list(products)
     _prefetch_inventory_recipes(products, using)
     ingredient_ids = {recipe.ingredient_id for product in products for recipe in product.recipes.all()}
-    balances = dict(Ingredient.objects.using(using).filter(pk__in=ingredient_ids).values_list('pk', 'current_stock'))
+    from .stock import available_balances
+    balances = available_balances()
     limits = {}
     for product in products:
         try:
@@ -144,7 +159,7 @@ def available_order_actions(order):
     return actions
 
 
-@transaction.atomic
+@serialized
 def apply_order_action(order_id, action):
     """Serialize changes before checking state; payment signals remain the sole stock writer.
 
@@ -167,6 +182,8 @@ def apply_order_action(order_id, action):
         order.order_status = Order.OrderStatus.PENDING_KITCHEN
         fields.append('payment_status')
     elif action == 'cancel_cash':
+        from .checkout import release_benefits
+        release_benefits(order)
         order.payment_status = Order.PaymentStatus.FAILED
         order.order_status = Order.OrderStatus.CANCELLED
         fields.append('payment_status')
@@ -181,6 +198,32 @@ def apply_order_action(order_id, action):
     if action == 'finish_cooking' and order.order_type == Order.OrderType.DELIVERY and not order.shipping_code:
         order.shipping_code = f'VD-{order.pk:05d}'
         fields.append('shipping_code')
+    from django.utils import timezone
+    if action == 'confirm_cash':
+        from .models import PaymentReceipt
+        PaymentReceipt.objects.get_or_create(provider='CASH', external_id=f'cash-order:{order.pk}', defaults={
+            'order': order, 'amount': int(order.amount_due), 'allocated': True, 'received_at': timezone.now()})
+    if action in ('handover_delivery', 'complete_delivery'):
+        from .delivery import delivery_action
+        delivery_action(order.pk, 'handover' if action == 'handover_delivery' else 'delivered',
+                        evidence='Nhân viên xác nhận tại màn hình điều phối')
+        order.refresh_from_db()
+        return order
+    if action == 'complete_dine_in':
+        from .loyalty import enqueue
+        from .models import ServiceRequest
+        order.completed_at = timezone.now()
+        fields.append('completed_at')
+        enqueue(f'complete:{order.pk}', 'ORDER_COMPLETED', order_id=order.pk)
+        ServiceRequest.objects.filter(replacement=order, state='REPLACING').update(state='CLOSED')
+    if action == 'finish_cooking' and order.order_type == 'DELIVERY':
+        from .models import Delivery
+        delivery, _ = Delivery.objects.get_or_create(order=order)
+        delivery.state = 'READY_FOR_PICKUP'
+        delivery.version += 1
+        delivery.save()
+    order.version += 1
+    fields.append('version')
     order.save(update_fields=fields)
     if action == 'cancel_cash' and order.table_id:
         # Completed diners still occupy their places until the separate cleaning action.

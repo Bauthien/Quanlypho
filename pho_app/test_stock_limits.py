@@ -121,12 +121,12 @@ class StockLimitTests(TestCase):
     @override_settings(PAYMENT_WEBHOOK_SECRET='stock-test-secret')
     def test_verified_qr_callback_returns_reconciliation_error_for_shortage(self):
         order = self.make_order(payment_method='VIETQR')
-        body = json.dumps({'order_code': order.order_code, 'amount': order.total_amount, 'status': 'paid'}).encode()
+        body = json.dumps({'order_code': order.order_code, 'amount': order.total_amount, 'status': 'paid', 'transaction_id': 'STOCK-BANK-TX'}).encode()
         signature = hmac.new(b'stock-test-secret', body, hashlib.sha256).hexdigest()
         response = self.client.post(
             reverse('vietqr_webhook'), body, content_type='application/json', HTTP_X_PAYMENT_SIGNATURE=signature,
         )
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 202)
         self.assertTrue(response.json()['requires_reconciliation'])
         self.assert_pending_without_exports(order)
 
@@ -181,6 +181,7 @@ class LegacyNegativeStockMigrationTests(TransactionTestCase):
         before = ('pho_app', '0013_protect_inventory_and_table_history')
         after = ('pho_app', '0014_prevent_negative_inventory')
         executor = MigrationExecutor(connection)
+        latest = executor.loader.graph.leaf_nodes()
         try:
             executor.migrate([before])
             IngredientBefore = executor.loader.project_state([before]).apps.get_model('pho_app', 'Ingredient')
@@ -191,6 +192,9 @@ class LegacyNegativeStockMigrationTests(TransactionTestCase):
         self.assertEqual(ingredient.current_stock, -100)
         with self.assertRaises(IntegrityError), transaction.atomic():
             Ingredient.objects.filter(pk=ingredient.pk).update(current_stock=-99)
+        # The application models now include later columns; restore current schema
+        # before using User/views, and before the test runner flushes the database.
+        MigrationExecutor(connection).migrate(latest)
         admin = User.objects.create_user(username='stock-reconcile-admin', role='ADMIN')
         self.client.force_login(admin)
         response = self.client.post(reverse('admin_ingredient_import', args=[ingredient.pk]), {'quantity': 1}, follow=True)

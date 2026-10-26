@@ -1,8 +1,7 @@
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
-from django.db import transaction
-from .models import Order, InventoryTransaction
-from .services import ensure_inventory_available, order_inventory_deductions
+from .models import Order
+from .domain import serialized
 
 @receiver(pre_save, sender=Order)
 def cache_previous_payment_status(sender, instance, using, raw=False, **kwargs):
@@ -16,6 +15,7 @@ def cache_previous_payment_status(sender, instance, using, raw=False, **kwargs):
         )
 
 @receiver(post_save, sender=Order)
+@serialized
 def deduct_inventory_on_paid(sender, instance, created, using, raw=False, update_fields=None, **kwargs):
     if raw or (update_fields is not None and 'payment_status' not in update_fields):
         return
@@ -23,21 +23,14 @@ def deduct_inventory_on_paid(sender, instance, created, using, raw=False, update
     if instance.payment_status != Order.PaymentStatus.PAID or prev_status == Order.PaymentStatus.PAID:
         return
 
-    with transaction.atomic(using=using):
-        deductions = order_inventory_deductions(instance, using=using)
-        # Lock all shared ingredients in a consistent order and check the entire
-        # order before writing any stock balance or export transaction.
-        ingredients, required = ensure_inventory_available(deductions, using=using, lock=True)
-
-        for ingredient in ingredients:
-            ingredient.current_stock -= required[ingredient.pk]
-            ingredient.save(using=using, update_fields=['current_stock'])
-        InventoryTransaction.objects.using(using).bulk_create([
-            InventoryTransaction(
-                ingredient_id=ingredient_id,
-                transaction_type=InventoryTransaction.TransactionType.EXPORT,
-                quantity_changed=-amount,
-                created_by_id=instance.customer_id,
-            )
-            for ingredient_id, amount in deductions
-        ])
+    from .checkout import consume_benefits
+    from .stock import commit_reserved_inventory
+    from .domain import BusinessError
+    from .services import InvalidOrderTransition
+    try:
+        consume_benefits(instance)
+        commit_reserved_inventory(instance)
+    except BusinessError as exc:
+        if isinstance(exc, InvalidOrderTransition):
+            raise
+        raise InvalidOrderTransition(str(exc)) from exc

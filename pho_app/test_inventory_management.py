@@ -93,7 +93,8 @@ class InventoryManagementTests(TestCase):
         order.save()
         self.ingredient.refresh_from_db()
         self.assertEqual(self.ingredient.current_stock, Decimal('90'))
-        self.assertEqual(InventoryTransaction.objects.count(), 2)
+        # One aggregated export per order/ingredient, even when both BOMs use it.
+        self.assertEqual(InventoryTransaction.objects.count(), 1)
 
     def test_ingredient_with_recipe_cannot_be_deleted(self):
         recipe = Recipe.objects.create(menu_item=self.menu, ingredient=self.ingredient, quantity_required=1)

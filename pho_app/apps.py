@@ -6,3 +6,4 @@ class PhoAppConfig(AppConfig):
 
     def ready(self):
         import pho_app.signals
+        import pho_app.defaults

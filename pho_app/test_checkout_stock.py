@@ -62,7 +62,8 @@ class CheckoutStockTests(TestCase):
         self.assert_no_order_or_stock_changes()
 
     def test_delivery_cannot_bypass_stock_check(self):
-        self.assertContains(self.checkout(order_type='DELIVERY', table_id='', delivery_address='Địa chỉ thử'), 'Không đủ tồn kho')
+        self.assertContains(self.checkout(order_type='DELIVERY', table_id='', delivery_address='Địa chỉ thử',
+            recipient_name='Khách thử', recipient_phone='0901234567', customer_lat='10.7769', customer_lng='106.7009'), 'Không đủ tồn kho')
         self.assert_no_order_or_stock_changes()
 
     def test_queue_checkout_keeps_ticket_called_when_stock_is_short(self):

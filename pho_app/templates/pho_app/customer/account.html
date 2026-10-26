@@ -1,0 +1,26 @@
+{% extends 'pho_app/base.html' %}
+{% load commerce_ui %}
+{% block title %}Tài khoản của tôi · Phở Nhà{% endblock %}
+{% block breadcrumb %}Tài khoản của tôi{% endblock %}
+{% block body_class %}figma-account-page{% endblock %}
+{% block content %}
+<main class="{% if user.is_customer %}customer-main{% else %}workspace{% endif %} commerce-page figma-module figma-account" data-tabs data-tab-param="tab" {% if profile_form.errors or password_form.errors %}data-force-tab="profile"{% endif %}>
+  <header class="xp-customer-title"><div><a class="text-button xp-back" href="{% url 'menu' %}">← Quay lại đặt món</a><span class="xp-eyebrow">TÀI KHOẢN CỦA TÔI</span><h1>Xin chào, {{ user.display_name }}</h1><p>Quản lý thông tin, ưu đãi và hành trình thành viên.</p></div><div class="xp-account-badge"><span class="avatar" aria-hidden="true">{{ user.display_name|first|upper }}</span><div><strong>{{ user.display_name }}</strong><small>Tài khoản đang dùng{% if wallet %} · Hạng {{ wallet.tier.name }}{% endif %}</small></div></div></header>
+  <nav class="commerce-tabbar" role="tablist" aria-label="Tài khoản của tôi">
+    <button id="profile-tab" role="tab" aria-selected="true" aria-controls="profile" data-tab-target="profile">Hồ sơ cá nhân</button>
+    <button id="addresses-tab" role="tab" aria-selected="false" aria-controls="addresses" data-tab-target="addresses">Sổ địa chỉ</button>
+    {% if wallet %}<button id="membership-tab" role="tab" aria-selected="false" aria-controls="membership" data-tab-target="membership">Thành viên & điểm</button><button id="wallet-tab" role="tab" aria-selected="false" aria-controls="member-wallet" data-tab-target="member-wallet" data-tab-key="wallet">Ví voucher <span class="tab-count">{{ voucher_count }}</span></button><button id="orders-tab" role="tab" aria-selected="false" aria-controls="my-orders" data-tab-target="my-orders">Đơn của tôi</button>{% endif %}
+  </nav>
+  <section id="profile" role="tabpanel" aria-labelledby="profile-tab">{% include 'pho_app/customer/account_profile.html' %}</section>
+  <section id="addresses" role="tabpanel" aria-labelledby="addresses-tab" hidden>{% include 'pho_app/customer/account_addresses.html' %}</section>
+  {% if wallet %}
+  <section id="membership" role="tabpanel" aria-labelledby="membership-tab" hidden>{% include 'pho_app/customer/account_membership.html' %}</section>
+  <section id="member-wallet" role="tabpanel" aria-labelledby="wallet-tab" hidden>{% include 'pho_app/customer/account_wallet.html' %}</section>
+  <section id="my-orders" role="tabpanel" aria-labelledby="orders-tab" hidden>
+    <div class="xp-stack"><div class="commerce-section-head"><div><h2>Đơn của tôi</h2><p>Theo dõi 30 đơn gần nhất và gửi yêu cầu hỗ trợ.</p></div><a class="secondary-btn" href="{% url 'menu' %}">Đặt món mới</a></div>
+      <div class="xp-card table-scroll commerce-table-wrap"><table class="data-table commerce-table"><thead><tr><th>Đơn hàng</th><th>Thực trả</th><th>Trạng thái</th><th></th></tr></thead><tbody>{% for order in orders %}<tr><td><a class="table-title" href="{% url 'order_detail' order.pk %}">{{ order.order_code }}</a><small>{{ order.created_at|date:'H:i · d/m/Y' }}</small></td><td class="commerce-value" data-money="{{ order.amount_due }}">{{ order.amount_due }}đ</td><td><span class="badge badge-{{ order.order_status|state_tone }}">{{ order.get_order_status_display }}</span></td><td><a class="text-button" href="{% url 'order_detail' order.pk %}">Chi tiết {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></td></tr>{% empty %}<tr><td colspan="4"><div class="commerce-empty"><strong>Bữa phở đầu tiên đang chờ bạn</strong><p>Chọn món yêu thích, đặt đơn và theo dõi tại đây.</p><a class="primary-btn" href="{% url 'menu' %}">Khám phá thực đơn</a></div></td></tr>{% endfor %}</tbody></table></div>
+      {% if account_cases %}<div class="xp-card"><h2>Yêu cầu hỗ trợ gần đây</h2>{% for case in account_cases %}<div class="refund-entry"><div class="commerce-section-head"><div><strong>#{{ case.pk }} · {{ case.order.order_code }}</strong><p class="commerce-muted">{{ case.reason }}</p></div><span class="badge badge-{{ case.state|state_tone }}">{{ case.get_state_display }}</span></div><a class="text-button" href="{% url 'order_support' case.order_id %}">Theo dõi yêu cầu {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></div>{% endfor %}</div>{% endif %}
+    </div>
+  </section>{% endif %}
+</main>
+{% endblock %}

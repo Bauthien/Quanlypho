@@ -214,3 +214,9 @@ Quanlypho/
 1. **PostGIS trên Windows**: Trong `core_project/settings.py` đã cấu hình tự động trỏ đến đường dẫn cài đặt PostgreSQL 18 (`C:\Program Files\PostgreSQL\18\bin`) và nạp thư viện `libgdal-35.dll`, `libgeos_c.dll`. Nếu bạn dùng phiên bản PostgreSQL khác, hãy điều chỉnh đường dẫn `POSTGIS_BIN` trong `settings.py`.
 2. **Khách hàng tự đăng ký**: Mọi tài khoản tự tạo tại `/dang-ky/` luôn được hệ thống gán vai trò `Khách hàng (CUSTOMER)`. Không một ai có thể tự nâng quyền thành Quản lý hoặc Thu ngân thông qua API đăng ký.
 3. **Webhook VietQR**: Endpoint nhận callback thanh toán `/thanh-toan/vietqr/webhook/` bắt buộc kiểm tra chữ ký số HMAC-SHA256 qua header `X-Payment-Signature` với bí mật `PAYMENT_WEBHOOK_SECRET` để chống giả mạo giao dịch.
+
+## Chức năng TH4 đã triển khai
+
+Khuyến mãi/voucher, đổi điểm lấy voucher, hủy đơn/hoàn tiền/giao bù, giữ nguyên liệu/giao nhận, tài khoản/nhiều phiên, sổ địa chỉ và khách hàng thân thiết. Tài liệu chạy, các màn hình mới, cấu hình VietQR/sinh nhật/hotline và lệnh xử lý định kỳ: [Hướng dẫn triển khai TH4](docs/th4/HUONG_DAN_TRIEN_KHAI.md).
+
+Webhook thanh toán hiện yêu cầu thêm `transaction_id` thực tế từ ngân hàng. Quản lý dùng `/thu-ngan/ho-tro/` để đối soát các khoản thu đến muộn hoặc hoàn tiền thủ công. Mã QR dùng số thực trả sau tất cả ưu đãi.

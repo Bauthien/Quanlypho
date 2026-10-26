@@ -1,0 +1,3 @@
+{% extends 'pho_app/base.html' %}
+{% block title %}Xác thực lại tài khoản · Phở Nhà{% endblock %}
+{% block content %}<main class="{% if user.is_authenticated and not user.is_customer %}workspace{% else %}customer-main{% endif %} commerce-page"><section class="panel commerce-empty"><span class="stat-icon tone-red">{% include 'pho_app/includes/icon.html' with name='users' %}</span><span class="eyebrow">BẢO VỆ PHIÊN TÀI KHOẢN</span><h1>Cần xác thực lại</h1><p>{{ reason }}</p><p>Đăng nhập bằng mật khẩu hoặc chọn một tài khoản còn phiên hiệu lực trong menu tài khoản.</p><a class="primary-btn" href="{% url 'login' %}?switch=1">Đăng nhập lại</a></section></main>{% endblock %}

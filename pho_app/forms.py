@@ -59,6 +59,7 @@ class RecipeForm(forms.Form):
 
 class IngredientImportForm(forms.Form):
     quantity = forms.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.01'))
+    input_unit = forms.CharField(required=False, max_length=50)
 
 
 class OrderFilterForm(forms.Form):
@@ -136,6 +137,7 @@ class StyledAuthForm(AuthenticationForm):
 
 
 class RegisterForm(forms.ModelForm):
+    referral_code = forms.CharField(label='Mã giới thiệu (nếu có)', required=False, max_length=24, widget=forms.TextInput(attrs={'class': 'form-input'}))
     password1 = forms.CharField(
         label='Mật khẩu',
         widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Mật khẩu (tối thiểu 4 ký tự)'}),
@@ -169,9 +171,15 @@ class RegisterForm(forms.ModelForm):
 
     def clean_password1(self):
         password1 = self.cleaned_data.get('password1', '')
-        if len(password1) < 4:
-            raise ValidationError('Mật khẩu cần có ít nhất 4 ký tự.')
+        from django.contrib.auth.password_validation import validate_password
+        validate_password(password1)
         return password1
+
+    def clean_referral_code(self):
+        code = self.cleaned_data.get('referral_code', '').strip().upper()
+        if code and not User.objects.filter(referral_code=code, role='CUSTOMER', is_active=True).exists():
+            raise ValidationError('Mã giới thiệu không hợp lệ.')
+        return code
 
     def clean_password2(self):
         password1 = self.cleaned_data.get('password1')
@@ -186,6 +194,8 @@ class RegisterForm(forms.ModelForm):
         user.is_staff = False
         user.is_superuser = False
         user.set_password(self.cleaned_data['password1'])
+        if self.cleaned_data.get('referral_code'):
+            user.referred_by = User.objects.get(referral_code=self.cleaned_data['referral_code'])
         if commit:
             user.save()
         return user
@@ -208,9 +218,15 @@ class UserRoleForm(forms.ModelForm):
 
 
 class MenuItemForm(forms.ModelForm):
+    def clean(self):
+        data = super().clean()
+        if data.get('category') == 'PHO' and data.get('inventory_mode') != 'BOM':
+            raise ValidationError('Món phở bắt buộc quản lý theo định lượng.')
+        return data
+
     class Meta:
         model = MenuItem
-        fields = ['name', 'category', 'base_price', 'image_primary', 'image_detail_1', 'image_detail_2']
+        fields = ['name', 'category', 'base_price', 'inventory_mode', 'image_primary', 'image_detail_1', 'image_detail_2']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Tên món'}),
             'base_price': forms.NumberInput(attrs={'class': 'form-input', 'min': 0}),
@@ -221,7 +237,7 @@ class MenuItemForm(forms.ModelForm):
 class ToppingForm(forms.ModelForm):
     class Meta:
         model = Topping
-        fields = ['name', 'price', 'image_thumbnail']
+        fields = ['name', 'price', 'inventory_mode', 'image_thumbnail']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Tên topping'}),
             'price': forms.NumberInput(attrs={'class': 'form-input', 'min': 0}),

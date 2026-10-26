@@ -93,6 +93,74 @@
     window.phoToast?.(`Đã thêm ${customItem.name} vào giỏ hàng.`);
   });
 
+  let quoteTimer, quoteRequest = 0, quoteReady = false;
+  const quoteFields = ['checkoutAddressId', 'checkoutWalletId', 'voucherCode', 'checkoutPoints', 'recipientName', 'recipientPhone', 'deliveryAddress', 'orderType', 'paymentMethod'];
+  const walletSelect = $('#checkoutWalletId'), codeInput = $('#voucherCode');
+  walletSelect?.addEventListener('change', () => { if (walletSelect.value && codeInput) codeInput.value = ''; });
+  codeInput?.addEventListener('input', () => { if (codeInput.value && walletSelect) walletSelect.value = ''; });
+  $('#checkoutAddressId')?.addEventListener('change', () => {
+    const option = $('#checkoutAddressId').selectedOptions[0];
+    $('#checkoutAddressVersion').value = option.dataset.version || '';
+    if (option.value) {
+      $('#recipientName').value = option.dataset.name;
+      $('#recipientPhone').value = option.dataset.phone;
+      address.value = option.dataset.address;
+      $('#customerLat').value = (option.dataset.lat || '').replace(',', '.');
+      $('#customerLng').value = (option.dataset.lng || '').replace(',', '.');
+      quoteFee($('#customerLat').value, $('#customerLng').value);
+    } else {
+      address.value = ''; $('#customerLat').value = ''; $('#customerLng').value = '';
+      quoteFee();
+    }
+    [address, $('#recipientName'), $('#recipientPhone')].forEach(input => { input.readOnly = Boolean(option.value); });
+    $('#locateBtn').disabled = Boolean(option.value);
+  });
+  quoteFields.forEach(id => $('#' + id)?.addEventListener('input', scheduleQuote));
+  function scheduleQuote() {
+    quoteReady = false;
+    $('#quoteToken').value = '';
+    $('#checkoutBtn').disabled = true;
+    const number = ++quoteRequest;
+    clearTimeout(quoteTimer);
+    quoteTimer = setTimeout(() => refreshQuote(number), 250);
+  }
+  async function refreshQuote(number) {
+      if (!cart.length) { $('#serverQuote').textContent = 'Chọn món để xem tổng tiền.'; $('#serverQuote').classList.remove('is-error', 'is-loading'); return; }
+    const body = new FormData(form);
+    body.set('cart', JSON.stringify(cart.map(({ id, qty, customizations, toppings, note }) => ({ id, qty, customizations, toppings, note }))));
+    body.set('account_generation', document.querySelector('meta[name="account-generation"]').content);
+    if (orderType.value !== 'DELIVERY') body.delete('address_id');
+    try {
+        $('#serverQuote').classList.remove('is-error'); $('#serverQuote').classList.add('is-loading');
+        $('#serverQuote').setAttribute('aria-busy', 'true');
+        $('#serverQuote').textContent = 'Đang tính ưu đãi…';
+      const response = await fetch(config.quoteUrl, { method: 'POST', body, headers: { Accept: 'application/json' } });
+      const data = await response.json();
+      if (number !== quoteRequest) return;
+      if (!response.ok || !data.ok) throw new Error(data.error || 'Chưa thể tính báo giá.');
+      $('#quoteToken').value = data.token;
+      $('#cartTotalAmount').textContent = money(data.payable);
+      $('#serverQuote').replaceChildren();
+        [['Tiền món', data.subtotal], ['Giảm hạng', -data.tier_discount], ['Voucher món', -data.voucher_discount], ['Phí giao', data.delivery_fee], ['Miễn giao theo hạng', -data.auto_shipping_discount], ['Voucher giao hàng', -data.voucher_shipping_discount], ['Đổi điểm', -data.point_discount]].filter(([, value], index) => index === 0 || Number(value) !== 0).forEach(([label, value]) => {
+        const row = document.createElement('p'), span = document.createElement('span'), strong = document.createElement('strong');
+          if (value < 0) row.classList.add('is-saving');
+        span.textContent = label; strong.textContent = money(value); row.append(span, strong); $('#serverQuote').append(row);
+      });
+      if ($('#pointLimitHint')) $('#pointLimitHint').textContent = `Đơn này dùng tối đa ${data.max_points} điểm khả dụng.`;
+      quoteReady = true;
+      const blocked = orderType.value === 'QUEUE_CART' && queueStatus !== 'CALLED';
+      const phoCount = cart.reduce((sum, entry) => sum + (category(product(entry)) === 'pho' ? entry.qty : 0), 0);
+      $('#checkoutBtn').disabled = blocked || (orderType.value === 'DINE_IN' && phoCount > remainingCapacity);
+      $('#checkoutBtn').textContent = blocked ? 'Chờ gọi số để thanh toán' : 'Đặt món ngay';
+    } catch (error) {
+      if (number !== quoteRequest) return;
+      $('#serverQuote').textContent = error.message || 'Mất kết nối. Hãy thử lại.';
+        $('#serverQuote').classList.add('is-error');
+      $('#checkoutBtn').disabled = true;
+      } finally {
+        if (number === quoteRequest) { $('#serverQuote').classList.remove('is-loading'); $('#serverQuote').removeAttribute('aria-busy'); }
+    }
+  }
   function renderCart() {
     const count = cart.reduce((total, entry) => total + entry.qty, 0);
     const phoCount = cart.reduce((total, entry) => {
@@ -122,6 +190,7 @@
     $('#checkoutError').textContent = unavailable ? `${product(unavailable).name} không còn đủ số lượng. Vui lòng giảm số lượng hoặc chọn món khác.` : '';
     $('#checkoutBtn').disabled = !count || waiting || full || blocked || Boolean(unavailable);
     $('#checkoutBtn').textContent = unavailable ? 'Món trong giỏ không còn đủ' : waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
+    scheduleQuote();
   }
   $('#cartItemsList').addEventListener('click', (event) => {
     const button = event.target.closest('[data-cart-index]');
@@ -151,9 +220,12 @@
   function updateMode() {
     const delivery = orderType.value === 'DELIVERY', queue = orderType.value === 'QUEUE_CART';
     $('#addressField').hidden = !delivery;
+    $('#deliveryRecipientFields').hidden = !delivery;
     if ($('#tableField')) $('#tableField').hidden = delivery || queue;
     if (tableSelect) tableSelect.required = false;
-    address.required = delivery && !($('#customerLat').value && $('#customerLng').value);
+    address.required = delivery;
+    $('#recipientName').required = delivery;
+    $('#recipientPhone').required = delivery;
     if (delivery) payment.value = 'VIETQR';
     payment.disabled = delivery;
     document.querySelectorAll('[data-order-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.orderMode === orderType.value)));
@@ -174,7 +246,8 @@
       if (request !== feeRequest) return;
       deliveryAllowed = data.ok;
       $('#cartTotalAmount').dataset.deliveryFee = String(data.ok ? data.fee : 0);
-      $('#deliveryFeeHint').textContent = !data.ok ? `Ngoài phạm vi giao hàng: ${data.distance_km || '?'} km.` : data.fallback ? `Chưa có GPS · phí tạm tính ${money(data.fee)}.` : `Cách quán ${data.distance_km} km · phí giao ${money(data.fee)}.`;
+      const distanceLabel = Number(data.distance_km) < 1 ? 'dưới 1' : data.distance_km;
+      $('#deliveryFeeHint').textContent = !data.ok ? `Ngoài phạm vi giao hàng: ${data.distance_km || '?'} km.` : data.fallback ? `Chưa có GPS · phí tạm tính ${money(data.fee)}.` : `Cách quán ${distanceLabel} km · phí giao ${money(data.fee)}.`;
       renderCart();
     } catch (_) { window.phoToast?.('Chưa lấy được phí giao hàng. Vui lòng thử lại.'); }
   }
@@ -233,15 +306,26 @@
     return cookieValue;
   }
   form.addEventListener('submit', (event) => {
-    if ($('#checkoutBtn').disabled || !cart.length) { event.preventDefault(); return; }
+    if (!quoteReady || $('#checkoutBtn').disabled || !cart.length) { event.preventDefault(); return; }
     $('#cartPayload').value = JSON.stringify(cart.map(({ id, qty, customizations, toppings, note }) => ({ id, qty, customizations, toppings, note })));
     payment.disabled = false;
+    if (orderType.value !== 'DELIVERY') $('#checkoutAddressId').disabled = true;
     const csrfToken = getCookie('csrftoken');
     const csrfInput = form.querySelector('[name=csrfmiddlewaretoken]');
     if (csrfToken && csrfInput) {
       csrfInput.value = csrfToken;
     }
   });
-  if (new URLSearchParams(location.search).get('mode') === 'delivery') orderType.value = 'DELIVERY';
+  const incoming = new URLSearchParams(location.search);
+  if (incoming.get('mode') === 'delivery') orderType.value = 'DELIVERY';
+  const addressId = incoming.get('address');
+  if (addressId && [...$('#checkoutAddressId').options].some(option => option.value === addressId)) $('#checkoutAddressId').value = addressId;
+  const walletId = incoming.get('wallet');
+  if (walletId && walletSelect && [...walletSelect.options].some(option => option.value === walletId)) { walletSelect.value = walletId; if (codeInput) codeInput.value = ''; }
+  else if (incoming.get('promo') && codeInput) { codeInput.value = incoming.get('promo').slice(0, 50); if (walletSelect) walletSelect.value = ''; }
+  if ($('#checkoutAddressId').value) $('#checkoutAddressId').dispatchEvent(new Event('change'));
   renderMenu(); updateMode();
+  document.addEventListener('pho:choose-dish', event => { if (Number.isInteger(event.detail?.id)) { customize(event.detail.id); customQuantity = Math.max(1, Math.min(99, Number(event.detail.quantity) || 1)); customPrice(); } });
+  document.addEventListener('pho:open-cart', openCart);
+  if (incoming.get('dish')) customize(Number(incoming.get('dish')));
 })();

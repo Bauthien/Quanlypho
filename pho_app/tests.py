@@ -179,7 +179,7 @@ class AuthAndRoleTests(TestCase):
         item = MenuItem.objects.create(name='Phở Tái', base_price=50000, image_primary='menu_items/pho.jpg')
         ingredient = Ingredient.objects.create(name='Bánh phở kiểm thử QR', unit='kg', current_stock=10)
         Recipe.objects.create(menu_item=item, ingredient=ingredient, quantity_required='0.20')
-        topping = Topping.objects.create(name='Trứng chần', price=5000)
+        topping = Topping.objects.create(name='Trứng chần', price=5000, inventory_mode='UNTRACKED')
         options_by_category = {}
         for option in CustomizationOption.objects.all().order_by('category', 'id'):
             options_by_category.setdefault(option.category, option)
@@ -207,7 +207,7 @@ class AuthAndRoleTests(TestCase):
         table.refresh_from_db()
         self.assertEqual(table.status, Table.Status.OCCUPIED)
 
-        body = json.dumps({'order_code': order.order_code, 'amount': 110000, 'status': 'success'}).encode()
+        body = json.dumps({'order_code': order.order_code, 'amount': 110000, 'status': 'success', 'transaction_id': 'BANK-QR-TEST'}).encode()
         signature = hmac.new(b'test-secret', body, hashlib.sha256).hexdigest()
         with override_settings(PAYMENT_WEBHOOK_SECRET='test-secret'):
             response = self.client.post(
@@ -239,11 +239,15 @@ class AuthAndRoleTests(TestCase):
             total_amount=10000,
         )
         with override_settings(PAYMENT_WEBHOOK_SECRET='test-secret'):
-            for status, expected_status in [('failed', 200), ('success', 409)]:
+            # A failure notification alone cannot prove that no money can arrive.
+            # Explicit cancellation is terminal; late money is retained for reconciliation.
+            Order.objects.filter(pk=order.pk).update(payment_status='FAILED', order_status='CANCELLED')
+            for status, expected_status in [('failed', 200), ('success', 202)]:
                 body = json.dumps({
                     'order_code': order.order_code,
                     'amount': 10000,
                     'status': status,
+                    'transaction_id': 'BANK-LATE-TEST',
                 }).encode()
                 signature = hmac.new(b'test-secret', body, hashlib.sha256).hexdigest()
                 response = self.client.post(
@@ -441,6 +445,8 @@ class AuthAndRoleTests(TestCase):
             'order_type': Order.OrderType.DELIVERY,
             'payment_method': Order.PaymentMethod.CASH,
             'delivery_address': '12 Nguyễn Huệ, Q1',
+            'recipient_name': 'Khách giao hàng',
+            'recipient_phone': '0901234567',
             'customer_lat': '10.7769',
             'customer_lng': '106.7009',
         })

@@ -1,0 +1,10 @@
+<details class="account-switcher">
+  <summary>{% if user.is_authenticated %}<span class="avatar" aria-hidden="true">{{ user.display_name|first|upper }}</span><span>{{ user.display_name }}</span>{% else %}{% include 'pho_app/includes/icon.html' with name='users' %}<span>Chọn tài khoản đã lưu</span>{% endif %}{% include 'pho_app/includes/icon.html' with name='menu' %}</summary>
+  <div class="account-switcher-menu">
+    <div class="switcher-label">Tài khoản của bạn</div>
+    {% if user.is_authenticated %}<a href="{% url 'account' %}">{% include 'pho_app/includes/icon.html' with name='users' %} Hồ sơ & ưu đãi</a>{% endif %}
+    {% for slot in browser_slots %}<form method="post" action="{% url 'account_switch' %}">{% csrf_token %}<input type="hidden" name="account_generation" value="{{ account_generation }}"><input type="hidden" name="slot_id" value="{{ slot.pk }}"><button type="submit" {% if slot.user_id == user.id %}class="is-current" aria-label="{{ slot.user.display_name }}, tài khoản hiện tại"{% endif %}><span class="avatar">{{ slot.user.display_name|first|upper }}</span><span>{{ slot.user.display_name }}<small>{{ slot.user.get_role_display }}</small></span>{% if slot.user_id == user.id %}{% include 'pho_app/includes/icon.html' with name='check' %}{% endif %}</button></form>{% endfor %}
+    <a class="switcher-add" href="{% url 'login' %}?switch=1">{% include 'pho_app/includes/icon.html' with name='plus' %} Thêm tài khoản</a>
+    {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">{% include 'pho_app/includes/icon.html' with name='logout' %} Đăng xuất tài khoản này</button></form>{% endif %}
+  </div>
+</details>

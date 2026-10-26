@@ -1,0 +1,8 @@
+<div class="quote-breakdown">{% with price=order.checkout_snapshot %}{% if price %}
+<p><span>Tiền món</span><strong data-money="{{ price.subtotal }}">{{ price.subtotal }}đ</strong></p>
+{% if price.tier_discount %}<p class="is-saving"><span>Ưu đãi thành viên</span><strong>−<span data-money="{{ price.tier_discount }}">{{ price.tier_discount }}đ</span></strong></p>{% endif %}
+{% if price.voucher_discount %}<p class="is-saving"><span>Voucher giảm món</span><strong>−<span data-money="{{ price.voucher_discount }}">{{ price.voucher_discount }}đ</span></strong></p>{% endif %}
+{% if price.auto_shipping_discount %}<p class="is-saving"><span>Miễn giao theo hạng</span><strong>−<span data-money="{{ price.auto_shipping_discount }}">{{ price.auto_shipping_discount }}đ</span></strong></p>{% endif %}
+{% if price.voucher_shipping_discount %}<p class="is-saving"><span>Voucher phí giao</span><strong>−<span data-money="{{ price.voucher_shipping_discount }}">{{ price.voucher_shipping_discount }}đ</span></strong></p>{% endif %}
+{% if price.point_discount %}<p class="is-saving"><span>Dùng {{ price.points }} điểm</span><strong>−<span data-money="{{ price.point_discount }}">{{ price.point_discount }}đ</span></strong></p>{% endif %}
+{% endif %}{% endwith %}{% if order.delivery_fee %}<p><span>Phí giao hàng{% if order.delivery_distance_km %} · {{ order.delivery_distance_km }}km{% endif %}</span><strong data-money="{{ order.delivery_fee }}">{{ order.delivery_fee }}đ</strong></p>{% endif %}</div>

@@ -19,7 +19,7 @@ class MenuManagementTests(TestCase):
         ingredient = Ingredient.objects.create(name='Bánh phở kiểm thử thực đơn', unit='kg', current_stock=100)
         Recipe.objects.create(menu_item=cls.pho, ingredient=ingredient, quantity_required='0.20')
         cls.drink = MenuItem.objects.create(name='Món uống đặt tên riêng', base_price=20000, category='DRINK', image_primary='drink.jpg')
-        cls.topping = Topping.objects.create(name='Trứng chần', price=5000)
+        cls.topping = Topping.objects.create(name='Trứng chần', price=5000, inventory_mode='UNTRACKED')
 
     def setUp(self):
         self.client.force_login(self.admin)
