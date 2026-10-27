@@ -1,6 +1,6 @@
 {% extends 'pho_app/admin/shell.html' %}
 {% block title %}{% if table %}Chỉnh sửa bàn{% else %}Thêm bàn mới{% endif %} · Phở Nhà{% endblock %}
-{% block breadcrumb %}Sơ đồ bàn / {% if table %}Chỉnh sửa{% else %}Thêm mới{% endif %}{% endblock %}
+{% block breadcrumb %}Sơ đồ bàn & QR / {% if table %}Chỉnh sửa{% else %}Thêm mới{% endif %}{% endblock %}
 {% block admin_content %}
 <div class="page-heading"><div><span class="eyebrow">CHUẨN BỊ MỘT CHỖ NGỒI ẤM ÁP</span><h1>{% if table %}Chỉnh sửa Bàn {{ table.table_number }}{% else %}Thêm bàn mới{% endif %}</h1><p>Mã QR gọi món sẽ được tạo cho bàn.</p></div></div>
 <form class="panel editor-card" method="post">
@@ -13,6 +13,6 @@
         {{ field.errors }}
     </div>
     {% endfor %}
-    <div class="actions"><a class="secondary-btn" href="{% url 'admin_table_list' %}">Quay lại</a><button class="primary-btn" type="submit">{% include 'pho_app/includes/icon.html' with name='check' %} Lưu thông tin bàn</button></div>
+    <div class="actions"><a class="secondary-btn" href="{% url 'table_map' %}">Quay lại</a><button class="primary-btn" type="submit">{% include 'pho_app/includes/icon.html' with name='check' %} Lưu thông tin bàn</button></div>
 </form>
 {% endblock %}

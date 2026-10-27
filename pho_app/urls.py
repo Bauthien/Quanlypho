@@ -37,6 +37,7 @@ urlpatterns = [
     path('thanh-toan/vietqr/simulate/<int:order_id>/', views.simulate_vietqr_payment, name='simulate_vietqr_payment'),
 
     path('thu-ngan/', views.staff_home, name='staff_home'),
+    path('so-do-ban/', views.table_map, name='table_map'),
     path('thu-ngan/so-do-ban/', views.staff_table_map, name='staff_table_map'),
     path('thu-ngan/xac-nhan-tien-mat/<int:order_id>/', views.confirm_cash_payment, name='confirm_cash'),
     path('thu-ngan/huy-don/<int:order_id>/', views.cancel_cash_order, name='cancel_order'),

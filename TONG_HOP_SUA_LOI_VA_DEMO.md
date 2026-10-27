@@ -37,7 +37,7 @@ Mặc định máy chủ chạy tại `http://127.0.0.1:8000`.
 | --- | --- | --- |
 | Quản lý tồn kho và định lượng | `/quan-ly/ton-kho/` | Quản lý |
 | Thêm nguyên liệu | `/quan-ly/ton-kho/them/` | Quản lý |
-| Danh sách bàn | `/quan-ly/ban/` | Quản lý |
+| Sơ đồ bàn & QR | `/so-do-ban/` | Thu ngân hoặc quản lý |
 | Thêm bàn | `/quan-ly/ban/them/` | Quản lý |
 | Danh sách đánh giá quản lý | `/quan-ly/danh-gia/` | Quản lý |
 | Thực đơn khách hàng | `/thuc-don/` | Khách hàng hoặc khách vãng lai |

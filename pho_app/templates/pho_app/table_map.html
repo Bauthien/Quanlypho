@@ -1,0 +1,52 @@
+{% extends 'pho_app/base.html' %}
+{% block title %}Sơ đồ bàn & QR · Phở Nhà{% endblock %}
+{% block breadcrumb %}Sơ đồ bàn & QR{% endblock %}
+{% block content %}
+<main class="workspace">
+    <div class="page-heading">
+        <div><span class="eyebrow">QUẢN LÝ CHỖ NGỒI · GỌI MÓN BẰNG QR</span><h1>Sơ đồ bàn & QR</h1><p>Theo dõi sức chứa, đơn đang phục vụ và mã QR gọi món tại từng bàn.</p></div>
+        <div class="heading-actions"><a class="secondary-btn" href="{% url 'staff_home' %}">{% include 'pho_app/includes/icon.html' with name='wallet' %} Thu ngân</a>{% if user.is_admin_role %}<a class="primary-btn" href="{% url 'admin_table_create' %}">{% include 'pho_app/includes/icon.html' with name='plus' %} Thêm bàn mới</a>{% endif %}</div>
+    </div>
+    <section class="stats-grid table-map-stats">
+        <article class="stat-card"><span class="stat-top">Bàn trống</span><strong class="stat-value">{{ available_count }}</strong></article>
+        <article class="stat-card"><span class="stat-top">Đang phục vụ</span><strong class="stat-value">{{ occupied_count }}</strong></article>
+        <article class="stat-card"><span class="stat-top">Đang dọn</span><strong class="stat-value">{{ cleaning_count }}</strong></article>
+    </section>
+    <section class="panel" data-filter-root>
+        <div class="panel-heading"><div><h2>Tình trạng từng bàn</h2><p>Chỉ dọn được bàn khi không còn đơn đang chờ thanh toán hoặc đang chế biến.</p></div></div>
+        <div class="toolbar"><div class="segmented" role="group" aria-label="Lọc trạng thái bàn"><button class="active" data-filter-group="all" type="button" aria-pressed="true">Tất cả</button><button data-filter-group="AVAILABLE" type="button" aria-pressed="false">Bàn trống</button><button data-filter-group="OCCUPIED" type="button" aria-pressed="false">Có khách</button><button data-filter-group="CLEANING" type="button" aria-pressed="false">Đang dọn</button></div><label class="search-field">{% include 'pho_app/includes/icon.html' with name='search' %}<input type="search" data-filter-search placeholder="Tìm bàn..." aria-label="Tìm bàn"></label></div>
+        <div class="staff-table-map-grid">
+            {% for table in tables %}
+            <article class="staff-table-card table-{{ table.status }}" data-filter-item="Bàn {{ table.table_number }}" data-filter-category="{{ table.status }}">
+                <div class="staff-table-card-head"><span class="stat-icon tone-{% if table.status == 'AVAILABLE' %}green{% elif table.status == 'CLEANING' %}purple{% else %}orange{% endif %}">{% include 'pho_app/includes/icon.html' with name='table' %}</span><span class="badge {% if table.status == 'AVAILABLE' %}badge-green{% elif table.status == 'CLEANING' %}badge-blue{% else %}badge-orange{% endif %}">{{ table.get_status_display }}</span></div>
+                <h2>Bàn {{ table.table_number }}</h2>
+                <p class="staff-table-capacity">{{ table.current_pho_bowls }} / {{ table.capacity }} tô đang dùng · còn {{ table.remaining_capacity }}</p>
+                {% if table.active_orders %}
+                <div class="staff-table-orders">
+                    {% for order in table.active_orders %}
+                    <div class="staff-table-order"><strong>{{ order.order_code }}</strong><span>{% if order.customer %}{{ order.customer.display_name }}{% else %}{{ order.guest_name|default:'Khách tại bàn' }}{% endif %}</span><small>{{ order.pho_count }} tô · {{ order.get_order_status_display }} · {{ order.get_payment_status_display }}</small>{% if order.order_status == 'COMPLETED' and order.payment_status == 'PAID' %}<form method="post" action="{% url 'free_order_table' order.id %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'table_map' %}"><button class="secondary-btn full" type="submit">Khách ăn xong · trả {{ order.pho_count }} tô</button></form>{% endif %}</div>
+                    {% endfor %}
+                </div>
+                {% elif table.called_ticket %}<p class="muted staff-table-empty">Đã gọi số {{ table.called_ticket.ticket_number }} · {% if table.called_ticket.customer %}{{ table.called_ticket.customer.display_name }}{% else %}{{ table.called_ticket.guest_name|default:'Khách' }}{% endif %}.</p>
+                {% elif table.status == 'OCCUPIED' %}<p class="muted staff-table-empty">Bàn đang giữ cho khách được gọi từ hàng đợi.</p>
+                {% elif table.status == 'CLEANING' %}<p class="muted staff-table-empty">Bàn đang chờ xác nhận dọn xong.</p>
+                {% else %}<p class="muted staff-table-empty">Sẵn sàng đón khách.</p>{% endif %}
+                {% if table.status != 'AVAILABLE' %}
+                    {% if table.can_clear %}
+                    <form method="post" action="{% url 'free_table' table.id %}" data-confirm="Xác nhận Bàn {{ table.table_number }} đã dọn xong?" onsubmit="return confirm(this.dataset.confirm);">{% csrf_token %}<input type="hidden" name="next" value="{% url 'table_map' %}"><button class="secondary-btn full" type="submit">{% include 'pho_app/includes/icon.html' with name='check' %} Xác nhận đã dọn bàn</button></form>
+                    {% else %}<p class="table-clear-help">Hoàn tất hoặc hủy các đơn còn mở trước khi dọn bàn.</p>{% endif %}
+                {% endif %}
+                <details class="table-qr-details" data-qr-state>
+                    <summary>{% include 'pho_app/includes/icon.html' with name='qr' %} Mã QR gọi món</summary>
+                    <a href="{{ table.qr_image_url }}" target="_blank" rel="noopener" aria-label="Xem QR Bàn {{ table.table_number }}"><img src="{{ table.qr_image_url }}" width="160" height="160" alt="Mã QR Bàn {{ table.table_number }}" loading="lazy" data-qr-image></a>
+                    <div class="qr-unavailable" data-qr-error role="status" hidden>Chưa tải được QR. Kiểm tra kết nối Internet hoặc mở trang gọi món bên dưới.</div>
+                    <a class="text-button" href="{% url 'menu' %}?table={{ table.pk }}" target="_blank" rel="noopener">Mở trang gọi món {% include 'pho_app/includes/icon.html' with name='arrow' %}</a>
+                </details>
+                {% if user.is_admin_role %}<div class="actions table-management-actions"><a class="secondary-btn" href="{% url 'admin_table_edit' table.pk %}">{% include 'pho_app/includes/icon.html' with name='edit' %} Chỉnh sửa</a><form method="post" action="{% url 'admin_table_delete' table.pk %}" data-confirm="Xóa Bàn {{ table.table_number }}?" onsubmit="return confirm(this.dataset.confirm);">{% csrf_token %}<button class="icon-button danger" type="submit" aria-label="Xóa Bàn {{ table.table_number }}">{% include 'pho_app/includes/icon.html' with name='trash' %}</button></form></div>{% endif %}
+            </article>
+            {% empty %}<p class="empty-state">Chưa có bàn nào được tạo.</p>{% endfor %}
+        </div>
+        {% if tables %}<p class="empty-state" data-filter-empty hidden>Không có bàn phù hợp với bộ lọc.</p>{% endif %}
+    </section>
+</main>
+{% endblock %}

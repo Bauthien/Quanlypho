@@ -21,7 +21,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from .forms import (
     IngredientForm, IngredientImportForm, MenuItemForm, OrderFilterForm, RecipeForm,
@@ -358,9 +358,36 @@ def order_detail(request, order_id):
         except InvalidOrderTransition as exc:
             inventory_error = str(exc)
 
+    awaiting_qr_payment = (
+        order.payment_method == Order.PaymentMethod.VIETQR
+        and order.payment_status == Order.PaymentStatus.PENDING
+        and order.order_status == Order.OrderStatus.CART
+        and not inventory_error
+    )
+    vietqr_image_url = _vietqr_image_url(order) if awaiting_qr_payment else ''
+    payment_qr_is_demo = bool(
+        settings.DEBUG and awaiting_qr_payment and not vietqr_image_url and order.amount_due > 0
+    )
+    if payment_qr_is_demo:
+        # A demo QR contains order information only, never a bank transfer payload.
+        query = urlencode({
+            'size': '260x260',
+            'data': json.dumps({
+                'mode': 'DEMO', 'order_code': order.order_code,
+                'amount': int(order.amount_due), 'currency': 'VND',
+            }, separators=(',', ':')),
+        })
+        vietqr_image_url = f'https://api.qrserver.com/v1/create-qr-code/?{query}'
+    can_simulate_payment = settings.DEBUG and awaiting_qr_payment and (
+        (request.user.is_authenticated and order.customer_id == request.user.pk)
+        or (order.customer_id is None and order.pk in request.session.get('guest_orders', []))
+    )
+
     return render(request, 'pho_app/customer/order_detail.html', {
         'order': order,
-        'vietqr_image_url': _vietqr_image_url(order) if order.payment_method == Order.PaymentMethod.VIETQR and not inventory_error else '',
+        'vietqr_image_url': vietqr_image_url,
+        'payment_qr_is_demo': payment_qr_is_demo,
+        'can_simulate_payment': can_simulate_payment,
         'inventory_error': inventory_error,
         'grand_total': order.amount_due,
         'clear_cart': request.GET.get('placed') == '1' and can_view,
@@ -443,11 +470,11 @@ def queue_status(request):
     })
 
 
+@require_GET
 def delivery_fee_quote(request):
     coords = parse_coords(request.GET.get('lat'), request.GET.get('lng'))
     if not coords:
-        fee, distance, ok = compute_delivery_fee()
-        return JsonResponse({'ok': True, 'fee': int(fee), 'distance_km': None, 'fallback': True})
+        return JsonResponse({'ok': False, 'error': 'Chọn vị trí nhận món bằng GPS, bản đồ hoặc nhập đủ tọa độ hợp lệ.', 'fallback': False}, status=400)
     fee, distance, ok = compute_delivery_fee(coords[0], coords[1])
     if not ok:
         return JsonResponse({
@@ -455,12 +482,15 @@ def delivery_fee_quote(request):
             'distance_km': float(distance) if distance is not None else None,
             'max_km': getattr(settings, 'DELIVERY_MAX_KM', 10),
             'message': 'Ngoài phạm vi giao hàng.',
-        })
+            'error': 'Địa chỉ nằm ngoài phạm vi giao hàng. Vui lòng chọn địa chỉ khác.',
+        }, status=400)
     return JsonResponse({
         'ok': True,
         'fee': int(fee),
         'distance_km': float(distance) if distance is not None else None,
         'fallback': False,
+        'max_km': settings.DELIVERY_MAX_KM,
+        'latitude': coords[0], 'longitude': coords[1],
     })
 
 
@@ -546,6 +576,11 @@ def staff_home(request):
 
 @staff_required
 def staff_table_map(request):
+    return redirect('table_map')
+
+
+@staff_required
+def table_map(request):
     tables = natural_sort_table(Table.objects.all())
     active_orders = Order.objects.filter(
         order_type=Order.OrderType.DINE_IN,
@@ -562,20 +597,22 @@ def staff_table_map(request):
         if order.table_id:
             orders_by_table.setdefault(order.table_id, []).append(order)
 
+    called_tickets = {
+        ticket.table_id: ticket
+        for ticket in QueueTicket.objects.filter(status=QueueTicket.Status.CALLED).select_related('customer')
+    }
     for table in tables:
         table.active_orders = orders_by_table.get(table.pk, [])
         table.current_pho_bowls = sum(order.pho_count for order in table.active_orders)
         table.remaining_capacity = max(0, table.capacity - table.current_pho_bowls)
-        table.called_ticket = QueueTicket.objects.filter(
-            table=table,
-            status=QueueTicket.Status.CALLED,
-        ).select_related('customer').first()
+        table.called_ticket = called_tickets.get(table.pk)
+        table.qr_image_url = _generate_table_qr(request, table)
         table.can_clear = not table.called_ticket and all(
             order.order_status in (Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED)
             for order in table.active_orders
         )
 
-    return render(request, 'pho_app/staff/table_map.html', {
+    return render(request, 'pho_app/table_map.html', {
         'tables': tables,
         'available_count': sum(table.status == Table.Status.AVAILABLE for table in tables),
         'occupied_count': sum(table.status == Table.Status.OCCUPIED for table in tables),
@@ -769,6 +806,7 @@ def complete_dine_in(request, order_id):
 @require_POST
 @transaction.atomic
 def free_table(request, table_id):
+    destination = 'table_map' if request.POST.get('next') == reverse('table_map') else 'staff_home'
     table = get_object_or_404(Table.objects.select_for_update(), pk=table_id, status__in=[Table.Status.CLEANING, Table.Status.OCCUPIED])
     unfinished_orders = Order.objects.select_for_update().filter(
         table=table,
@@ -776,18 +814,18 @@ def free_table(request, table_id):
     ).exclude(order_status__in=[Order.OrderStatus.COMPLETED, Order.OrderStatus.CANCELLED])
     if unfinished_orders.exists():
         messages.error(request, 'Chưa thể dọn bàn vì vẫn còn đơn chưa hoàn tất.')
-        return redirect('staff_home')
+        return redirect(destination)
     if QueueTicket.objects.select_for_update().filter(
         table=table,
         status=QueueTicket.Status.CALLED,
     ).exists():
         messages.error(request, 'Chưa thể dọn bàn vì khách đã được gọi từ hàng đợi nhưng chưa vào bàn.')
-        return redirect('staff_home')
+        return redirect(destination)
     table.status = Table.Status.AVAILABLE
     table.save(update_fields=['status'])
     Order.objects.filter(table=table, is_cleared=False).update(is_cleared=True)
     messages.success(request, f'Bàn {table.table_number} đã dọn xong toàn bộ và sẵn sàng đón khách.')
-    return redirect('staff_home')
+    return redirect(destination)
 
 
 @staff_required
@@ -824,7 +862,7 @@ def free_order_table(request, order_id):
     else:
         messages.success(request, f'Đã giải phóng đơn {order.order_code}.')
 
-    return redirect('staff_home')
+    return redirect('table_map' if request.POST.get('next') == reverse('table_map') else 'staff_home')
 
 
 @kitchen_required
@@ -1069,18 +1107,12 @@ def cancel_cash_order(request, order_id):
     return redirect('staff_home')
 
 def _generate_table_qr(request, table):
-    # Dùng API qrserver.com để tạo mã QR
-    from urllib.parse import urlencode
-    domain = request.build_absolute_uri('/')[:-1] # Bỏ dấu / ở cuối
-    menu_url = f"{domain}/thuc-don/?table={table.id}"
-    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=500x500&data={menu_url}"
-    return qr_url
+    menu_url = request.build_absolute_uri(f"{reverse('menu')}?table={table.pk}")
+    return 'https://api.qrserver.com/v1/create-qr-code/?' + urlencode({'size': '500x500', 'data': menu_url})
 
 @admin_required
 def admin_table_list(request):
-
-    tables = natural_sort_table(Table.objects.all())
-    return render(request, 'pho_app/admin/table_list.html', {'tables': tables})
+    return redirect('table_map')
 
 @admin_required
 def admin_table_create(request):
@@ -1092,7 +1124,7 @@ def admin_table_create(request):
             table.qr_code_url = _generate_table_qr(request, table)
             table.save(update_fields=['qr_code_url'])
         messages.success(request, 'Đã thêm bàn mới thành công.')
-        return redirect('admin_table_list')
+        return redirect('table_map')
     return render(request, 'pho_app/admin/table_form.html', {'form': form})
 
 @admin_required
@@ -1103,7 +1135,7 @@ def admin_table_edit(request, table_id):
         table.qr_code_url = _generate_table_qr(request, table)
         form.save()
         messages.success(request, 'Đã cập nhật bàn thành công.')
-        return redirect('admin_table_list')
+        return redirect('table_map')
     return render(request, 'pho_app/admin/table_form.html', {'table': table, 'form': form})
 
 @admin_required
@@ -1116,7 +1148,7 @@ def admin_table_delete(request, table_id):
         messages.error(request, 'Không thể xóa bàn đã có đơn hàng hoặc vé xếp hàng. Lịch sử bàn được giữ nguyên.')
     else:
         messages.success(request, 'Đã xóa bàn.')
-    return redirect('admin_table_list')
+    return redirect('table_map')
 
 
 # ==========================================

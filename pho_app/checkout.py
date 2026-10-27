@@ -70,9 +70,10 @@ def resolve_cart(payload):
 
 
 def delivery_price(coords):
-    from .services import haversine_km
-    if not coords:
-        raise BusinessError('Cần tọa độ địa chỉ nhận để xác minh phạm vi giao hàng trước khi đặt đơn.')
+    from .services import haversine_km, parse_coords
+    coords = parse_coords(*coords) if coords and len(coords) == 2 else None
+    if coords is None:
+        raise BusinessError('Chọn vị trí nhận món bằng GPS, bản đồ hoặc nhập đủ vĩ độ và kinh độ để kiểm tra phí giao.')
     raw = Decimal(str(haversine_km(float(getattr(settings, 'RESTAURANT_LAT', 10.7769)),
         float(getattr(settings, 'RESTAURANT_LNG', 106.7009)), *coords)))
     if raw > Decimal(str(settings.DELIVERY_MAX_KM)):

@@ -3,6 +3,7 @@ import json
 import uuid
 
 from django.contrib import messages
+from django.conf import settings
 from django.core import signing
 from django.db import transaction
 from django.http import JsonResponse
@@ -18,6 +19,7 @@ from .models import (Delivery, Order, OrderItem, OrderItemCustomization, OrderIt
                      QueueTicket, Table, UserAddress)
 from .services import active_queue_ticket, customer_point, inventory_deductions, parse_coords, used_bowls
 from .stock import expire_orders, reserve_inventory
+from .locations import normalize_delivery_phone
 
 
 def checkout_inputs(request, reserve=False):
@@ -44,13 +46,18 @@ def checkout_inputs(request, reserve=False):
         snapshot = {'address_id': address.pk, 'version': address.version, 'recipient_name': address.recipient_name,
             'phone': address.phone, 'address': address.full_address, 'note': address.note,
             'ward': address.ward, 'district': address.district, 'province': address.province}
-        coords = (float(address.latitude), float(address.longitude)) if address.latitude is not None and address.longitude is not None else None
+        if address.latitude is not None or address.longitude is not None:
+            coords = parse_coords(address.latitude, address.longitude)
+        if 'delivery_note' in request.POST:
+            snapshot['note'] = request.POST.get('delivery_note', '')[:500]
     fee, distance = 0, None
     if kind == 'DELIVERY':
         if not snapshot['address'] or not snapshot['recipient_name'] or not snapshot['phone']:
             raise BusinessError('Điền tên người nhận, điện thoại và địa chỉ giao hàng.')
+        snapshot['phone'] = normalize_delivery_phone(snapshot['phone'])
         fee, distance = delivery_price(coords)
         snapshot['latitude'], snapshot['longitude'] = coords
+        snapshot['shop_latitude'], snapshot['shop_longitude'] = settings.RESTAURANT_LAT, settings.RESTAURANT_LNG
     wallet_id = request.POST.get('wallet_id') or None
     code = request.POST.get('voucher_code', '')
     if wallet_id and code.strip():

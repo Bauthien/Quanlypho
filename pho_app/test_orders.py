@@ -382,7 +382,7 @@ class OrderManagementTests(TestCase):
         OrderItem.objects.create(order=order, menu_item=self.menu, quantity=2, item_price=50000)
         self.client.force_login(self.staff)
 
-        response = self.client.get(reverse('staff_table_map'))
+        response = self.client.get(reverse('table_map'))
         self.assertContains(response, '2 / 4 tô đang dùng')
         cleared = self.client.post(reverse('free_table', args=[table.pk]))
 

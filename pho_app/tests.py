@@ -345,9 +345,9 @@ class AuthAndRoleTests(TestCase):
         customer = User.objects.create_user(username='map-customer', password='pass12345')
 
         self.client.force_login(customer)
-        self.assertEqual(self.client.get(reverse('staff_table_map')).status_code, 302)
+        self.assertEqual(self.client.get(reverse('table_map')).status_code, 302)
         self.client.force_login(staff)
-        response = self.client.get(reverse('staff_table_map'))
+        response = self.client.get(reverse('table_map'))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Bàn MAP-1')
@@ -383,7 +383,7 @@ class AuthAndRoleTests(TestCase):
         )
         self.client.force_login(staff)
 
-        response = self.client.get(reverse('staff_table_map'))
+        response = self.client.get(reverse('table_map'))
         self.assertContains(response, ticket.ticket_number)
         self.assertContains(response, 'Hoàn tất hoặc hủy các đơn còn mở trước khi dọn bàn.')
 

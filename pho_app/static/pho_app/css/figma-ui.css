@@ -218,7 +218,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
 .table-tile.table-CLEANING { background: #f2eef7; }
 .cashier-seat-form { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cashier-seat-form .form-input { min-width: 180px; }
-.staff-table-map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 16px; }
+.staff-table-map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 16px; align-items: start; }
 .staff-table-card { border: 1px solid var(--border); border-top: 3px solid #83a78e; border-radius: 12px; padding: 17px; background: var(--surface); }
 .staff-table-card.table-OCCUPIED { border-top-color: #c59c67; background: #fcf9f3; }
 .staff-table-card.table-CLEANING { border-top-color: #9c8eab; background: #faf8fc; }
@@ -231,6 +231,14 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--brand); width:
 .table-clear-help { margin-top: 12px; color: #8c6437; }
 .staff-table-card form { margin-top: 13px; }
 .table-map-stats { margin-bottom: 22px; }
+.table-qr-details { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--border); }
+.table-qr-details summary { min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--brand); font-size: 12px; font-weight: 600; }
+.table-qr-details summary::after { content: '+'; margin-left: auto; font-size: 18px; }
+.table-qr-details[open] summary::after { content: '−'; }
+.table-qr-details img { margin: 12px auto; width: 160px; height: 160px; border: 8px solid white; border-radius: 8px; }
+.table-qr-details .text-button { width: 100%; justify-content: center; }
+.table-management-actions { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 8px; }
+.staff-table-card .table-management-actions form { margin-top: 0; margin-left: auto; }
 .dining-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; background: var(--surface); }
 .dining-group:last-of-type { margin-bottom: 0; }
 .dining-group-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border); padding-bottom: 8px; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }

@@ -48,13 +48,11 @@
     const url = URL.createObjectURL(file); preview.src = url; preview.hidden = false; preview.dataset.objectUrl = url;
     const fallback = preview.parentElement.querySelector('.avatar'); if (fallback) fallback.hidden = true;
   }));
-  document.querySelector('[data-address-locate]')?.addEventListener('click', event => {
-    const button = event.currentTarget;
-    if (!navigator.geolocation) return;
-    button.disabled = true;
-    navigator.geolocation.getCurrentPosition(position => {
-      document.querySelector('[name="latitude"]').value = position.coords.latitude.toFixed(7);
-      document.querySelector('[name="longitude"]').value = position.coords.longitude.toFixed(7); button.disabled = false;
-    }, () => { button.disabled = false; window.phoToast?.('Chưa lấy được tọa độ. Bạn có thể nhập tọa độ địa chỉ nhận món.'); }, { timeout: 15000 });
-  });
+  const addressLatitude = document.querySelector('[name="latitude"]');
+  if (addressLatitude) {
+    const addressForm = addressLatitude.closest('form');
+    ['street', 'ward', 'district', 'province'].forEach(name => addressForm.querySelector(`[name="${name}"]`)?.addEventListener('input', () => {
+      addressForm.querySelector('[data-location-picker]').locationPicker?.clear('Địa chỉ vừa thay đổi. Chọn lại vị trí để tính đúng phí giao.');
+    }));
+  }
 })();

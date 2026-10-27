@@ -81,6 +81,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'pho_app.context_processors.inventory_alerts',
+                'pho_app.context_processors.delivery_location',
                 'pho_app.commerce_views.account_context',
             ],
         },

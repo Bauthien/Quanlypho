@@ -1,5 +1,11 @@
 from django.db.models import F
+from django.conf import settings
 from .models import Ingredient
+
+
+def delivery_location(request):
+    return {'location_shop_lat': settings.RESTAURANT_LAT, 'location_shop_lng': settings.RESTAURANT_LNG,
+        'location_max_km': settings.DELIVERY_MAX_KM}
 
 
 def inventory_alerts(request):

@@ -1,0 +1,5 @@
+{% load commerce_ui %}{% delivery_destination order as destination %}
+{% if destination %}<div class="delivery-destination">
+  {% if destination.coordinates %}<p class="delivery-coordinates">Tọa độ nhận món: {{ destination.coordinates }}</p>{% endif %}
+  <div class="delivery-location-actions"><a class="text-button" href="{{ destination.map_url }}" target="_blank" rel="noopener">{% include 'pho_app/includes/icon.html' with name='location' %} Xem vị trí nhận món</a><a class="text-button" href="{{ destination.directions_url }}" target="_blank" rel="noopener">Chỉ đường giao hàng {% include 'pho_app/includes/icon.html' with name='arrow' %}</a>{% if destination.phone %}<a class="text-button" href="tel:{{ destination.phone }}">Gọi người nhận</a>{% endif %}</div>
+</div>{% endif %}

@@ -3,6 +3,12 @@ from django import template
 register = template.Library()
 
 
+@register.simple_tag
+def delivery_destination(order):
+    from pho_app.locations import delivery_destination as destination_for
+    return destination_for(order)
+
+
 @register.filter
 def compact_amount(value):
     from decimal import Decimal, InvalidOperation

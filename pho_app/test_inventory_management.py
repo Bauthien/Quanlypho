@@ -182,7 +182,7 @@ class InventoryManagementTests(TestCase):
         self.assertEqual(duplicate.status_code, 200)
         self.assertEqual(Table.objects.count(), 1)
         response = self.client.post(reverse('admin_table_create'), {'table_number': 'INV-NEW', 'capacity': '1'})
-        self.assertRedirects(response, reverse('admin_table_list'))
+        self.assertRedirects(response, reverse('table_map'))
         self.assertEqual(Table.objects.get(table_number='INV-NEW').capacity, 1)
 
     def test_table_with_orders_cannot_be_deleted(self):

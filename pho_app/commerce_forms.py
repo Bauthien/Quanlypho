@@ -52,6 +52,19 @@ class ProfileForm(StyledModelForm):
 class AddressForm(StyledModelForm):
     version = forms.IntegerField(required=False, widget=forms.HiddenInput)
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field, marker in (('latitude', 'lat'), ('longitude', 'lng')):
+            self.fields[field].widget = forms.TextInput(attrs={'class': 'form-input', 'inputmode': 'decimal',
+                f'data-location-{marker}': '', 'autocomplete': 'off'})
+
+    def clean_phone(self):
+        from .locations import normalize_delivery_phone
+        try:
+            return normalize_delivery_phone(self.cleaned_data['phone'])
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+
     class Meta:
         model = UserAddress
         fields = ['recipient_name', 'phone', 'street', 'ward', 'district', 'province', 'label', 'note', 'latitude', 'longitude', 'is_default']

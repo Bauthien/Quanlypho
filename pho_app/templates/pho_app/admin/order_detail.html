@@ -33,7 +33,8 @@
         </section>
         {% if order.order_type == 'DELIVERY' %}
         <section class="panel"><div class="panel-heading"><h2>Thông tin giao hàng</h2>{% include 'pho_app/includes/icon.html' with name='truck' %}</div>
-            <dl class="order-meta-grid"><div class="order-meta-wide"><dt>Địa chỉ nhận hàng</dt><dd>{{ order.delivery_address|default:'Chưa có địa chỉ'|linebreaksbr }}</dd></div><div><dt>Khoảng cách</dt><dd>{% if order.delivery_distance_km != None %}{{ order.delivery_distance_km|floatformat:2 }} km{% else %}Chưa có GPS · Phí dự phòng{% endif %}</dd></div><div><dt>Mã vận đơn</dt><dd>{{ order.shipping_code|default:'Chưa cấp mã' }}</dd></div></dl>
+            <dl class="order-meta-grid"><div class="order-meta-wide"><dt>Địa chỉ nhận hàng</dt><dd>{{ order.delivery_address|default:'Chưa có địa chỉ'|linebreaksbr }}</dd></div><div><dt>Khoảng cách đường thẳng</dt><dd>{% if order.delivery_distance_km != None %}{{ order.delivery_distance_km|floatformat:2 }} km{% else %}Đơn cũ chưa lưu khoảng cách{% endif %}</dd></div><div><dt>Mã vận đơn</dt><dd>{{ order.shipping_code|default:'Chưa cấp mã' }}</dd></div></dl>
+            {% include 'pho_app/includes/delivery_destination.html' %}
             {% if can_print_labels %}<a class="secondary-btn order-label-link" href="{% url 'delivery_labels' order.pk %}">{% include 'pho_app/includes/icon.html' with name='print' %} In 2 tem giao hàng</a>{% endif %}
         </section>
         {% endif %}

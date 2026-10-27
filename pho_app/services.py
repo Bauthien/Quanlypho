@@ -292,9 +292,11 @@ def haversine_km(lat1, lng1, lat2, lng2):
 
 
 def parse_coords(lat_raw, lng_raw):
+    if isinstance(lat_raw, bool) or isinstance(lng_raw, bool):
+        return None
     try:
-        lat = float(lat_raw)
-        lng = float(lng_raw)
+        lat = float(str(lat_raw).strip().replace(',', '.'))
+        lng = float(str(lng_raw).strip().replace(',', '.'))
     except (TypeError, ValueError):
         return None
     if not (-90 <= lat <= 90 and -180 <= lng <= 180):
@@ -303,20 +305,16 @@ def parse_coords(lat_raw, lng_raw):
 
 
 def compute_delivery_fee(lat=None, lng=None):
-    shop_lat = float(getattr(settings, 'RESTAURANT_LAT', 10.7769))
-    shop_lng = float(getattr(settings, 'RESTAURANT_LNG', 106.7009))
-    max_km = float(getattr(settings, 'DELIVERY_MAX_KM', 10))
-    base = Decimal(str(getattr(settings, 'DELIVERY_BASE_FEE', 15000)))
-    per_km = Decimal(str(getattr(settings, 'DELIVERY_FEE_PER_KM', 8000)))
-    fallback = Decimal(str(getattr(settings, 'DELIVERY_FLAT_FEE', 30000)))
-    if lat is None or lng is None:
-        return fallback, None, True
-    km = haversine_km(shop_lat, shop_lng, lat, lng)
-    if km > max_km:
-        return None, Decimal(str(round(km, 2))), False
-    billed_km = max(1, math.ceil(km))
-    fee = base + per_km * billed_km
-    return fee, Decimal(str(round(km, 2))), True
+    from .checkout import delivery_price
+    coords = parse_coords(lat, lng)
+    if coords is None:
+        return None, None, False
+    try:
+        fee, distance = delivery_price(coords)
+        return fee, distance, True
+    except ValueError:
+        distance = haversine_km(settings.RESTAURANT_LAT, settings.RESTAURANT_LNG, *coords)
+        return None, Decimal(str(round(distance, 6))), False
 
 
 def customer_point(lat, lng):

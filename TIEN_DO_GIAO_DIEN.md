@@ -83,7 +83,7 @@ Khi server Django đang chạy, mở [http://127.0.0.1:8000/](http://127.0.0.1:8
 | Đăng nhập / đăng ký | `/dang-nhap/`, `/dang-ky/` | Khách chưa đăng nhập |
 | Dashboard | `/quan-ly/` | Quản lý |
 | Thực đơn và topping | `/quan-ly/thuc-don/` | Quản lý |
-| Bàn và QR | `/quan-ly/ban/` | Quản lý |
+| Sơ đồ bàn & QR | `/so-do-ban/` | Thu ngân hoặc quản lý; thêm/sửa/xóa bàn dành cho quản lý |
 | Tài khoản và vai trò | `/quan-ly/nguoi-dung/` | Quản lý |
 | Thu ngân và hàng đợi | `/thu-ngan/` | Thu ngân hoặc quản lý |
 | Bếp | `/bep/` | Bếp hoặc quản lý |

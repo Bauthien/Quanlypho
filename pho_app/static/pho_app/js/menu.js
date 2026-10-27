@@ -24,7 +24,9 @@
   const tableSelect = $('#tableSelect'), address = $('#deliveryAddress');
   let cart = [], activeCategory = 'all', customItem = null, customQuantity = 1;
   let remainingCapacity = config.remainingCapacity, queueStatus = config.queueStatus;
-  let deliveryAllowed = true, feeRequest = 0;
+  let deliveryAllowed = false;
+  const locationRoot = $('[data-location-picker]', form);
+  const locationPicker = locationRoot.locationPicker;
   try {
     const saved = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
     if (Array.isArray(saved)) cart = saved.filter((entry) => entry && menuItems.some((item) => item.id === entry.id) && Number.isInteger(entry.qty) && entry.qty > 0 && Array.isArray(entry.customizations) && Array.isArray(entry.toppings)).map((entry) => ({ ...entry, qty: Math.min(99, entry.qty) }));
@@ -94,7 +96,7 @@
   });
 
   let quoteTimer, quoteRequest = 0, quoteReady = false;
-  const quoteFields = ['checkoutAddressId', 'checkoutWalletId', 'voucherCode', 'checkoutPoints', 'recipientName', 'recipientPhone', 'deliveryAddress', 'orderType', 'paymentMethod'];
+  const quoteFields = ['checkoutAddressId', 'checkoutWalletId', 'voucherCode', 'checkoutPoints', 'recipientName', 'recipientPhone', 'deliveryAddress', 'deliveryNote', 'orderType', 'paymentMethod'];
   const walletSelect = $('#checkoutWalletId'), codeInput = $('#voucherCode');
   walletSelect?.addEventListener('change', () => { if (walletSelect.value && codeInput) codeInput.value = ''; });
   codeInput?.addEventListener('input', () => { if (codeInput.value && walletSelect) walletSelect.value = ''; });
@@ -105,15 +107,29 @@
       $('#recipientName').value = option.dataset.name;
       $('#recipientPhone').value = option.dataset.phone;
       address.value = option.dataset.address;
-      $('#customerLat').value = (option.dataset.lat || '').replace(',', '.');
-      $('#customerLng').value = (option.dataset.lng || '').replace(',', '.');
-      quoteFee($('#customerLat').value, $('#customerLng').value);
+      $('#deliveryNote').value = option.dataset.note || '';
+      const lat = (option.dataset.lat || '').replace(',', '.'), lng = (option.dataset.lng || '').replace(',', '.');
+      locationPicker.setLocked(Boolean(lat && lng));
+      locationPicker.setCoordinates(lat, lng);
+      const edit = $('[data-location-address-edit]', locationRoot);
+      edit.href = option.dataset.editUrl; edit.hidden = Boolean(lat && lng);
     } else {
-      address.value = ''; $('#customerLat').value = ''; $('#customerLng').value = '';
-      quoteFee();
+      address.value = ''; $('#deliveryNote').value = '';
+      locationPicker.setLocked(false); locationPicker.clear();
+      $('[data-location-address-edit]', locationRoot).hidden = true;
     }
     [address, $('#recipientName'), $('#recipientPhone')].forEach(input => { input.readOnly = Boolean(option.value); });
-    $('#locateBtn').disabled = Boolean(option.value);
+  });
+  address.addEventListener('input', () => {
+    if (!$('#checkoutAddressId').value) locationPicker.clear('Địa chỉ vừa thay đổi. Chọn lại vị trí nhận món để xác nhận phí giao.');
+  });
+  locationRoot.addEventListener('locationchange', event => {
+    deliveryAllowed = Boolean(event.detail.allowed);
+    $('#cartTotalAmount').dataset.deliveryFee = String(event.detail.fee || 0);
+    if (event.detail.pending) {
+      quoteReady = false; ++quoteRequest; clearTimeout(quoteTimer);
+      $('#quoteToken').value = ''; $('#checkoutBtn').disabled = true;
+    } else renderCart();
   });
   quoteFields.forEach(id => $('#' + id)?.addEventListener('input', scheduleQuote));
   function scheduleQuote() {
@@ -150,8 +166,8 @@
       quoteReady = true;
       const blocked = orderType.value === 'QUEUE_CART' && queueStatus !== 'CALLED';
       const phoCount = cart.reduce((sum, entry) => sum + (category(product(entry)) === 'pho' ? entry.qty : 0), 0);
-      $('#checkoutBtn').disabled = blocked || (orderType.value === 'DINE_IN' && phoCount > remainingCapacity);
-      $('#checkoutBtn').textContent = blocked ? 'Chờ gọi số để thanh toán' : 'Đặt món ngay';
+      $('#checkoutBtn').disabled = blocked || (orderType.value === 'DELIVERY' && !deliveryAllowed) || (orderType.value === 'DINE_IN' && phoCount > remainingCapacity);
+      $('#checkoutBtn').textContent = blocked ? 'Chờ gọi số để thanh toán' : orderType.value === 'DELIVERY' && !deliveryAllowed ? 'Chọn vị trí nhận món' : 'Đặt món ngay';
     } catch (error) {
       if (number !== quoteRequest) return;
       $('#serverQuote').textContent = error.message || 'Mất kết nối. Hãy thử lại.';
@@ -189,7 +205,7 @@
     $('#checkoutError').hidden = !unavailable;
     $('#checkoutError').textContent = unavailable ? `${product(unavailable).name} không còn đủ số lượng. Vui lòng giảm số lượng hoặc chọn món khác.` : '';
     $('#checkoutBtn').disabled = !count || waiting || full || blocked || Boolean(unavailable);
-    $('#checkoutBtn').textContent = unavailable ? 'Món trong giỏ không còn đủ' : waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Ngoài phạm vi giao hàng' : 'Đặt món ngay';
+    $('#checkoutBtn').textContent = unavailable ? 'Món trong giỏ không còn đủ' : waiting ? 'Chờ gọi số để thanh toán' : full ? `Bàn chỉ còn ${remainingCapacity} tô phở` : blocked ? 'Chọn vị trí nhận món' : 'Đặt món ngay';
     scheduleQuote();
   }
   $('#cartItemsList').addEventListener('click', (event) => {
@@ -226,6 +242,7 @@
     address.required = delivery;
     $('#recipientName').required = delivery;
     $('#recipientPhone').required = delivery;
+    locationRoot.querySelectorAll('input').forEach(input => { input.disabled = !delivery; });
     if (delivery) payment.value = 'VIETQR';
     payment.disabled = delivery;
     document.querySelectorAll('[data-order-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.orderMode === orderType.value)));
@@ -234,39 +251,6 @@
   document.querySelectorAll('[data-order-mode]').forEach((button) => button.addEventListener('click', () => { orderType.value = button.dataset.orderMode; updateMode(); if (orderType.value === 'DELIVERY') window.phoToast?.('Chọn món trước, sau đó nhập địa chỉ trong giỏ hàng nhé.'); }));
   orderType.addEventListener('change', updateMode);
   if (tableSelect) { tableSelect.addEventListener('change', () => { remainingCapacity = Number(tableSelect.selectedOptions[0]?.dataset.remaining || 999); renderCart(); }); }
-
-  async function quoteFee(lat, lng) {
-    const request = ++feeRequest;
-    const params = new URLSearchParams();
-    if (lat != null && lng != null) { params.set('lat', lat); params.set('lng', lng); }
-    try {
-      const response = await fetch(`${config.deliveryUrl}?${params}`, { headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error('Delivery quote failed');
-      const data = await response.json();
-      if (request !== feeRequest) return;
-      deliveryAllowed = data.ok;
-      $('#cartTotalAmount').dataset.deliveryFee = String(data.ok ? data.fee : 0);
-      const distanceLabel = Number(data.distance_km) < 1 ? 'dưới 1' : data.distance_km;
-      $('#deliveryFeeHint').textContent = !data.ok ? `Ngoài phạm vi giao hàng: ${data.distance_km || '?'} km.` : data.fallback ? `Chưa có GPS · phí tạm tính ${money(data.fee)}.` : `Cách quán ${distanceLabel} km · phí giao ${money(data.fee)}.`;
-      renderCart();
-    } catch (_) { window.phoToast?.('Chưa lấy được phí giao hàng. Vui lòng thử lại.'); }
-  }
-  $('#locateBtn').addEventListener('click', () => {
-    if (!navigator.geolocation) { quoteFee(); return; }
-    $('#locateBtn').disabled = true;
-    navigator.geolocation.getCurrentPosition((position) => {
-      $('#locateBtn').disabled = false;
-      $('#customerLat').value = position.coords.latitude;
-      $('#customerLng').value = position.coords.longitude;
-      updateMode();
-      quoteFee(position.coords.latitude, position.coords.longitude);
-    }, () => {
-      $('#locateBtn').disabled = false;
-      $('#customerLat').value = ''; $('#customerLng').value = '';
-      updateMode();
-      quoteFee();
-    }, { enableHighAccuracy: true, timeout: 8000 });
-  });
 
   async function pollQueue() {
     try {
