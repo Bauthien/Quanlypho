@@ -551,9 +551,11 @@ dialog::backdrop { background: #29282466; backdrop-filter: blur(3px); }
 .order-management-table .badge { white-space: nowrap; }
 .order-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 20px; font-size: 11px; color: var(--muted); }
 .order-page-links { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.order-page-links > a, .order-page-links > span { min-width: 38px; min-height: 38px; padding: 8px; display: grid; place-items: center; border-radius: 7px; border: 1px solid var(--border); color: var(--ink); background: white; }
-.order-page-links > a:hover { border-color: var(--brand); color: var(--brand); }
-.order-page-links .current { background: var(--brand); color: white; border-color: var(--brand); }
+.order-page-links > a, .order-page-links > span, .order-page-links > button { min-width: 38px; min-height: 38px; padding: 8px; display: grid; place-items: center; border-radius: 7px; border: 1px solid var(--border); color: var(--ink); background: white; font-family: inherit; font-size: inherit; cursor: pointer; }
+.order-page-links > a:hover, .order-page-links > button:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.order-page-links > button:disabled { opacity: 0.4; cursor: not-allowed; }
+.order-page-links .current, .order-page-links button.active { background: var(--brand); color: white; border-color: var(--brand); }
+.order-page-links .page-ellipsis { border: none; background: transparent; min-width: 20px; color: var(--muted); }
 .order-back-link { display: inline-block; color: var(--muted); font-size: 12px; padding: 5px 0; margin-bottom: 18px; }
 .order-back-link:hover { color: var(--brand); }
 .order-detail-heading h1 { overflow-wrap: anywhere; }

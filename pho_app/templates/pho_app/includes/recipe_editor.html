@@ -19,7 +19,17 @@
       <div class="recipe-column-head" aria-hidden="true"><span>Nguyên liệu</span><span>Số lượng</span><span>Đơn vị nhập</span><span></span></div>
       <div class="recipe-rows" data-recipe-rows></div>
       <p class="recipe-empty" data-recipe-empty hidden>Chưa có nguyên liệu. Thêm dòng hoặc chọn nhiều nguyên liệu để bắt đầu.</p>
-      <div class="recipe-row-actions" data-row-actions><button class="secondary-btn" type="button" data-recipe-add>+ Thêm dòng</button><button class="secondary-btn" type="button" data-recipe-pick aria-expanded="false" aria-controls="recipeBatchPicker">Chọn nhiều nguyên liệu</button><button class="secondary-btn recipe-clear" type="button" data-recipe-clear aria-expanded="false" aria-controls="recipeClearConfirm">Xóa tất cả</button></div>
+      <div class="recipe-auto-banner" data-recipe-auto-banner hidden>
+        <div class="auto-banner-content">
+          <span class="auto-banner-icon">✨</span>
+          <div class="auto-banner-text">
+            <strong data-auto-banner-title>Đã tự động tính toán định lượng chuẩn</strong>
+            <p data-auto-banner-desc></p>
+          </div>
+          <button type="button" class="icon-button auto-banner-close" data-auto-banner-close aria-label="Đóng thông báo">✕</button>
+        </div>
+      </div>
+      <div class="recipe-row-actions" data-row-actions><button class="primary-btn recipe-auto-btn" type="button" data-recipe-auto title="Tự động tính toán định lượng bằng thuật toán Domain Semantic NLP & Heuristic"><span class="auto-sparkle">✨</span> Tự động tạo định lượng</button><button class="secondary-btn" type="button" data-recipe-add>+ Thêm dòng</button><button class="secondary-btn" type="button" data-recipe-pick aria-expanded="false" aria-controls="recipeBatchPicker">Chọn nhiều nguyên liệu</button><button class="secondary-btn recipe-clear" type="button" data-recipe-clear aria-expanded="false" aria-controls="recipeClearConfirm">Xóa tất cả</button></div>
       <div class="recipe-picker" id="recipeBatchPicker" hidden><strong>Chọn nguyên liệu cần thêm</strong><div class="recipe-picker-options" data-picker-options></div><div class="recipe-picker-actions"><button type="button" class="secondary-btn" data-picker-cancel>Hủy chọn</button><button type="button" class="primary-btn" data-picker-apply disabled>Thêm đã chọn</button></div></div>
       <div class="recipe-picker" id="recipeClearConfirm" role="group" aria-labelledby="recipeClearTitle" hidden><strong id="recipeClearTitle"></strong><p class="field-help">Xóa các dòng trong bản nháp của sản phẩm đang chọn. Công thức đã lưu chỉ thay đổi khi bạn lưu lại.</p><div class="recipe-picker-actions"><button type="button" class="secondary-btn" data-clear-cancel>Hủy</button><button type="button" class="primary-btn" data-clear-confirm>Xác nhận xóa tất cả</button></div></div>
       <p class="field-help">Có thể nhập g / ml và quy đổi về đơn vị kho. Kho dùng kg / lít có bước nhỏ nhất 10 g / 10 ml; dùng đơn vị kho gram / ml nếu cần lượng nhỏ hơn.</p>

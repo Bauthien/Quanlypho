@@ -89,6 +89,7 @@
       const empty = $('[data-list-empty]', root); if (empty) empty.hidden = count > 0;
       const number = $('[data-list-count]', root); if (number) number.textContent = count;
       categories.forEach(button => { const active = button.dataset.listCategory === category; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); });
+      if (root._paginateUpdate) root._paginateUpdate();
     }
     search?.addEventListener('input', filter);
     filters.forEach(button => button.addEventListener('click', () => { state = button.dataset.listFilter; filters.forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); }); filter(); }));
@@ -103,6 +104,123 @@
     select?.addEventListener('change', () => { state = select.value; filter(); });
     filter();
   });
+  // Universal Auto Pagination (20 items per page by default)
+  function setupAutoPagination(container) {
+    const pageSize = Number(container.dataset.autoPaginate || 20);
+    const table = $('table', container);
+    if (!table) return;
+    const tbody = $('tbody', table);
+    if (!tbody) return;
+
+    let nav = $('[data-pagination-nav]', container);
+    if (!nav) {
+      nav = document.createElement('nav');
+      nav.className = 'order-pagination auto-table-pagination';
+      nav.setAttribute('data-pagination-nav', '');
+      nav.setAttribute('aria-label', 'Phân trang bảng dữ liệu');
+      nav.innerHTML = '<span class="pagination-info" data-pagination-info></span><div class="order-page-links" data-pagination-controls></div>';
+      const wrap = $('.table-scroll', container) || table;
+      wrap.parentNode.insertBefore(nav, wrap.nextSibling);
+    }
+
+    const info = $('[data-pagination-info]', nav);
+    const controls = $('[data-pagination-controls]', nav);
+    let currentPage = 1;
+
+    function renderPage() {
+      const allRows = Array.from(tbody.children).filter(r => r.tagName === 'TR' && !r.classList.contains('recipe-detail-row') && !r.querySelector(':scope > td[colspan]'));
+      const activeRows = allRows.filter(r => !r.hidden && r.dataset.filterHidden !== 'true');
+      const total = activeRows.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+
+      const start = (currentPage - 1) * pageSize;
+      const end = Math.min(start + pageSize, total);
+
+      allRows.forEach(row => {
+        const isMaster = row.classList.contains('recipe-master-row');
+        const detailRow = isMaster && row.id ? document.querySelector(`[data-master-row-id="${row.id}"]`) : null;
+        if (row.hidden || row.dataset.filterHidden === 'true') {
+          row.style.display = 'none';
+          if (detailRow) detailRow.style.display = 'none';
+        } else {
+          const idx = activeRows.indexOf(row);
+          if (idx >= start && idx < end) {
+            row.style.display = '';
+            if (detailRow) {
+              detailRow.style.display = row.classList.contains('is-expanded') ? '' : 'none';
+            }
+          } else {
+            row.style.display = 'none';
+            if (detailRow) detailRow.style.display = 'none';
+          }
+        }
+      });
+
+      if (total === 0) {
+        nav.hidden = true;
+        return;
+      }
+
+      nav.hidden = false;
+      info.innerHTML = `Hiển thị <strong>${start + 1} - ${end}</strong> trong tổng số <strong>${total}</strong> dữ liệu (${pageSize} dòng / trang)`;
+
+      if (totalPages <= 1) {
+        controls.innerHTML = '';
+        return;
+      }
+
+      let html = `<button type="button" class="page-btn prev-btn" data-page="${currentPage - 1}" ${currentPage <= 1 ? 'disabled' : ''} aria-label="Trang trước">‹ Trước</button>`;
+
+      const maxButtons = 5;
+      let startP = Math.max(1, currentPage - 2);
+      let endP = Math.min(totalPages, startP + maxButtons - 1);
+      if (endP - startP < maxButtons - 1) {
+        startP = Math.max(1, endP - maxButtons + 1);
+      }
+
+      if (startP > 1) {
+        html += `<button type="button" class="page-btn" data-page="1">1</button>`;
+        if (startP > 2) html += `<span class="page-ellipsis">…</span>`;
+      }
+
+      for (let p = startP; p <= endP; p++) {
+        html += `<button type="button" class="page-btn ${p === currentPage ? 'active current' : ''}" data-page="${p}" ${p === currentPage ? 'aria-current="page"' : ''}>${p}</button>`;
+      }
+
+      if (endP < totalPages) {
+        if (endP < totalPages - 1) html += `<span class="page-ellipsis">…</span>`;
+        html += `<button type="button" class="page-btn" data-page="${totalPages}">${totalPages}</button>`;
+      }
+
+      html += `<button type="button" class="page-btn next-btn" data-page="${currentPage + 1}" ${currentPage >= totalPages ? 'disabled' : ''} aria-label="Trang sau">Tiếp ›</button>`;
+
+      controls.innerHTML = html;
+    }
+
+    controls.addEventListener('click', e => {
+      const btn = e.target.closest('[data-page]');
+      if (!btn || btn.disabled) return;
+      const targetPage = Number(btn.dataset.page);
+      if (!Number.isNaN(targetPage) && targetPage >= 1) {
+        currentPage = targetPage;
+        renderPage();
+        container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+
+    container._paginateUpdate = () => {
+      currentPage = 1;
+      renderPage();
+    };
+
+    renderPage();
+  }
+
+  $$('[data-auto-paginate]').forEach(setupAutoPagination);
+
   const addressComparison = $('[data-address-comparison]');
   if (addressComparison) {
     let fee = null, serial = 0;

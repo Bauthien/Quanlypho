@@ -4,11 +4,297 @@
 {% block breadcrumb %}Quản lý tồn kho{% endblock %}
 {% block admin_content %}<div class="commerce-page figma-module" data-tabs>
 <header class="page-heading"><div><span class="eyebrow">NGUYÊN LIỆU & ĐỊNH LƯỢNG</span><h1>Quản lý tồn kho</h1><p>Theo dõi tồn thực tế, lượng đang giữ và nguyên liệu còn có thể bán.</p></div><div class="heading-actions"><button class="secondary-btn" data-dialog-open="stockEditor">Hoàn kho / Hao hụt</button><a class="primary-btn" data-inventory-create href="{% url 'admin_ingredient_create' %}?usage=PHO">{% include 'pho_app/includes/icon.html' with name='plus' %} Thêm nguyên liệu</a></div></header>
+<!-- KPI Dashboard Cards -->
+<div class="inventory-kpi-grid">
+  <div class="inventory-kpi-card">
+    <div class="inventory-kpi-icon tone-blue">
+      {% include 'pho_app/includes/icon.html' with name='bag' %}
+    </div>
+    <div class="inventory-kpi-info">
+      <span class="inventory-kpi-label">Tổng nguyên liệu</span>
+      <strong class="inventory-kpi-value">{{ total_ingredients }} <small>loại</small></strong>
+      <span class="inventory-kpi-sub">{{ food_ingredient_count }} món chính · {{ drink_ingredient_count }} đồ uống</span>
+    </div>
+  </div>
+
+  <div class="inventory-kpi-card {% if low_stock_count %}is-alert{% endif %}">
+    <div class="inventory-kpi-icon {% if low_stock_count %}tone-red{% else %}tone-green{% endif %}">
+      {% if low_stock_count %}
+        {% include 'pho_app/includes/icon.html' with name='bag' %}
+      {% else %}
+        {% include 'pho_app/includes/icon.html' with name='check' %}
+      {% endif %}
+    </div>
+    <div class="inventory-kpi-info">
+      <span class="inventory-kpi-label">Cảnh báo sắp hết</span>
+      <strong class="inventory-kpi-value {% if low_stock_count %}val-danger{% else %}val-success{% endif %}">
+        {{ low_stock_count }} <small>{% if low_stock_count %}cần nhập thêm{% else %}an toàn{% endif %}</small>
+      </strong>
+      <span class="inventory-kpi-sub">
+        {% if low_stock_count %}
+          Có nguyên liệu dưới ngưỡng tối thiểu
+        {% else %}
+          Tồn kho đều trên ngưỡng an toàn
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="inventory-kpi-card">
+    <div class="inventory-kpi-icon tone-warm">
+      {% include 'pho_app/includes/icon.html' with name='bowl' %}
+    </div>
+    <div class="inventory-kpi-info">
+      <span class="inventory-kpi-label">Định lượng món (BOM)</span>
+      <strong class="inventory-kpi-value">{{ total_recipes }} <small>công thức</small></strong>
+      <span class="inventory-kpi-sub">Tự động trừ kho khi bán</span>
+    </div>
+  </div>
+
+  <div class="inventory-kpi-card">
+    <div class="inventory-kpi-icon tone-green">
+      {% include 'pho_app/includes/icon.html' with name='chart' %}
+    </div>
+    <div class="inventory-kpi-info">
+      <span class="inventory-kpi-label">Nhật ký biến động</span>
+      <strong class="inventory-kpi-value">{{ recent_transactions|length }} <small>giao dịch</small></strong>
+      <span class="inventory-kpi-sub">Theo dõi xuất bán &amp; nhập kho</span>
+    </div>
+  </div>
+</div>
+
 {% if low_stock_count %}<div class="notice notice-warm">{% include 'pho_app/includes/icon.html' with name='bag' %}<div><strong>{{ low_stock_count }} nguyên liệu cần nhập thêm</strong><p>Xem bộ lọc “Cần nhập” để kiểm tra số lượng và bổ sung kịp thời.</p></div></div>{% endif %}
 <nav class="commerce-tabbar" role="tablist" aria-label="Quản lý tồn kho"><button id="tabBtnIngredients" role="tab" aria-selected="true" aria-controls="tabIngredientsSection" data-tab-target="tabIngredientsSection" data-tab-key="ingredients">Nguyên liệu</button><button id="tabBtnRecipes" role="tab" aria-selected="false" aria-controls="tabRecipesSection" data-tab-target="tabRecipesSection" data-tab-key="recipes">Định lượng món</button><button id="tabBtnHistory" role="tab" aria-selected="false" aria-controls="tabHistorySection" data-tab-target="tabHistorySection" data-tab-key="history">Lịch sử xuất nhập</button><button id="stockIncidentsTab" role="tab" aria-selected="false" aria-controls="stockIncidents" data-tab-target="stockIncidents" data-tab-key="incidents">Sự cố kho{% if stock_incidents %}<span class="tab-count">{{ stock_incidents|length }}</span>{% endif %}</button></nav>
 {% include 'pho_app/includes/inventory_ingredients.html' %}
-<section id="tabRecipesSection" role="tabpanel" aria-labelledby="tabBtnRecipes" hidden><div class="panel"><div class="commerce-section-head"><div><h2>Định lượng món, nước uống & topping</h2><p>Số nguyên liệu cần dùng cho một đơn vị bán.</p></div><button class="secondary-btn" data-dialog-open="recipeEditor">{% include 'pho_app/includes/icon.html' with name='plus' %} Thiết lập định lượng</button></div><div class="table-scroll commerce-table-wrap"><table class="data-table commerce-table"><thead><tr><th>Món / Topping</th><th>Nguyên liệu</th><th>Lượng / đơn vị bán</th><th></th></tr></thead><tbody>{% for recipe in recipes %}<tr><td><strong class="table-title">{% if recipe.menu_item %}{{ recipe.menu_item.name }}{% else %}{{ recipe.topping.name }}{% endif %}</strong><small>{% if recipe.menu_item %}{% if recipe.menu_item.category == 'DRINK' %}Nước uống{% else %}Món chính{% endif %}{% else %}Topping{% endif %}</small></td><td>{{ recipe.ingredient.name }}</td><td><span class="badge badge-blue">{{ recipe.quantity_required|floatformat:2 }} {{ recipe.ingredient.unit }}</span></td><td><form method="post" action="{% url 'admin_recipe_delete' recipe.pk %}" data-confirm="Xóa định lượng này?">{% csrf_token %}<button class="icon-button danger" aria-label="Xóa định lượng {{ recipe.ingredient.name }}">{% include 'pho_app/includes/icon.html' with name='trash' %}</button></form></td></tr>{% empty %}<tr><td colspan="4"><div class="commerce-empty"><strong>Chưa có định lượng món</strong><p>Thêm nguyên liệu cần dùng để hệ thống tính tồn có thể bán.</p></div></td></tr>{% endfor %}</tbody></table></div></div></section>
-<section id="tabHistorySection" role="tabpanel" aria-labelledby="tabBtnHistory" hidden><div class="panel"><div class="commerce-section-head"><div><h2>Lịch sử xuất nhập kho</h2><p>40 biến động gần nhất, gồm nhập kho, xuất bán và điều chỉnh.</p></div></div><div class="table-scroll commerce-table-wrap"><table class="data-table commerce-table"><thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Loại</th><th>Biến động</th><th>Người ghi nhận</th></tr></thead><tbody>{% for tx in recent_transactions %}<tr><td>{{ tx.created_at|date:'H:i · d/m/Y' }}</td><td class="table-title">{{ tx.ingredient.name }}</td><td><span class="badge badge-{% if tx.transaction_type == 'IMPORT' %}green{% elif tx.transaction_type == 'EXPORT' %}orange{% else %}blue{% endif %}">{{ tx.get_transaction_type_display }}</span></td><td class="commerce-value {% if tx.quantity_changed > 0 %}value-green{% else %}value-brand{% endif %}">{% if tx.quantity_changed > 0 %}+{% endif %}{{ tx.quantity_changed|floatformat:1 }} {{ tx.ingredient.unit }}</td><td>{{ tx.created_by.display_name|default:'Hệ thống đơn hàng' }}</td></tr>{% empty %}<tr><td colspan="5"><div class="commerce-empty"><strong>Chưa có biến động kho</strong><p>Lịch sử được ghi lại khi phát sinh xuất nhập.</p></div></td></tr>{% endfor %}</tbody></table></div></div></section>
+<section id="tabRecipesSection" role="tabpanel" aria-labelledby="tabBtnRecipes" data-auto-paginate="20" hidden>
+  <div class="panel">
+    <div class="commerce-section-head">
+      <div>
+        <h2>Định lượng món, nước uống &amp; topping</h2>
+        <p>Quản lý tập trung công thức tiêu hao theo từng món. Nhấn vào dòng để xem chi tiết hoặc chỉnh sửa.</p>
+      </div>
+      <button class="secondary-btn" data-dialog-open="recipeEditor" data-recipe-target="MENU">{% include 'pho_app/includes/icon.html' with name='plus' %} Thiết lập định lượng</button>
+    </div>
+
+    <!-- Thanh công cụ tìm kiếm và lọc nhanh -->
+    <div class="recipe-toolbar">
+      <div class="catalog-tabs" role="group" aria-label="Lọc nhóm món" data-recipe-filter-group>
+        <button type="button" class="active" data-recipe-filter="all" aria-pressed="true">Tất cả <span class="tab-count">{{ recipe_filter_counts.all }}</span></button>
+        <button type="button" data-recipe-filter="MENU" aria-pressed="false">Món chính <span class="tab-count">{{ recipe_filter_counts.menu }}</span></button>
+        <button type="button" data-recipe-filter="DRINK" aria-pressed="false">Nước uống <span class="tab-count">{{ recipe_filter_counts.drink }}</span></button>
+        <button type="button" data-recipe-filter="TOPPING" aria-pressed="false">Topping <span class="tab-count">{{ recipe_filter_counts.topping }}</span></button>
+        <button type="button" data-recipe-filter="missing" aria-pressed="false">⚠️ Chưa cài định lượng <span class="tab-count">{{ recipe_filter_counts.missing }}</span></button>
+      </div>
+      <label class="search-field">
+        {% include 'pho_app/includes/icon.html' with name='search' %}
+        <input type="search" data-recipe-search placeholder="Tìm theo tên món hoặc nguyên liệu…" aria-label="Tìm theo tên món hoặc nguyên liệu">
+      </label>
+    </div>
+
+    <div class="table-scroll commerce-table-wrap">
+      <table class="data-table commerce-table recipe-master-table">
+        <thead>
+          <tr>
+            <th style="min-width: 220px;">Món / Topping</th>
+            <th style="width: 170px;">Trạng thái</th>
+            <th>Tóm tắt công thức (Nhấn để xem chi tiết)</th>
+            <th class="text-right" style="width: 150px;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in product_recipes %}
+          <!-- Dòng sản phẩm (Master Row) -->
+          <tr class="recipe-master-row" 
+              id="recipe-row-{{ p.target }}-{{ p.id }}" 
+              data-recipe-row 
+              data-kind="{{ p.target }}" 
+              data-search="{{ p.name }} {{ p.search_keywords }}" 
+              data-configured="{% if p.has_recipe %}yes{% else %}no{% endif %}">
+            <td class="recipe-col-product">
+              <div class="stock-row-title">
+                <span class="stat-icon {{ p.tone_class }}">
+                  {% if p.target == 'MENU' %}
+                    {% include 'pho_app/includes/icon.html' with name='menu' %}
+                  {% elif p.target == 'DRINK' %}
+                    {% include 'pho_app/includes/icon.html' with name='bag' %}
+                  {% else %}
+                    {% include 'pho_app/includes/icon.html' with name='check' %}
+                  {% endif %}
+                </span>
+                <div>
+                  <strong class="table-title">{{ p.name }}</strong>
+                  <div class="recipe-sub-meta">
+                    <span class="recipe-cat-badge">{{ p.category_display }}</span>
+                    {% if p.has_recipe and p.max_servings is not None %}
+                      <span class="recipe-servings-hint" title="Ước tính số phần có thể phục vụ từ tồn kho khả dụng hiện tại">
+                        Kho đủ: <strong>~{{ p.max_servings }}</strong> phần
+                      </span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td>
+              {% if p.inventory_mode == 'DIRECT' %}
+                <span class="recipe-status-pill tone-blue">
+                  <span class="dot"></span> Đóng chai / lon
+                </span>
+              {% elif p.has_recipe %}
+                <span class="recipe-status-pill tone-green">
+                  <span class="dot"></span> {{ p.ingredient_count }} nguyên liệu
+                </span>
+              {% else %}
+                <span class="recipe-status-pill tone-orange">
+                  <span class="dot"></span> Chưa thiết lập
+                </span>
+              {% endif %}
+            </td>
+            <td class="recipe-col-preview">
+              {% if p.inventory_mode == 'DIRECT' %}
+                <span class="recipe-direct-text">Đóng chai/lon sẵn · Xuất 1 đơn vị trực tiếp khi bán</span>
+              {% elif p.recipes %}
+                <div class="recipe-summary-box">
+                  <div class="recipe-chips-list">
+                    {% for r in p.display_recipes|slice:":3" %}
+                      <span class="recipe-chip-item">
+                        <strong class="chip-name">{{ r.name }}</strong>: 
+                        <span class="chip-qty">{{ r.formatted_qty }}</span>
+                      </span>
+                    {% endfor %}
+                    {% if p.recipes|length > 3 %}
+                      <span class="recipe-chip-item chip-more" data-toggle-recipe="{{ p.target }}-{{ p.id }}" title="Xem thêm {{ p.recipes|length|add:'-3' }} nguyên liệu">
+                        +{{ p.recipes|length|add:"-3" }} nguyên liệu khác
+                      </span>
+                    {% endif %}
+                  </div>
+                  <button type="button" class="btn-detail-toggle" data-toggle-recipe="{{ p.target }}-{{ p.id }}" aria-expanded="false" title="Nhấn xem chi tiết định lượng">
+                    <span class="toggle-label">Chi tiết</span>
+                    <span class="toggle-arrow">▾</span>
+                  </button>
+                </div>
+              {% else %}
+                <span class="recipe-unconfigured-text">
+                  ⚠️ Chưa có công thức. Nhấn <strong>Thiết lập</strong> để thêm nguyên liệu.
+                </span>
+              {% endif %}
+            </td>
+            <td class="text-right">
+              <div class="table-actions" style="justify-content: flex-end;">
+                <button class="secondary-btn" type="button" data-dialog-open="recipeEditor" data-recipe-target="{{ p.target }}" data-product-id="{{ p.id }}" title="Chỉnh sửa công thức">
+                  {% include 'pho_app/includes/icon.html' with name='edit' %} {% if p.has_recipe %}Sửa{% else %}Thiết lập{% endif %}
+                </button>
+                {% if p.recipes %}
+                <form method="post" action="{% url 'admin_recipe_clear_product' p.kind p.id %}" data-confirm="Xóa toàn bộ định lượng của {{ p.name }}?">
+                  {% csrf_token %}
+                  <button class="icon-button danger" aria-label="Xóa định lượng {{ p.name }}" title="Xóa toàn bộ định lượng">
+                    {% include 'pho_app/includes/icon.html' with name='trash' %}
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+
+          <!-- Dòng chi tiết mở rộng (Accordion Detail Card) -->
+          {% if p.recipes %}
+          <tr class="recipe-detail-row" 
+              id="detail-{{ p.target }}-{{ p.id }}" 
+              data-master-row-id="recipe-row-{{ p.target }}-{{ p.id }}" 
+              style="display: none;">
+            <td colspan="4" class="recipe-detail-cell">
+              <div class="recipe-detail-card">
+                <div class="recipe-detail-head">
+                  <div class="detail-head-title">
+                    <span class="detail-icon">🍲</span>
+                    <div>
+                      <h4>Công thức chi tiết: <strong>{{ p.name }}</strong></h4>
+                      <p>Tiêu chuẩn định lượng tiêu hao cho 1 tô / 1 phần bán ra</p>
+                    </div>
+                  </div>
+                  <div class="detail-head-actions">
+                    {% if p.max_servings is not None %}
+                      <div class="detail-capacity-pill">
+                        <span class="capacity-title">Khả năng phục vụ từ kho:</span>
+                        <strong class="capacity-num">~{{ p.max_servings }} phần</strong>
+                      </div>
+                    {% endif %}
+                    <button class="secondary-btn" type="button" data-dialog-open="recipeEditor" data-recipe-target="{{ p.target }}" data-product-id="{{ p.id }}">
+                      {% include 'pho_app/includes/icon.html' with name='edit' %} Chỉnh sửa công thức
+                    </button>
+                    <button class="icon-button" type="button" data-close-recipe="{{ p.target }}-{{ p.id }}" title="Thu gọn chi tiết">
+                      {% include 'pho_app/includes/icon.html' with name='close' %}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="recipe-subtable-wrap">
+                  <table class="recipe-subtable">
+                    <thead>
+                      <tr>
+                        <th style="width: 40px;">#</th>
+                        <th>Nguyên liệu</th>
+                        <th>Định lượng / 1 phần</th>
+                        <th>Tồn kho khả dụng hiện tại</th>
+                        <th>Ước tính phục vụ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for r in p.display_recipes %}
+                      <tr>
+                        <td class="sub-col-idx">{{ forloop.counter }}</td>
+                        <td class="sub-col-name">
+                          <strong>{{ r.name }}</strong>
+                          <span class="sub-badge-usage">{{ r.usage_display }}</span>
+                        </td>
+                        <td class="sub-col-qty">
+                          <span class="sub-qty-val">{{ r.formatted_qty }}</span>
+                          {% if r.raw_qty_note %}
+                            <small class="sub-qty-raw">({{ r.raw_qty_note }})</small>
+                          {% endif %}
+                        </td>
+                        <td class="sub-col-stock">
+                          <span class="sub-stock-badge {% if r.is_low_stock %}stock-danger{% else %}stock-ok{% endif %}">
+                            {{ r.available_stock|floatformat:2 }} {{ r.unit }}
+                          </span>
+                        </td>
+                        <td class="sub-col-servings">
+                          {% if r.servings %}
+                            <span class="sub-serving-text">Đủ ~<strong>{{ r.servings }}</strong> phần</span>
+                          {% else %}
+                            <span class="sub-serving-empty">Hết hàng</span>
+                          {% endif %}
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="recipe-detail-foot">
+                  <span class="detail-note">💡 Định lượng được tự động trừ kho khi chế biến hoặc chốt hóa đơn.</span>
+                  <button type="button" class="btn-collapse" data-close-recipe="{{ p.target }}-{{ p.id }}">▲ Thu gọn bảng chi tiết</button>
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% endif %}
+          {% empty %}
+          <tr>
+            <td colspan="4">
+              <div class="commerce-empty">
+                <strong>Chưa có sản phẩm nào</strong>
+                <p>Hãy thêm món ăn hoặc topping trong mục Thực đơn trước.</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+</section>
+<section id="tabHistorySection" role="tabpanel" aria-labelledby="tabBtnHistory" data-auto-paginate="20" hidden><div class="panel"><div class="commerce-section-head"><div><h2>Lịch sử xuất nhập kho</h2><p>Toàn bộ biến động kho, gồm nhập kho, xuất bán và điều chỉnh (20 bản ghi / trang).</p></div></div><div class="table-scroll commerce-table-wrap"><table class="data-table commerce-table"><thead><tr><th>Thời gian</th><th>Nguyên liệu</th><th>Loại</th><th>Biến động</th><th>Người ghi nhận</th></tr></thead><tbody>{% for tx in recent_transactions %}<tr><td>{{ tx.created_at|date:'H:i · d/m/Y' }}</td><td class="table-title">{{ tx.ingredient.name }}</td><td><span class="badge badge-{% if tx.transaction_type == 'IMPORT' %}green{% elif tx.transaction_type == 'EXPORT' %}orange{% else %}blue{% endif %}">{{ tx.get_transaction_type_display }}</span></td><td class="commerce-value {% if tx.quantity_changed > 0 %}value-green{% else %}value-brand{% endif %}">{% if tx.quantity_changed > 0 %}+{% endif %}{{ tx.quantity_changed|floatformat:1 }} {{ tx.ingredient.unit }}</td><td>{{ tx.created_by.display_name|default:'Hệ thống đơn hàng' }}</td></tr>{% empty %}<tr><td colspan="5"><div class="commerce-empty"><strong>Chưa có biến động kho</strong><p>Lịch sử được ghi lại khi phát sinh xuất nhập.</p></div></td></tr>{% endfor %}</tbody></table></div></div></section>
 {% include 'pho_app/includes/stock_operations.html' %}
 </div>
 <dialog class="commerce-dialog" id="importEditor" aria-labelledby="importEditorTitle"><header class="commerce-dialog-head"><div><h2 id="importEditorTitle">Nhập thêm nguyên liệu</h2><p data-import-name></p></div><button class="icon-button" type="button" data-dialog-close aria-label="Đóng">{% include 'pho_app/includes/icon.html' with name='close' %}</button></header><form class="commerce-form" method="post">{% csrf_token %}<div class="commerce-dialog-body"><div class="form-grid"><div class="form-group"><label for="importQuantity">Số lượng nhập</label><input id="importQuantity" class="form-input" type="number" min="0.01" step="0.01" name="quantity" required></div><div class="form-group"><label for="importUnit">Đơn vị nhập</label><input id="importUnit" class="form-input" name="input_unit" maxlength="50" required></div></div><p class="notice notice-info">Đơn vị lưu kho: <strong data-import-unit></strong>. Hỗ trợ quy đổi kg ↔ g, lít ↔ ml và ghi lại lượng nhập thực tế.</p></div><footer class="commerce-dialog-actions"><button class="secondary-btn" type="button" data-dialog-close>Để sau</button><button class="primary-btn">Xác nhận nhập kho</button></footer></form></dialog>

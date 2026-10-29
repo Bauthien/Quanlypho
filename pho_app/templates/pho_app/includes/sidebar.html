@@ -13,8 +13,8 @@
         <a href="{% url 'admin_inventory' %}" {% if 'inventory' in request.resolver_match.url_name or 'ingredient' in request.resolver_match.url_name %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='bag' %}<span>Quản lý tồn kho</span>{% if low_stock_count %}<span class="badge" style="margin-left: auto; background: #c24134; color: white; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700;" title="{{ low_stock_count }} nguyên liệu sắp hết">{{ low_stock_count }}</span>{% endif %}</a>
         {% endif %}
         {% if user.is_staff_role or user.is_admin_role %}
-        <a href="{% url 'service_queue' %}" {% if request.resolver_match.url_name == 'service_queue' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='truck' %}<span>Hỗ trợ đơn & giao nhận</span></a>
-        <a href="{% url 'delivery_queue' %}" {% if request.resolver_match.url_name == 'delivery_queue' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='truck' %}<span>Giao hàng</span></a>
+        <a href="{% url 'service_queue' %}" {% if request.resolver_match.url_name == 'service_queue' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='orders' %}<span>Hỗ trợ & khiếu nại</span></a>
+        <a href="{% url 'delivery_queue' %}" {% if request.resolver_match.url_name == 'delivery_queue' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='truck' %}<span>Điều phối giao hàng</span></a>
         <a href="{% url 'staff_home' %}" {% if request.resolver_match.url_name == 'staff_home' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='wallet' %}<span>Thu ngân</span></a>
         <a href="{% url 'table_map' %}" {% if request.resolver_match.url_name == 'table_map' or request.resolver_match.url_name == 'admin_table_create' or request.resolver_match.url_name == 'admin_table_edit' %}aria-current="page"{% endif %}>{% include 'pho_app/includes/icon.html' with name='table' %}<span>Sơ đồ bàn & QR</span></a>
         {% endif %}

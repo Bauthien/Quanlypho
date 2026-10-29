@@ -1,41 +1,130 @@
-<section id="tabIngredientsSection" role="tabpanel" aria-labelledby="tabBtnIngredients" data-filter-list data-inventory-groups data-list-category-param="stock_group">
+<section id="tabIngredientsSection" role="tabpanel" aria-labelledby="tabBtnIngredients" data-filter-list data-inventory-groups data-list-category-param="stock_group" data-auto-paginate="20">
   <div class="panel">
     <div class="inventory-group-toolbar">
       <div class="catalog-tabs inventory-group-tabs" role="group" aria-label="Nhóm nguyên liệu">
         <button type="button" class="active" data-list-category="PHO" aria-pressed="true">Món chính <span class="tab-count">{{ food_ingredient_count }}</span></button>
         <button type="button" data-list-category="DRINK" aria-pressed="false">Nước uống <span class="tab-count">{{ drink_ingredient_count }}</span></button>
       </div>
-      <p class="field-help">Nguyên liệu dùng chung có mặt ở cả hai nhóm và dùng cùng một số tồn kho.</p>
+      <p class="field-help">Nguyên liệu dùng chung (hành, tỏi, gia vị...) hiển thị ở cả 2 nhóm và dùng chung tồn kho.</p>
     </div>
     <div class="commerce-toolbar">
-      <label class="search-field">{% include 'pho_app/includes/icon.html' with name='search' %}<input type="search" data-list-search placeholder="Tìm nguyên liệu trong nhóm…" aria-label="Tìm nguyên liệu trong nhóm"></label>
-      <div class="catalog-tabs" role="group" aria-label="Trạng thái nguyên liệu"><button type="button" class="active" data-list-filter="all" aria-pressed="true">Tất cả</button><button type="button" data-list-filter="low" aria-pressed="false">Cần nhập</button><button type="button" data-list-filter="held" aria-pressed="false">Đang giữ</button></div>
+      <label class="search-field">
+        {% include 'pho_app/includes/icon.html' with name='search' %}
+        <input type="search" data-list-search placeholder="Tìm tên nguyên liệu…" aria-label="Tìm tên nguyên liệu">
+      </label>
+      <div class="catalog-tabs" role="group" aria-label="Trạng thái nguyên liệu">
+        <button type="button" class="active" data-list-filter="all" aria-pressed="true">Tất cả</button>
+        <button type="button" data-list-filter="low" aria-pressed="false">⚠️ Cần nhập thêm</button>
+      </div>
     </div>
     <div class="table-scroll commerce-table-wrap">
-      <table class="data-table commerce-table">
-        <thead><tr><th>Nguyên liệu</th><th>Nhóm sử dụng</th><th>Tồn thực tế</th><th>Đang giữ</th><th>Khả dụng</th><th>Ngưỡng tối thiểu</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+      <table class="data-table commerce-table ingredient-clean-table">
+        <thead>
+          <tr>
+            <th style="min-width: 220px;">Nguyên liệu</th>
+            <th style="width: 140px;">Phân loại</th>
+            <th style="width: 160px;">Tồn kho khả dụng</th>
+            <th style="width: 150px;">Mức tồn kho</th>
+            <th style="width: 130px;">Ngưỡng an toàn</th>
+            <th style="width: 130px;">Trạng thái</th>
+            <th class="text-right" style="width: 150px;">Thao tác</th>
+          </tr>
+        </thead>
         <tbody>
           {% for ing in ingredients %}
           <tr data-list-record data-search="{{ ing.name }}" data-category="{% if ing.usage == 'SHARED' %}PHO DRINK{% else %}{{ ing.usage }}{% endif %}" data-state="{% if ing.current_stock <= ing.minimum_stock %}low{% endif %} {% if ing.held_stock %}held{% endif %}">
-            <td><div class="stock-row-title"><span class="stat-icon {% if ing.current_stock <= ing.minimum_stock %}tone-red{% else %}tone-blue{% endif %}">{% include 'pho_app/includes/icon.html' with name='bag' %}</span><div><strong class="table-title">{{ ing.name }}</strong><small>NL-{{ ing.pk }} · {{ ing.unit }}</small></div></div></td>
-            <td><span class="badge{% if ing.usage == 'SHARED' %} badge-blue{% endif %}">{% if ing.usage == 'SHARED' %}Dùng chung{% elif ing.usage == 'DRINK' %}Nước uống{% else %}Món chính{% endif %}</span></td>
-            <td class="stock-number">{{ ing.current_stock|floatformat:1 }}</td>
-            <td>{{ ing.held_stock|floatformat:1 }}</td>
-            <td class="stock-number {% if ing.available_stock <= ing.minimum_stock %}warning{% else %}available{% endif %}">{{ ing.available_stock|floatformat:1 }} <small>{{ ing.unit }}</small></td>
-            <td>{{ ing.minimum_stock|floatformat:1 }} <small>{{ ing.unit }}</small></td>
-            <td><span class="badge badge-{% if ing.current_stock <= ing.minimum_stock %}orange{% elif ing.held_stock %}blue{% else %}green{% endif %}">{% if ing.current_stock <= ing.minimum_stock %}Cần nhập{% elif ing.held_stock %}Đang giữ{% else %}Ổn định{% endif %}</span></td>
-            <td><div class="table-actions"><button class="secondary-btn" type="button" data-dialog-open="importEditor" data-import-url="{% url 'admin_ingredient_import' ing.pk %}" data-ingredient-name="{{ ing.name }}" data-ingredient-unit="{{ ing.unit }}">{% include 'pho_app/includes/icon.html' with name='plus' %} Nhập</button><a class="icon-button" href="{% url 'admin_ingredient_edit' ing.pk %}" aria-label="Sửa {{ ing.name }}">{% include 'pho_app/includes/icon.html' with name='edit' %}</a><form method="post" action="{% url 'admin_ingredient_delete' ing.pk %}" data-confirm="Xóa nguyên liệu này khỏi danh mục?">{% csrf_token %}<button class="icon-button danger" aria-label="Xóa {{ ing.name }}">{% include 'pho_app/includes/icon.html' with name='trash' %}</button></form></div></td>
+            <td>
+              <div class="stock-row-title">
+                <span class="stat-icon {% if ing.current_stock <= ing.minimum_stock %}tone-red{% else %}tone-blue{% endif %}">
+                  {% include 'pho_app/includes/icon.html' with name='bag' %}
+                </span>
+                <div>
+                  <strong class="table-title">{{ ing.name }}</strong>
+                  <small>Đơn vị quản lý: {{ ing.unit }}</small>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="badge{% if ing.usage == 'SHARED' %} badge-blue{% endif %}">
+                {% if ing.usage == 'SHARED' %}Dùng chung{% elif ing.usage == 'DRINK' %}Nước uống{% else %}Món chính{% endif %}
+              </span>
+            </td>
+            <td>
+              <div class="stock-qty-cell">
+                <strong class="stock-main-qty {% if ing.available_stock <= ing.minimum_stock %}val-danger{% else %}val-success{% endif %}">
+                  {{ ing.available_stock|floatformat:1 }} <span class="unit-text">{{ ing.unit }}</span>
+                </strong>
+                {% if ing.held_stock > 0 %}
+                  <small class="stock-held-hint" title="Lượng nguyên liệu đang giữ cho đơn chờ">(Đang giữ: {{ ing.held_stock|floatformat:1 }} {{ ing.unit }})</small>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              <div class="stock-progress-wrap" title="Tồn khả dụng: {{ ing.available_stock|floatformat:1 }} / Ngưỡng tối thiểu: {{ ing.minimum_stock|floatformat:1 }} {{ ing.unit }}">
+                <div class="stock-progress-bar">
+                  <div class="progress-fill {% if ing.available_stock <= ing.minimum_stock %}fill-danger{% elif ing.available_stock <= ing.minimum_stock|add:ing.minimum_stock %}fill-warning{% else %}fill-success{% endif %}"
+                       style="width: {% if ing.minimum_stock > 0 %}{% widthratio ing.available_stock ing.minimum_stock 50 %}{% else %}100{% endif %}%; max-width: 100%;"></div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="stock-min-val">{{ ing.minimum_stock|floatformat:1 }} <small>{{ ing.unit }}</small></span>
+            </td>
+            <td>
+              <span class="badge badge-{% if ing.current_stock <= ing.minimum_stock %}orange{% elif ing.held_stock %}blue{% else %}green{% endif %}">
+                {% if ing.current_stock <= ing.minimum_stock %}Cần nhập{% elif ing.held_stock %}Đang giữ{% else %}Ổn định{% endif %}
+              </span>
+            </td>
+            <td class="text-right">
+              <div class="table-actions" style="justify-content: flex-end;">
+                <button class="secondary-btn btn-sm" type="button" data-dialog-open="importEditor" data-import-url="{% url 'admin_ingredient_import' ing.pk %}" data-ingredient-name="{{ ing.name }}" data-ingredient-unit="{{ ing.unit }}" title="Nhập thêm vào kho">
+                  {% include 'pho_app/includes/icon.html' with name='plus' %} Nhập kho
+                </button>
+                <a class="icon-button" href="{% url 'admin_ingredient_edit' ing.pk %}" aria-label="Sửa {{ ing.name }}" title="Sửa thông tin nguyên liệu">
+                  {% include 'pho_app/includes/icon.html' with name='edit' %}
+                </a>
+                <form method="post" action="{% url 'admin_ingredient_delete' ing.pk %}" data-confirm="Xóa nguyên liệu {{ ing.name }} khỏi kho?">
+                  {% csrf_token %}
+                  <button class="icon-button danger" aria-label="Xóa {{ ing.name }}" title="Xóa nguyên liệu">
+                    {% include 'pho_app/includes/icon.html' with name='trash' %}
+                  </button>
+                </form>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    <div class="commerce-empty" data-list-empty hidden><span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='bag' %}</span><strong>Không tìm thấy nguyên liệu trong nhóm</strong><p>Thử tìm kiếm khác, đổi trạng thái hoặc thêm nguyên liệu vào nhóm đang chọn.</p></div>
-    <div class="inventory-group-footer">
-      <p class="commerce-results" aria-live="polite"><span data-list-count>{{ food_ingredient_count }}</span> nguyên liệu · <span data-inventory-group-name>Món chính</span></p>
-      <button class="secondary-btn" type="button" data-dialog-open="recipeEditor" data-recipe-target="MENU" data-inventory-recipe>Thiết lập định lượng</button>
+    <div class="commerce-empty" data-list-empty hidden>
+      <span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='bag' %}</span>
+      <strong>Không tìm thấy nguyên liệu phù hợp</strong>
+      <p>Thử tìm kiếm khác hoặc kiểm tra lại bộ lọc.</p>
     </div>
-    <p class="commerce-results">Khả dụng = tồn thực tế − lượng đang giữ. Lượng giữ được chuyển thành xuất kho khi thanh toán được xác nhận.</p>
   </div>
-  {% include 'pho_app/includes/stock_holds.html' %}
+
+  {% if stock_holds %}
+  <!-- Chỉ hiển thị khi thực sự có đơn giữ nguyên liệu -->
+  <div class="stock-active-holds-alert">
+    <div class="holds-alert-head">
+      <span class="holds-icon">⏳</span>
+      <div>
+        <strong>Đang có đơn hàng giữ nguyên liệu tạm thời</strong>
+        <p>Nguyên liệu được giữ tạm trong lúc khách thanh toán và sẽ tự động trừ kho ngay khi xác nhận đơn.</p>
+      </div>
+    </div>
+    <div class="holds-list">
+      {% for hold in stock_holds %}
+      <div class="hold-item">
+        <a class="text-button" href="{% url 'order_detail' hold.order_id %}">{{ hold.order.order_code }}</a>
+        <span>Hết hạn: {{ hold.expires_at|date:'H:i' }} · 
+          {% for line in hold.lines.all %}
+            {{ line.ingredient.name }} ({{ line.quantity|floatformat:1 }} {{ line.ingredient.unit }}){% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </section>

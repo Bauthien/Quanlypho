@@ -144,3 +144,106 @@
   .figma-module .profile-avatar-actions { width: 100%; }
 }
 @media (prefers-reduced-motion:reduce) { .figma-module * { scroll-behavior: auto; } }
+\n
+/* Enhanced Delivery Queue Card Styling */
+.delivery-orders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.delivery-record {
+  background: #ffffff;
+  border: 1px solid var(--border, #e4dfd7);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.delivery-record:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
+}
+.delivery-record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eeebe5;
+}
+.delivery-head-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.order-code-tag {
+  font-size: 13px;
+  color: var(--brand-dark, #8b2319);
+  background: var(--brand-soft, #fdf5f4);
+  border: 1px solid #f9dedc;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.phone-link {
+  color: #1e40af;
+  font-weight: 600;
+  text-decoration: none;
+}
+.phone-link:hover {
+  text-decoration: underline;
+}
+.delivery-address-box {
+  margin: 12px 0 10px;
+}
+.delivery-dest {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink, #2d2621);
+  margin-bottom: 8px;
+}
+.delivery-chips-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-soft, #f8f5f1);
+  border: 1px solid var(--border, #e4dfd7);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink, #2d2621);
+}
+.delivery-customer-note {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #92400e;
+  margin: 10px 0;
+}
+.delivery-customer-note .note-label {
+  font-weight: 600;
+  color: #78350f;
+}
+.attempt-log {
+  padding: 6px 10px;
+  background: #fcfaf7;
+  border-radius: 6px;
+  border: 1px solid #eeebe5;
+  margin-bottom: 6px;
+}
+.attempt-log strong {
+  display: block;
+  font-size: 12px;
+  color: var(--ink, #2d2621);
+}
+.attempt-log small {
+  font-size: 11px;
+  color: var(--muted, #70685f);
+}

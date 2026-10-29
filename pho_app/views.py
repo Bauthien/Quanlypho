@@ -1273,7 +1273,7 @@ def admin_inventory(request):
         ingredient.held_stock = held.get(ingredient.pk, 0)
         ingredient.available_stock = available.get(ingredient.pk, 0)
     recipes = Recipe.objects.select_related('menu_item', 'topping', 'ingredient').all().order_by('menu_item__name', 'topping__name')
-    recent_transactions = InventoryTransaction.objects.select_related('ingredient', 'created_by').order_by('-created_at')[:40]
+    recent_transactions = list(InventoryTransaction.objects.select_related('ingredient', 'created_by').order_by('-created_at'))
 
     total_ingredients = len(ingredients)
     shared_ingredient_count = sum(ingredient.usage == Ingredient.Usage.SHARED for ingredient in ingredients)
@@ -1293,9 +1293,106 @@ def admin_inventory(request):
     for line in InventoryRequirement.objects.filter(reservation__order__in=stock_orders).select_related('reservation'):
         stock_order_options[str(line.reservation.order_id)].append(line.ingredient_id)
 
+    ing_map = {i.pk: i for i in ingredients}
+
+    def format_qty_and_servings(r):
+        ing = ing_map.get(r.ingredient_id, r.ingredient)
+        unit = (ing.unit or '').strip().lower()
+        qty = r.quantity_required
+        avail = getattr(ing, 'available_stock', ing.current_stock)
+        
+        if unit == 'kg' and qty < 1:
+            formatted_qty = f'{int(qty * 1000)} g'
+            raw_qty_note = f'{qty:g} kg'
+        elif unit == 'lit' and qty < 1:
+            formatted_qty = f'{int(qty * 1000)} ml'
+            raw_qty_note = f'{qty:g} lít'
+        else:
+            formatted_qty = f'{qty:g} {ing.unit}'
+            raw_qty_note = ''
+
+        servings = int(avail / qty) if qty > 0 and avail > 0 else 0
+        is_low = avail <= ing.minimum_stock
+        usage_names = {'PHO': 'Món chính', 'DRINK': 'Nước uống', 'SHARED': 'Dùng chung'}
+        usage_display = usage_names.get(ing.usage, ing.usage)
+
+        return {
+            'id': r.pk,
+            'ingredient_id': ing.pk,
+            'name': ing.name,
+            'unit': ing.unit,
+            'usage_display': usage_display,
+            'quantity_required': qty,
+            'formatted_qty': formatted_qty,
+            'raw_qty_note': raw_qty_note,
+            'available_stock': avail,
+            'is_low_stock': is_low,
+            'servings': servings,
+        }
+
+    recipe_list = list(recipes)
+    product_recipes = []
+    for item in menu_items:
+        item_recipes = [r for r in recipe_list if r.menu_item_id == item.pk]
+        target = 'DRINK' if item.category == MenuItem.Category.DRINK else 'MENU'
+        display_recipes = [format_qty_and_servings(r) for r in item_recipes]
+        servings_list = [d['servings'] for d in display_recipes if d['quantity_required'] > 0]
+        max_servings = min(servings_list) if servings_list else None
+        search_kw = ' '.join(d['name'] for d in display_recipes)
+        product_recipes.append({
+            'id': item.pk,
+            'name': item.name,
+            'kind': 'menu',
+            'target': target,
+            'category': item.category,
+            'category_display': 'Nước uống' if item.category == MenuItem.Category.DRINK else 'Món chính',
+            'inventory_mode': item.inventory_mode,
+            'inventory_mode_display': 'Đóng chai / lon' if item.inventory_mode == 'DIRECT' else 'Pha chế (BOM)' if item.category == MenuItem.Category.DRINK else 'Định lượng (BOM)',
+            'recipes': item_recipes,
+            'display_recipes': display_recipes,
+            'ingredient_count': len(item_recipes),
+            'has_recipe': len(item_recipes) > 0 or item.inventory_mode == 'DIRECT',
+            'max_servings': max_servings,
+            'search_keywords': search_kw,
+            'tone_class': 'tone-red' if target == 'MENU' else 'tone-blue',
+        })
+    for item in toppings:
+        item_recipes = [r for r in recipe_list if r.topping_id == item.pk]
+        display_recipes = [format_qty_and_servings(r) for r in item_recipes]
+        servings_list = [d['servings'] for d in display_recipes if d['quantity_required'] > 0]
+        max_servings = min(servings_list) if servings_list else None
+        search_kw = ' '.join(d['name'] for d in display_recipes)
+        product_recipes.append({
+            'id': item.pk,
+            'name': item.name,
+            'kind': 'topping',
+            'target': 'TOPPING',
+            'category': item.category or 'PHO',
+            'category_display': 'Topping',
+            'inventory_mode': 'BOM',
+            'inventory_mode_display': 'Topping (BOM)',
+            'recipes': item_recipes,
+            'display_recipes': display_recipes,
+            'ingredient_count': len(item_recipes),
+            'has_recipe': len(item_recipes) > 0,
+            'max_servings': max_servings,
+            'search_keywords': search_kw,
+            'tone_class': 'tone-green',
+        })
+
+    recipe_filter_counts = {
+        'all': len(product_recipes),
+        'menu': sum(1 for p in product_recipes if p['target'] == 'MENU'),
+        'drink': sum(1 for p in product_recipes if p['target'] == 'DRINK'),
+        'topping': sum(1 for p in product_recipes if p['target'] == 'TOPPING'),
+        'missing': sum(1 for p in product_recipes if not p['has_recipe']),
+    }
+
     return render(request, 'pho_app/admin/inventory_list.html', {
         'ingredients': ingredients,
         'recipes': recipes,
+        'product_recipes': product_recipes,
+        'recipe_filter_counts': recipe_filter_counts,
         'recent_transactions': recent_transactions,
         'total_ingredients': total_ingredients,
         'food_ingredient_count': food_ingredient_count,
@@ -1479,6 +1576,58 @@ def admin_recipe_create(request):
 
 
 @admin_required
+@require_GET
+def admin_recipe_auto_suggest(request):
+    """
+    Đề xuất định lượng tự động bằng mô hình Domain-specific Semantic NLP and Heuristic Engine.
+    """
+    from .nlp_bom import suggest_recipe_bom
+    target_kind = request.GET.get('target', 'MENU')
+    product_id = request.GET.get('id')
+    scope = request.GET.get('scope', 'PHO')
+
+    product_name = ''
+    category = 'PHO'
+    if target_kind == 'TOPPING':
+        topping = get_object_or_404(Topping, pk=product_id)
+        product_name = topping.name
+        category = topping.category or scope
+    else:
+        menu_item = get_object_or_404(MenuItem, pk=product_id)
+        product_name = menu_item.name
+        category = menu_item.category
+
+    ingredients = list(
+        Ingredient.objects.filter(usage__in=[category, Ingredient.Usage.SHARED])
+        .values('id', 'name', 'unit', 'usage')
+    )
+
+    result = suggest_recipe_bom(
+        product_name=product_name,
+        category=category,
+        target_kind=target_kind,
+        available_ingredients=ingredients
+    )
+    return JsonResponse(result)
+
+
+@admin_required
+@require_POST
+def admin_recipe_clear_product(request, kind, product_id):
+    """Xóa toàn bộ công thức định lượng của một sản phẩm."""
+    if kind == 'topping':
+        item = get_object_or_404(Topping, pk=product_id)
+        count = item.recipes.count()
+        item.recipes.all().delete()
+    else:
+        item = get_object_or_404(MenuItem, pk=product_id)
+        count = item.recipes.count()
+        item.recipes.all().delete()
+    messages.success(request, f'Đã xóa định lượng ({count} nguyên liệu) của {item.name}.')
+    return redirect(reverse('admin_inventory') + '?view=recipes')
+
+
+@admin_required
 @require_POST
 def admin_recipe_delete(request, recipe_id):
     """Xóa công thức định lượng."""
@@ -1491,5 +1640,5 @@ def admin_recipe_delete(request, recipe_id):
 # All legacy stock/role/order mutation paths share the transaction gate.
 for _name in ('confirm_cash_payment', 'assign_order_table', 'free_table', 'free_order_table',
               'admin_ingredient_create', 'admin_ingredient_edit', 'admin_ingredient_import',
-              'admin_recipe_create', 'admin_recipe_delete', 'admin_update_role', 'submit_review', 'simulate_vietqr_payment'):
+              'admin_recipe_create', 'admin_recipe_delete', 'admin_recipe_clear_product', 'admin_update_role', 'submit_review', 'simulate_vietqr_payment'):
     globals()[_name] = serialized(globals()[_name])

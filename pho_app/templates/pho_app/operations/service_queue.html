@@ -1,28 +1,289 @@
 {% extends 'pho_app/base.html' %}
 {% load commerce_ui %}
-{% block title %}{% if delivery_only %}Giao hàng{% else %}Hỗ trợ đơn & hoàn tiền{% endif %} · Phở Nhà{% endblock %}
-{% block breadcrumb %}{% if delivery_only %}Giao hàng{% else %}Hỗ trợ đơn & hoàn tiền{% endif %}{% endblock %}
-{% block content %}<main class="workspace commerce-page figma-module" data-tabs {% if delivery_only %}data-force-tab="delivery"{% endif %}>
-  <header class="page-heading"><div><span class="eyebrow">ĐIỀU PHỐI & CHĂM SÓC KHÁCH HÀNG</span><h1>{% if delivery_only %}Giao hàng{% else %}Hỗ trợ đơn & hoàn tiền{% endif %}</h1><p>{% if delivery_only %}Theo dõi bàn giao, kết quả giao món và xử lý lượt giao gặp sự cố.{% else %}Tiếp nhận yêu cầu, theo dõi khoản hoàn và cập nhật kết quả xử lý.{% endif %}</p></div>{% if user.is_admin_role %}<form method="post" action="{% url 'commerce_maintenance' %}" data-commerce-submit>{% csrf_token %}<button class="secondary-btn">{% include 'pho_app/includes/icon.html' with name='clock' %} Xử lý đơn quá hạn</button></form>{% endif %}</header>
-  <nav {% if delivery_only %}hidden{% endif %} class="commerce-tabbar" role="tablist" aria-label="Hỗ trợ và giao nhận"><button id="cases-tab" role="tab" aria-selected="true" aria-controls="cases" data-tab-target="cases">{% include 'pho_app/includes/icon.html' with name='orders' %} Yêu cầu hỗ trợ <span class="tab-count">{{ cases|length }}</span></button><button id="delivery-tab" role="tab" aria-selected="false" aria-controls="delivery" data-tab-target="delivery">{% include 'pho_app/includes/icon.html' with name='truck' %} Giao nhận <span class="tab-count">{{ delivery_orders|length }}</span></button>{% if user.is_admin_role %}<button id="receipts-tab" role="tab" aria-selected="false" aria-controls="receipts" data-tab-target="receipts">{% include 'pho_app/includes/icon.html' with name='wallet' %} Đối soát tiền <span class="tab-count">{{ receipts|length }}</span></button>{% endif %}</nav>
+{% block title %}Hỗ trợ & khiếu nại · Phở Nhà{% endblock %}
+{% block breadcrumb %}Hỗ trợ & khiếu nại{% endblock %}
+{% block content %}
+<main class="workspace commerce-page figma-module" data-tabs>
+  <header class="page-heading">
+    <div>
+      <span class="eyebrow">CHĂM SÓC KHÁCH HÀNG & HẬU MÃI</span>
+      <h1>Hỗ trợ &amp; Khiếu nại</h1>
+      <p>Tiếp nhận phản ánh từ khách hàng, xét duyệt yêu cầu hoàn tiền hoặc tạo đơn giao bù.</p>
+    </div>
+    {% if user.is_admin_role %}
+    <form method="post" action="{% url 'commerce_maintenance' %}" data-commerce-submit>
+      {% csrf_token %}
+      <button class="secondary-btn">{% include 'pho_app/includes/icon.html' with name='clock' %} Xử lý đơn quá hạn</button>
+    </form>
+    {% endif %}
+  </header>
+
+  <nav class="commerce-tabbar" role="tablist" aria-label="Hỗ trợ khách hàng">
+    <button id="cases-tab" role="tab" aria-selected="true" aria-controls="cases" data-tab-target="cases">
+      {% include 'pho_app/includes/icon.html' with name='orders' %} Yêu cầu hỗ trợ <span class="tab-count">{{ cases|length }}</span>
+    </button>
+    {% if user.is_admin_role %}
+    <button id="receipts-tab" role="tab" aria-selected="false" aria-controls="receipts" data-tab-target="receipts">
+      {% include 'pho_app/includes/icon.html' with name='wallet' %} Đối soát tiền hoàn <span class="tab-count">{{ receipts|length }}</span>
+    </button>
+    {% endif %}
+  </nav>
+
   <section id="cases" role="tabpanel" aria-labelledby="cases-tab" data-filter-list>
-    <div class="commerce-toolbar"><label class="search-field">{% include 'pho_app/includes/icon.html' with name='search' %}<input type="search" data-list-search placeholder="Tìm mã đơn, lý do yêu cầu…" aria-label="Tìm yêu cầu hỗ trợ"></label><div class="catalog-tabs"><button class="active" data-list-filter="all" aria-pressed="true">Tất cả</button><button data-list-filter="OPEN" aria-pressed="false">Chờ duyệt</button><button data-list-filter="processing" aria-pressed="false">Đang xử lý</button><button data-list-filter="CLOSED" aria-pressed="false">Đã đóng</button></div></div>
-    {% for case in cases %}<details class="operation-case" id="case-{{ case.pk }}" data-list-record data-state="{{ case.state }} {% if case.state == 'APPROVED' or case.state == 'REFUNDING' or case.state == 'REPLACING' %}processing{% endif %}" data-search="{{ case.order.order_code }} {{ case.reason }} {{ case.pk }}"><summary><span class="stat-icon {% if case.state == 'OPEN' %}tone-orange{% else %}tone-blue{% endif %}">{% include 'pho_app/includes/icon.html' with name='orders' %}</span><div class="operation-case-summary"><strong>{{ case.order.order_code }} <span class="commerce-small">· Yêu cầu #{{ case.pk }}</span></strong><p>{{ case.get_kind_display }} · {{ case.reason }}</p></div><div class="operation-case-meta"><span class="badge badge-{{ case.state|state_tone }}">{{ case.get_state_display }}</span><small>{{ case.created_at|date:'H:i · d/m/Y' }}</small></div><span class="record-chevron">{% include 'pho_app/includes/icon.html' with name='arrow' %}</span></summary>
-      <div class="operation-case-body"><div class="commerce-grid"><div><dl class="operation-facts"><div><dt>Nội dung khách gửi</dt><dd>{{ case.reason }}</dd></div>{% if case.evidence %}<div><dt>Thông tin bằng chứng</dt><dd>{{ case.evidence }}</dd></div>{% endif %}<div><dt>Phần món cần xử lý</dt><dd>{% for unit in case.allocations.all %}{{ unit.label }} · phần {{ unit.unit }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</dd></div><div><dt>Phương án mong muốn</dt><dd>{{ case.get_remedy_display }}</dd></div>{% if case.decision_note %}<div><dt>Kết quả xét duyệt</dt><dd>{{ case.decision_note }}</dd></div>{% endif %}</dl><hr class="commerce-divider"><a class="text-button" href="{% url 'order_support' case.order_id %}">Xem đầy đủ yêu cầu {% include 'pho_app/includes/icon.html' with name='arrow' %}</a>{% if case.replacement_id %}<p><a class="text-button" href="{% url 'order_detail' case.replacement_id %}">Đơn giao bù {{ case.replacement.order_code }}</a></p>{% endif %}</div>
-      <div class="commerce-stack">{% if case.state == 'OPEN' and user.is_admin_role %}<form class="operation-action-box commerce-form" method="post" action="{% url 'service_action' case.pk %}">{% csrf_token %}<h3>Xét duyệt yêu cầu</h3><p class="commerce-muted">Ghi lý do để khách hiểu quyết định của cửa hàng.</p><div class="form-grid"><div class="form-group"><label for="decision-{{ case.pk }}">Lý do quyết định</label><textarea id="decision-{{ case.pk }}" class="form-input" name="note" required maxlength="2000" rows="3" placeholder="Kết quả kiểm tra và cách xử lý…"></textarea></div></div><div class="form-actions"><button class="secondary-btn" name="action" value="reject">Từ chối</button><button class="primary-btn" name="action" value="approve">Duyệt yêu cầu</button></div></form>{% endif %}
-      {% if case.state == 'APPROVED' and case.remedy == 'REPLACE' and user.is_admin_role %}<form class="operation-action-box commerce-form" method="post" action="{% url 'service_action' case.pk %}">{% csrf_token %}<h3>Yêu cầu đã được duyệt</h3><p class="commerce-muted">Tạo đơn làm lại từ đúng các phần món được duyệt.</p><div class="form-actions"><button class="primary-btn" name="action" value="replacement">Tạo đơn giao bù</button></div></form>{% endif %}
-      {% for plan in case.refund_plans.all %}<article class="operation-action-box"><div class="refund-entry-head"><div><p class="commerce-small">Số tiền hoàn</p><strong data-money="{{ plan.amount }}">{{ plan.amount }}đ</strong></div><span class="badge badge-{{ plan.state|state_tone }}">{{ plan.get_state_display }}</span></div><p class="commerce-small">Chứng từ {{ plan.receipt.provider }} · {{ plan.receipt.external_id }}</p>
-        {% if plan.receipt.provider == 'CASH' or user.is_admin_role %}
-          {% if plan.state == 'RESERVED' %}<form class="commerce-form" method="post" action="{% url 'service_action' case.pk %}">{% csrf_token %}<input type="hidden" name="plan_id" value="{{ plan.pk }}"><div class="form-grid"><div class="form-group"><label for="refund-ref-{{ plan.pk }}">Mã lệnh chuyển hoàn / phiếu chi</label><input id="refund-ref-{{ plan.pk }}" name="reference" class="form-input" required placeholder="Nhập mã chứng từ thực tế"></div></div><div class="form-actions"><button class="secondary-btn" name="action" value="begin_refund">Ghi lệnh hoàn đã thực hiện</button></div></form>{% endif %}
-          {% for attempt in plan.attempts.all %}<div class="refund-entry"><div class="refund-entry-head"><strong class="commerce-small">Lần #{{ attempt.pk }} · {{ attempt.reference }}</strong><span class="badge badge-{{ attempt.state|state_tone }}">{{ attempt.get_state_display }}</span></div>{% if attempt.note %}<p class="commerce-muted">{{ attempt.note }}</p>{% endif %}{% if attempt.state == 'SUBMITTED' or attempt.state == 'UNKNOWN' %}<form class="commerce-form" method="post" action="{% url 'service_action' case.pk %}">{% csrf_token %}<input type="hidden" name="action" value="confirm_refund"><input type="hidden" name="attempt_id" value="{{ attempt.pk }}"><div class="form-grid"><div class="form-group"><label for="refund-state-{{ attempt.pk }}">Kết quả đối soát</label><select id="refund-state-{{ attempt.pk }}" name="state" class="form-input"><option value="UNKNOWN">Chưa rõ kết quả · tiếp tục giữ ngân sách</option><option value="SUCCEEDED">Đã chi thành công</option><option value="FAILED_FINAL">Đã xác minh thất bại cuối cùng</option></select></div><div class="form-group"><label for="refund-proof-{{ attempt.pk }}">Bằng chứng đối soát</label><input id="refund-proof-{{ attempt.pk }}" name="note" class="form-input" required></div></div><div class="form-actions"><button class="primary-btn">Xác nhận kết quả</button></div></form>{% endif %}</div>{% endfor %}
-        {% else %}<p class="notice notice-info">Khoản hoàn chuyển khoản cần quản lý đối soát.</p>{% endif %}
-      </article>{% endfor %}{% if case.benefits_applied %}<p class="notice notice-success">{% include 'pho_app/includes/icon.html' with name='check' %} Đã xử lý điểm, ưu đãi và chi tiêu xét hạng.</p>{% endif %}</div></div></div>
-    </details>{% endfor %}
-    <div class="panel commerce-empty" data-list-empty hidden><span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='check' %}</span><strong>Không có yêu cầu phù hợp</strong><p>Yêu cầu mới từ khách sẽ xuất hiện tại đây. Thử đổi bộ lọc nếu cần.</p></div><p class="commerce-results">Hiển thị <span data-list-count>{{ cases|length }}</span> yêu cầu trong 100 yêu cầu gần nhất.</p>
+    <div class="commerce-toolbar">
+      <label class="search-field">
+        {% include 'pho_app/includes/icon.html' with name='search' %}
+        <input type="search" data-list-search placeholder="Tìm mã đơn, lý do yêu cầu…" aria-label="Tìm yêu cầu hỗ trợ">
+      </label>
+      <div class="catalog-tabs">
+        <button class="active" data-list-filter="all" aria-pressed="true">Tất cả <span class="tab-count">{{ cases|length }}</span></button>
+        <button data-list-filter="OPEN" aria-pressed="false">Chờ duyệt <span class="tab-count">{{ open_cases }}</span></button>
+        <button data-list-filter="processing" aria-pressed="false">Đang xử lý <span class="tab-count">{{ processing_cases }}</span></button>
+        <button data-list-filter="CLOSED" aria-pressed="false">Đã đóng <span class="tab-count">{{ closed_cases }}</span></button>
+      </div>
+    </div>
+
+    {% for case in cases %}
+    <details class="operation-case" id="case-{{ case.pk }}" data-list-record data-state="{{ case.state }} {% if case.state == 'APPROVED' or case.state == 'REFUNDING' or case.state == 'REPLACING' %}processing{% endif %}" data-search="{{ case.order.order_code }} {{ case.reason }} {{ case.pk }}">
+      <summary>
+        <span class="stat-icon {% if case.state == 'OPEN' %}tone-orange{% else %}tone-blue{% endif %}">
+          {% include 'pho_app/includes/icon.html' with name='orders' %}
+        </span>
+        <div class="operation-case-summary">
+          <strong>{{ case.order.order_code }} <span class="commerce-small">· Yêu cầu #{{ case.pk }}</span></strong>
+          <p>{{ case.get_kind_display }} · {{ case.reason }}</p>
+        </div>
+        <div class="operation-case-meta">
+          <span class="badge badge-{{ case.state|state_tone }}">{{ case.get_state_display }}</span>
+          <small>{{ case.created_at|date:'H:i · d/m/Y' }}</small>
+        </div>
+        <span class="record-chevron">{% include 'pho_app/includes/icon.html' with name='arrow' %}</span>
+      </summary>
+      <div class="operation-case-body">
+        <div class="commerce-grid">
+          <div>
+            <dl class="operation-facts">
+              <div>
+                <dt>Nội dung khách gửi</dt>
+                <dd>{{ case.reason }}</dd>
+              </div>
+              {% if case.evidence %}
+              <div>
+                <dt>Thông tin bằng chứng</dt>
+                <dd>{{ case.evidence }}</dd>
+              </div>
+              {% endif %}
+              <div>
+                <dt>Phần món cần xử lý</dt>
+                <dd>
+                  {% for unit in case.allocations.all %}
+                    {{ unit.label }} · phần {{ unit.unit }}{% if not forloop.last %}<br>{% endif %}
+                  {% endfor %}
+                </dd>
+              </div>
+              <div>
+                <dt>Phương án mong muốn</dt>
+                <dd>{{ case.get_remedy_display }}</dd>
+              </div>
+              {% if case.decision_note %}
+              <div>
+                <dt>Kết quả xét duyệt</dt>
+                <dd>{{ case.decision_note }}</dd>
+              </div>
+              {% endif %}
+            </dl>
+            <hr class="commerce-divider">
+            <a class="text-button" href="{% url 'order_support' case.order_id %}">Xem chi tiết đơn hàng {% include 'pho_app/includes/icon.html' with name='arrow' %}</a>
+            {% if case.replacement_id %}
+            <p><a class="text-button" href="{% url 'order_detail' case.replacement_id %}">Đơn giao bù {{ case.replacement.order_code }}</a></p>
+            {% endif %}
+          </div>
+          <div class="commerce-stack">
+            {% if case.state == 'OPEN' and user.is_admin_role %}
+            <form class="operation-action-box commerce-form" method="post" action="{% url 'service_action' case.pk %}">
+              {% csrf_token %}
+              <h3>Xét duyệt yêu cầu</h3>
+              <p class="commerce-muted">Ghi lý do để khách hiểu quyết định của cửa hàng.</p>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="decision-{{ case.pk }}">Lý do quyết định</label>
+                  <textarea id="decision-{{ case.pk }}" class="form-input" name="note" required maxlength="2000" rows="3" placeholder="Kết quả kiểm tra và cách xử lý…"></textarea>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="secondary-btn" name="action" value="reject">Từ chối</button>
+                <button class="primary-btn" name="action" value="approve">Duyệt yêu cầu</button>
+              </div>
+            </form>
+            {% endif %}
+
+            {% if case.state == 'APPROVED' and case.remedy == 'REPLACE' and user.is_admin_role %}
+            <form class="operation-action-box commerce-form" method="post" action="{% url 'service_action' case.pk %}">
+              {% csrf_token %}
+              <h3>Yêu cầu đã được duyệt</h3>
+              <p class="commerce-muted">Tạo đơn làm lại từ đúng các phần món được duyệt.</p>
+              <div class="form-actions">
+                <button class="primary-btn" name="action" value="replacement">Tạo đơn giao bù</button>
+              </div>
+            </form>
+            {% endif %}
+
+            {% for plan in case.refund_plans.all %}
+            <article class="operation-action-box">
+              <div class="refund-entry-head">
+                <div>
+                  <p class="commerce-small">Số tiền hoàn</p>
+                  <strong data-money="{{ plan.amount }}">{{ plan.amount }}đ</strong>
+                </div>
+                <span class="badge badge-{{ plan.state|state_tone }}">{{ plan.get_state_display }}</span>
+              </div>
+              <p class="commerce-small">Chứng từ {{ plan.receipt.provider }} · {{ plan.receipt.external_id }}</p>
+              {% if plan.receipt.provider == 'CASH' or user.is_admin_role %}
+                {% if plan.state == 'RESERVED' %}
+                <form class="commerce-form" method="post" action="{% url 'service_action' case.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="plan_id" value="{{ plan.pk }}">
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label for="refund-ref-{{ plan.pk }}">Mã lệnh chuyển hoàn / phiếu chi</label>
+                      <input id="refund-ref-{{ plan.pk }}" name="reference" class="form-input" required placeholder="Nhập mã chứng từ thực tế">
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button class="secondary-btn" name="action" value="begin_refund">Ghi lệnh hoàn đã thực hiện</button>
+                  </div>
+                </form>
+                {% endif %}
+                {% for attempt in plan.attempts.all %}
+                <div class="refund-entry">
+                  <div class="refund-entry-head">
+                    <strong class="commerce-small">Lần #{{ attempt.pk }} · {{ attempt.reference }}</strong>
+                    <span class="badge badge-{{ attempt.state|state_tone }}">{{ attempt.get_state_display }}</span>
+                  </div>
+                  {% if attempt.note %}
+                    <p class="commerce-muted">{{ attempt.note }}</p>
+                  {% endif %}
+                  {% if attempt.state == 'SUBMITTED' or attempt.state == 'UNKNOWN' %}
+                  <form class="commerce-form" method="post" action="{% url 'service_action' case.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="confirm_refund">
+                    <input type="hidden" name="attempt_id" value="{{ attempt.pk }}">
+                    <div class="form-grid">
+                      <div class="form-group">
+                        <label for="refund-state-{{ attempt.pk }}">Kết quả đối soát</label>
+                        <select id="refund-state-{{ attempt.pk }}" name="state" class="form-input">
+                          <option value="UNKNOWN">Chưa rõ kết quả · tiếp tục giữ ngân sách</option>
+                          <option value="SUCCEEDED">Đã chi thành công</option>
+                          <option value="FAILED_FINAL">Đã xác minh thất bại cuối cùng</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label for="refund-proof-{{ attempt.pk }}">Bằng chứng đối soát</label>
+                        <input id="refund-proof-{{ attempt.pk }}" name="note" class="form-input" required>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button class="primary-btn">Xác nhận kết quả</button>
+                    </div>
+                  </form>
+                  {% endif %}
+                </div>
+                {% endfor %}
+              {% else %}
+                <p class="notice notice-info">Khoản hoàn chuyển khoản cần quản lý đối soát.</p>
+              {% endif %}
+            </article>
+            {% endfor %}
+            {% if case.benefits_applied %}
+              <p class="notice notice-success">{% include 'pho_app/includes/icon.html' with name='check' %} Đã xử lý điểm, ưu đãi và chi tiêu xét hạng.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </details>
+    {% endfor %}
+
+    <div class="panel commerce-empty" data-list-empty hidden>
+      <span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='check' %}</span>
+      <strong>Không có yêu cầu phù hợp</strong>
+      <p>Yêu cầu mới từ khách sẽ xuất hiện tại đây. Thử đổi bộ lọc nếu cần.</p>
+    </div>
+    <p class="commerce-results">Hiển thị <span data-list-count>{{ cases|length }}</span> yêu cầu trong 100 yêu cầu gần nhất.</p>
   </section>
-  {% include 'pho_app/operations/delivery_list.html' %}
-  {% if user.is_admin_role %}<section id="receipts" role="tabpanel" aria-labelledby="receipts-tab" hidden><div class="commerce-section-head"><div><h2>Khoản thu cần đối soát</h2><p>Kiểm tra chứng từ thực tế trước khi ghi nhận hoặc xác nhận hoàn.</p></div><button class="primary-btn" data-dialog-open="receiptEditor">{% include 'pho_app/includes/icon.html' with name='plus' %} Ghi nhận khoản thu</button></div><div class="notice notice-info">Thao tác chuyển tiền thực hiện tại ngân hàng. Màn hình này ghi nhận chứng từ và theo dõi kết quả.</div>{% for receipt in receipts %}{% include 'pho_app/operations/receipt_record.html' %}{% empty %}<div class="panel commerce-empty"><span class="stat-icon tone-green">{% include 'pho_app/includes/icon.html' with name='check' %}</span><strong>Không có khoản thu cần đối soát</strong><p>Các khoản dư hoặc tiền đến muộn sẽ được hiển thị tại đây.</p></div>{% endfor %}</section>{% endif %}
-  {% if failed_events %}<details class="panel security-panel"><summary><h3>Cập nhật cần xử lý lại <span class="badge badge-orange">{{ failed_events|length }}</span></h3>{% include 'pho_app/includes/icon.html' with name='clock' %}</summary><p class="commerce-muted">Một số cập nhật chưa hoàn tất. Quản lý có thể dùng “Xử lý đơn quá hạn” để chạy lại.</p>{% for event in failed_events %}<p class="commerce-small">#{{ event.pk }} · {{ event.kind }} · {{ event.error }}</p>{% endfor %}</details>{% endif %}
+
+  {% if user.is_admin_role %}
+  <section id="receipts" role="tabpanel" aria-labelledby="receipts-tab" hidden>
+    <div class="commerce-section-head">
+      <div>
+        <h2>Khoản thu cần đối soát</h2>
+        <p>Kiểm tra chứng từ thực tế trước khi ghi nhận hoặc xác nhận hoàn tiền.</p>
+      </div>
+      <button class="primary-btn" data-dialog-open="receiptEditor">{% include 'pho_app/includes/icon.html' with name='plus' %} Ghi nhận khoản thu</button>
+    </div>
+    <div class="notice notice-info">Thao tác chuyển tiền thực hiện tại ngân hàng. Màn hình này ghi nhận chứng từ và theo dõi kết quả.</div>
+    {% for receipt in receipts %}
+      {% include 'pho_app/operations/receipt_record.html' %}
+    {% empty %}
+      <div class="panel commerce-empty">
+        <span class="stat-icon tone-green">{% include 'pho_app/includes/icon.html' with name='check' %}</span>
+        <strong>Không có khoản thu cần đối soát</strong>
+        <p>Các khoản dư hoặc tiền đến muộn sẽ được hiển thị tại đây.</p>
+      </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if failed_events %}
+  <details class="panel security-panel">
+    <summary>
+      <h3>Cập nhật cần xử lý lại <span class="badge badge-orange">{{ failed_events|length }}</span></h3>
+      {% include 'pho_app/includes/icon.html' with name='clock' %}
+    </summary>
+    <p class="commerce-muted">Một số cập nhật chưa hoàn tất. Quản lý có thể dùng “Xử lý đơn quá hạn” để chạy lại.</p>
+    {% for event in failed_events %}
+      <p class="commerce-small">#{{ event.pk }} · {{ event.kind }} · {{ event.error }}</p>
+    {% endfor %}
+  </details>
+  {% endif %}
 </main>
-{% if user.is_admin_role %}<dialog class="commerce-dialog" id="receiptEditor" aria-labelledby="receiptEditorTitle"><header class="commerce-dialog-head"><div><h2 id="receiptEditorTitle">Ghi nhận khoản thu đã xác minh</h2><p>Nhập đúng thông tin từ chứng từ ngân hàng hoặc phiếu thu.</p></div><button class="icon-button" type="button" data-dialog-close aria-label="Đóng">{% include 'pho_app/includes/icon.html' with name='close' %}</button></header><form class="commerce-form" method="post" action="{% url 'reconcile_receipt' %}">{% csrf_token %}<input type="hidden" name="action" value="record"><div class="commerce-dialog-body"><div class="form-grid"><div class="form-group"><label for="receiptOrder">Mã đơn hàng</label><input id="receiptOrder" name="order_code" class="form-input" required placeholder="PH…"></div><div class="form-group"><label for="receiptAmount">Số tiền thực nhận (đ)</label><input id="receiptAmount" type="number" min="1" name="amount" class="form-input" required></div><div class="form-group field-wide"><label for="receiptReference">Mã giao dịch thực tế</label><input id="receiptReference" name="reference" class="form-input" required></div><div class="form-group field-wide"><label for="receiptNote">Bằng chứng đã kiểm tra</label><textarea id="receiptNote" name="note" class="form-input" required rows="3"></textarea></div></div></div><footer class="commerce-dialog-actions"><button class="secondary-btn" type="button" data-dialog-close>Để sau</button><button class="primary-btn">Ghi nhận khoản thu</button></footer></form></dialog>{% endif %}
+
+{% if user.is_admin_role %}
+<dialog class="commerce-dialog" id="receiptEditor" aria-labelledby="receiptEditorTitle">
+  <header class="commerce-dialog-head">
+    <div>
+      <h2 id="receiptEditorTitle">Ghi nhận khoản thu đã xác minh</h2>
+      <p>Nhập đúng thông tin từ chứng từ ngân hàng hoặc phiếu thu.</p>
+    </div>
+    <button class="icon-button" type="button" data-dialog-close aria-label="Đóng">{% include 'pho_app/includes/icon.html' with name='close' %}</button>
+  </header>
+  <form class="commerce-form" method="post" action="{% url 'reconcile_receipt' %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="record">
+    <div class="commerce-dialog-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="receiptOrder">Mã đơn hàng</label>
+          <input id="receiptOrder" name="order_code" class="form-input" required placeholder="PH…">
+        </div>
+        <div class="form-group">
+          <label for="receiptAmount">Số tiền thực nhận (đ)</label>
+          <input id="receiptAmount" type="number" min="1" name="amount" class="form-input" required>
+        </div>
+        <div class="form-group field-wide">
+          <label for="receiptReference">Mã giao dịch thực tế</label>
+          <input id="receiptReference" name="reference" class="form-input" required>
+        </div>
+        <div class="form-group field-wide">
+          <label for="receiptNote">Bằng chứng đã kiểm tra</label>
+          <textarea id="receiptNote" name="note" class="form-input" required rows="3"></textarea>
+        </div>
+      </div>
+    </div>
+    <footer class="commerce-dialog-actions">
+      <button class="secondary-btn" type="button" data-dialog-close>Để sau</button>
+      <button class="primary-btn">Ghi nhận khoản thu</button>
+    </footer>
+  </form>
+</dialog>
+{% endif %}
 {% endblock %}

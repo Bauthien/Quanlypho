@@ -77,6 +77,7 @@
   }
   function render() {
     closePicker(); closeClear(); errors();
+    const autoB = $('[data-recipe-auto-banner]'); if (autoB) autoB.hidden = true;
     const p = product(); if (p) selected[selectionKey()] = p.id;
     all('[name=recipe_target]').forEach(i => i.checked = i.value === kind);
     all('[name=topping_scope]').forEach(i => i.checked = i.value === scope);
@@ -134,6 +135,57 @@
   $('[data-recipe-clear]').addEventListener('click', () => {closePicker();clearKey=productKey(product());$('#recipeClearTitle').textContent=`Xóa tất cả ${draft().rows.length} dòng nguyên liệu của ${product().name}?`;$('#recipeClearConfirm').hidden=false;$('[data-recipe-clear]').setAttribute('aria-expanded','true');$('[data-clear-cancel]').focus();});
   $('[data-clear-cancel]').addEventListener('click', () => {closeClear();$('[data-recipe-clear]').focus();});
   $('[data-clear-confirm]').addEventListener('click', () => {if(!product()||clearKey!==productKey(product()))return;draft().rows=[];renderRows();changed();$('[data-recipe-status]').textContent='Đã xóa các dòng trong bản nháp. Bạn có thể thêm lại nguyên liệu.';$('[data-recipe-add]').focus();});
+
+  const autoBtn = $('[data-recipe-auto]');
+  const autoBanner = $('[data-recipe-auto-banner]');
+  const bannerClose = $('[data-auto-banner-close]');
+  if (bannerClose) bannerClose.addEventListener('click', () => { if (autoBanner) autoBanner.hidden = true; });
+
+  if (autoBtn) {
+    autoBtn.addEventListener('click', async () => {
+      const p = product();
+      if (!p) return;
+      closePicker(); closeClear(); errors();
+      autoBtn.disabled = true;
+      const originalHtml = autoBtn.innerHTML;
+      autoBtn.innerHTML = '<span>⚡ Đang phân tích...</span>';
+      try {
+        const url = new URL('/quan-ly/ton-kho/tu-dong-dinh-luong/', location.origin);
+        url.searchParams.set('target', kind);
+        url.searchParams.set('id', p.id);
+        url.searchParams.set('scope', scope);
+        const res = await fetch(url.href, {headers: {Accept: 'application/json'}});
+        const data = await res.json();
+        if (data.ok && Array.isArray(data.rows) && data.rows.length) {
+          const d = draft();
+          d.rows = data.rows.map(r => ({
+            ingredient_id: String(r.ingredient_id),
+            quantity: String(r.quantity),
+            input_unit: r.input_unit
+          }));
+          if (data.mode && kind === 'DRINK') {
+            d.mode = data.mode;
+            all('[name=inventory_mode]').forEach(i => i.checked = i.value === d.mode);
+          }
+          renderRows();
+          changed();
+          if (autoBanner) {
+            autoBanner.hidden = false;
+            $('[data-auto-banner-desc]').textContent = data.explanation || 'Thuật toán đã nhận diện thành phần và điền định lượng tiêu chuẩn.';
+          }
+          $('[data-recipe-status]').textContent = '✨ ' + (data.explanation || 'Đã tự động tính toán định lượng.');
+        } else {
+          errors([data.error || 'Chưa tìm thấy công thức mẫu phù hợp cho sản phẩm này trong kho. Bạn hãy thêm dòng thủ công.']);
+        }
+      } catch (err) {
+        errors(['Không thể kết nối máy chủ để tự động tạo định lượng.']);
+      } finally {
+        autoBtn.disabled = false;
+        autoBtn.innerHTML = originalHtml;
+      }
+    });
+  }
+
   $('[data-recipe-form]').addEventListener('submit', async e => {
     e.preventDefault();closeClear();const p=product(),d=draft();if(!p)return;
     const messages=[],seen=new Set();
@@ -172,8 +224,123 @@
     if (!opener || !['MENU','DRINK','TOPPING'].includes(opener.dataset.recipeTarget)) return;
     kind = opener.dataset.recipeTarget;
     if (kind !== 'TOPPING') scope = kind === 'DRINK' ? 'DRINK' : 'PHO';
+    if (opener.dataset.productId) {
+      selected[selectionKey()] = Number(opener.dataset.productId);
+    }
     render(); remember();
   }, true);
+  
+  // Accordion toggle & detail view for the recipe master table
+  const recipeSection = document.getElementById('tabRecipesSection');
+  if (recipeSection) {
+    const masterTable = recipeSection.querySelector('.recipe-master-table');
+
+    function toggleDetail(key) {
+      const masterRow = document.getElementById(`recipe-row-${key}`);
+      const detailRow = document.getElementById(`detail-${key}`);
+      if (!masterRow || !detailRow) return;
+
+      const isExpanded = masterRow.classList.toggle('is-expanded');
+      detailRow.style.display = isExpanded ? '' : 'none';
+      const toggleBtn = masterRow.querySelector(`[data-toggle-recipe="${key}"]`);
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', String(isExpanded));
+        const icon = toggleBtn.querySelector('.toggle-arrow');
+        if (icon) icon.textContent = isExpanded ? '▴' : '▾';
+        const text = toggleBtn.querySelector('.toggle-label');
+        if (text) text.textContent = isExpanded ? 'Đóng' : 'Chi tiết';
+      }
+    }
+
+    function closeDetail(key) {
+      const masterRow = document.getElementById(`recipe-row-${key}`);
+      const detailRow = document.getElementById(`detail-${key}`);
+      if (!masterRow || !detailRow) return;
+      masterRow.classList.remove('is-expanded');
+      detailRow.style.display = 'none';
+      const toggleBtn = masterRow.querySelector(`[data-toggle-recipe="${key}"]`);
+      if (toggleBtn) {
+        toggleBtn.setAttribute('aria-expanded', 'false');
+        const icon = toggleBtn.querySelector('.toggle-arrow');
+        if (icon) icon.textContent = '▾';
+        const text = toggleBtn.querySelector('.toggle-label');
+        if (text) text.textContent = 'Chi tiết';
+      }
+    }
+
+    masterTable?.addEventListener('click', event => {
+      // Toggle button clicked
+      const toggleBtn = event.target.closest('[data-toggle-recipe]');
+      if (toggleBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleDetail(toggleBtn.dataset.toggleRecipe);
+        return;
+      }
+
+      // Close button clicked
+      const closeBtn = event.target.closest('[data-close-recipe]');
+      if (closeBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDetail(closeBtn.dataset.closeRecipe);
+        return;
+      }
+
+      // Action buttons or links: do not toggle accordion
+      if (event.target.closest('button, form, a, input, select, label')) {
+        return;
+      }
+
+      // Master row click: toggle accordion
+      const row = event.target.closest('tr.recipe-master-row');
+      if (row && row.id) {
+        const key = row.id.replace('recipe-row-', '');
+        toggleDetail(key);
+      }
+    });
+
+    // Live filter and search
+    const searchInput = recipeSection.querySelector('[data-recipe-search]');
+    const filterButtons = recipeSection.querySelectorAll('[data-recipe-filter]');
+    const rows = [...recipeSection.querySelectorAll('[data-recipe-row]')];
+    let currentFilter = 'all';
+
+    const norm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd');
+
+    function filterRecipes() {
+      const term = norm(searchInput?.value || '');
+      rows.forEach(row => {
+        const nameMatches = !term || norm(row.dataset.search || '').includes(term);
+        const kindMatches = currentFilter === 'all'
+          || (currentFilter === 'missing' && row.dataset.configured === 'no')
+          || row.dataset.kind === currentFilter;
+        const visible = nameMatches && kindMatches;
+        row.dataset.filterHidden = visible ? '' : 'true';
+        row.hidden = !visible;
+        const detailRow = row.id ? document.querySelector(`[data-master-row-id="${row.id}"]`) : null;
+        if (detailRow && !visible) {
+          detailRow.style.display = 'none';
+        }
+      });
+      if (recipeSection._paginateUpdate) recipeSection._paginateUpdate();
+    }
+
+    searchInput?.addEventListener('input', filterRecipes);
+    filterButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentFilter = btn.dataset.recipeFilter;
+        filterButtons.forEach(b => {
+          const active = b === btn;
+          b.classList.toggle('active', active);
+          b.setAttribute('aria-pressed', String(active));
+        });
+        filterRecipes();
+      });
+    });
+    filterRecipes();
+  }
+
   syncInventoryGroup();
   render();
 })();

@@ -226,15 +226,50 @@ def order_support(request, order_id):
 
 
 @staff_required
-def service_queue(request, delivery_only=False):
+def service_queue(request):
+    """Màn hình tiếp nhận & xử lý yêu cầu khiếu nại, đổi món và hoàn tiền của khách hàng."""
     process_events()
+    cases = list(ServiceRequest.objects.select_related('order', 'replacement').prefetch_related('allocations', 'refund_plans__receipt', 'refund_plans__attempts').order_by('-pk')[:100])
+    receipts = list(PaymentReceipt.objects.filter(requires_reconciliation=True).select_related('order').order_by('-pk')[:50])
+    open_cases = sum(1 for c in cases if c.state == 'OPEN')
+    processing_cases = sum(1 for c in cases if c.state in ('APPROVED', 'REFUNDING', 'REPLACING'))
+    closed_cases = sum(1 for c in cases if c.state == 'CLOSED')
+
     return render(request, 'pho_app/operations/service_queue.html', {
-        'cases': ServiceRequest.objects.select_related('order', 'replacement').prefetch_related('allocations', 'refund_plans__receipt', 'refund_plans__attempts').order_by('-pk')[:100],
-        'receipts': PaymentReceipt.objects.filter(requires_reconciliation=True).select_related('order').order_by('-pk')[:50],
-        'delivery_orders': Order.objects.filter(order_type='DELIVERY', payment_status='PAID', order_status__in=['READY', 'DELIVERING', 'DELIVERY_EXCEPTION', 'COMPLETED']).select_related('delivery').prefetch_related('delivery__attempts').order_by('-created_at')[:100],
-        'delivery_only': delivery_only,
+        'cases': cases,
+        'open_cases': open_cases,
+        'processing_cases': processing_cases,
+        'closed_cases': closed_cases,
+        'receipts': receipts,
         'failed_events': DomainEvent.objects.filter(processed_at__isnull=True).exclude(error=''),
-        'request_key': uuid.uuid4().hex})
+        'request_key': uuid.uuid4().hex,
+    })
+
+
+@staff_required
+def delivery_queue(request):
+    """Màn hình điều phối giao hàng: theo dõi đơn ship, bàn giao shipper và cập nhật trạng thái."""
+    process_events()
+    delivery_orders = list(Order.objects.filter(
+        order_type='DELIVERY',
+        payment_status='PAID',
+        order_status__in=['READY', 'DELIVERING', 'DELIVERY_EXCEPTION', 'COMPLETED']
+    ).select_related('delivery').prefetch_related('delivery__attempts').order_by('-created_at')[:100])
+
+    ready_count = sum(1 for o in delivery_orders if o.order_status == 'READY')
+    delivering_count = sum(1 for o in delivery_orders if o.order_status == 'DELIVERING')
+    exception_count = sum(1 for o in delivery_orders if o.order_status == 'DELIVERY_EXCEPTION')
+    completed_count = sum(1 for o in delivery_orders if o.order_status == 'COMPLETED')
+
+    return render(request, 'pho_app/operations/delivery_queue.html', {
+        'delivery_orders': delivery_orders,
+        'ready_count': ready_count,
+        'delivering_count': delivering_count,
+        'exception_count': exception_count,
+        'completed_count': completed_count,
+        'failed_events': DomainEvent.objects.filter(processed_at__isnull=True).exclude(error=''),
+        'request_key': uuid.uuid4().hex,
+    })
 
 
 @staff_required
