@@ -11,7 +11,9 @@ from .models import (Ingredient, InventoryIncident, InventoryRequirement, Invent
 def convert_stock_units(quantity, input_unit, stock_unit):
     """Reviewed same-dimension conversions; never infer mass from volume."""
     units = {'g': ('mass', Decimal(1)), 'gram': ('mass', Decimal(1)), 'kg': ('mass', Decimal(1000)),
-             'ml': ('volume', Decimal(1)), 'l': ('volume', Decimal(1000)), 'lít': ('volume', Decimal(1000))}
+             'gam': ('mass', Decimal(1)), 'gr': ('mass', Decimal(1)),
+             'ml': ('volume', Decimal(1)), 'l': ('volume', Decimal(1000)), 'lít': ('volume', Decimal(1000)),
+             'lit': ('volume', Decimal(1000)), 'liter': ('volume', Decimal(1000))}
     source, target = input_unit.strip().lower(), stock_unit.strip().lower()
     quantity = Decimal(str(quantity))
     if not quantity.is_finite() or quantity <= 0:

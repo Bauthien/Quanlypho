@@ -279,7 +279,11 @@ def menu_view(request):
         for item in items
     ]
     options = list(CustomizationOption.objects.all().order_by('category', 'id').values('id', 'category', 'name'))
-    toppings = list(Topping.objects.filter(is_active=True).order_by('name').values('id', 'name', 'price'))
+    toppings = [{
+        'id': topping.pk, 'name': topping.name, 'price': topping.price, 'category': topping.category.lower(),
+        'applies_to_all': topping.applies_to_all,
+        'allowed_menu_items': [item.pk for item in topping.allowed_menu_items.all()],
+    } for topping in Topping.objects.filter(is_active=True).prefetch_related('allowed_menu_items').order_by('name')]
     latest_order = Order.objects.filter(customer=request.user).order_by('-created_at').first() if request.user.is_authenticated else Order.objects.filter(pk=request.session.get('latest_order_id')).first()
     ticket = active_queue_ticket(request)
     tables_qs = tables_with_capacity()
@@ -1272,11 +1276,17 @@ def admin_inventory(request):
     recent_transactions = InventoryTransaction.objects.select_related('ingredient', 'created_by').order_by('-created_at')[:40]
 
     total_ingredients = len(ingredients)
+    shared_ingredient_count = sum(ingredient.usage == Ingredient.Usage.SHARED for ingredient in ingredients)
+    food_ingredient_count = sum(ingredient.usage == Ingredient.Usage.PHO for ingredient in ingredients) + shared_ingredient_count
+    drink_ingredient_count = sum(ingredient.usage == Ingredient.Usage.DRINK for ingredient in ingredients) + shared_ingredient_count
     low_stock_count = Ingredient.objects.filter(current_stock__lte=F('minimum_stock')).count()
     total_recipes = recipes.count()
 
-    menu_items = MenuItem.objects.filter(is_active=True).order_by('name')
-    toppings = Topping.objects.filter(is_active=True).order_by('name')
+    menu_items = list(MenuItem.objects.filter(is_active=True).order_by('name'))
+    toppings = list(Topping.objects.filter(is_active=True).prefetch_related('allowed_menu_items').order_by('name'))
+    from .recipes import recipe_editor_data
+    editor_data = recipe_editor_data(ingredients, menu_items, toppings, recipes)
+    editor_data['user_id'] = request.user.pk
 
     stock_orders = list(Order.objects.filter(stock_reservation__state='CONSUMED').order_by('-created_at')[:100])
     stock_order_options = {str(order.pk): [] for order in stock_orders}
@@ -1288,8 +1298,12 @@ def admin_inventory(request):
         'recipes': recipes,
         'recent_transactions': recent_transactions,
         'total_ingredients': total_ingredients,
+        'food_ingredient_count': food_ingredient_count,
+        'drink_ingredient_count': drink_ingredient_count,
+        'shared_ingredient_count': shared_ingredient_count,
         'low_stock_count': low_stock_count,
         'total_recipes': total_recipes,
+        'recipe_editor_data': editor_data,
         'menu_items': menu_items,
         'toppings': toppings,
         'stock_incidents': InventoryIncident.objects.filter(resolved=False).select_related('ingredient'),
@@ -1302,7 +1316,10 @@ def admin_inventory(request):
 @admin_required
 def admin_ingredient_create(request):
     """Thêm nguyên liệu mới vào kho."""
-    form = IngredientForm(request.POST if request.method == 'POST' else None)
+    usage = request.GET.get('usage', Ingredient.Usage.PHO)
+    if usage not in Ingredient.Usage.values:
+        usage = Ingredient.Usage.PHO
+    form = IngredientForm(request.POST if request.method == 'POST' else None, initial={'usage': usage})
     if request.method == 'POST' and form.is_valid():
         with transaction.atomic():
             ingredient = form.save()
@@ -1335,7 +1352,7 @@ def admin_ingredient_edit(request, ingredient_id):
             return render(request, 'pho_app/admin/ingredient_form.html', {'ingredient': ingredient, 'form': form})
         from .stock import reserved_totals
         held = reserved_totals().get(ingredient.pk, 0)
-        if form.cleaned_data['unit'] != previous_unit and (ingredient.recipes.exists() or ingredient.inventorytransaction_set.exists()):
+        if form.cleaned_data['unit'] != previous_unit and (ingredient.recipe_set.exists() or ingredient.inventorytransaction_set.exists()):
             form.add_error('unit', 'Nguyên liệu đã có lịch sử: cần quy đổi có kiểm toán, không chỉ đổi nhãn đơn vị.')
             return render(request, 'pho_app/admin/ingredient_form.html', {'ingredient': ingredient, 'form': form})
         ingredient = form.save()
@@ -1416,6 +1433,31 @@ def admin_ingredient_import(request, ingredient_id):
 @require_POST
 def admin_recipe_create(request):
     """Thiết lập định lượng (BOM) tiêu hao cho món chính hoặc topping."""
+    if 'rows' in request.POST:
+        from .recipes import RecipeBatchForm, recipe_revision
+        form = RecipeBatchForm(request.POST)
+        if not form.is_valid():
+            return JsonResponse({'ok': False, 'errors': form.errors.get_json_data()}, status=422)
+        target = type(form.target).objects.select_for_update().get(pk=form.target.pk)
+        if form.cleaned_data['revision'] != recipe_revision(target):
+            return JsonResponse({'ok': False, 'errors': {'revision': [{'message': 'Định lượng đã được cập nhật ở trang khác. Tải lại trang trước khi lưu để tránh ghi đè.', 'code': 'conflict'}]}}, status=409)
+        is_topping = isinstance(target, Topping)
+        target.recipes.all().delete()
+        Recipe.objects.bulk_create([
+            Recipe(ingredient=ingredient, quantity_required=quantity, **({'topping': target} if is_topping else {'menu_item': target}))
+            for ingredient, quantity in form.cleaned_data['cleaned_rows']
+        ])
+        if is_topping:
+            target.applies_to_all = form.cleaned_data['applies_to_all']
+            target.save(update_fields=['applies_to_all'])
+            target.allowed_menu_items.set([] if target.applies_to_all else form.cleaned_data['allowed_menu_items'])
+        else:
+            target.inventory_mode = (form.cleaned_data.get('inventory_mode') or 'BOM') if target.category == 'DRINK' else 'BOM'
+            target.save(update_fields=['inventory_mode'])
+        from .domain import audit
+        audit(request.user, 'RECIPE_UPDATED', target, ingredient_count=len(form.cleaned_data['cleaned_rows']))
+        messages.success(request, f'Đã lưu {len(form.cleaned_data["cleaned_rows"])} nguyên liệu cho {target.name}.')
+        return JsonResponse({'ok': True, 'redirect': reverse('admin_inventory') + '?view=recipes'})
     form = RecipeForm(request.POST)
     if not form.is_valid():
         messages.error(request, 'Chọn đúng một món chính hoặc topping còn kinh doanh, nguyên liệu hợp lệ và định lượng dương (tối đa 2 chữ số thập phân).')

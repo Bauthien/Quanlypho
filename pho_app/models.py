@@ -126,7 +126,7 @@ class MenuItem(models.Model):
     category = models.CharField(max_length=10, choices=Category.choices, default=Category.PHO, verbose_name='Nhóm món')
     base_price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá gốc (VNĐ)")
     is_active = models.BooleanField(default=True, verbose_name="Còn kinh doanh")
-    inventory_mode = models.CharField(max_length=10, choices=[('BOM', 'Theo định lượng'), ('UNTRACKED', 'Không theo dõi kho')], default='BOM')
+    inventory_mode = models.CharField(max_length=10, choices=[('BOM', 'Theo định lượng'), ('DIRECT', 'Bán nguyên chai / lon'), ('UNTRACKED', 'Không theo dõi kho')], default='BOM')
 
     # 3 Hình ảnh trực quan cho Món chính
     image_primary = models.ImageField(upload_to='menu_items/', verbose_name="Ảnh đại diện chính")
@@ -147,6 +147,14 @@ class Topping(models.Model):
     inventory_mode = models.CharField(max_length=10, choices=[('BOM', 'Theo định lượng'), ('UNTRACKED', 'Không theo dõi kho')], default='BOM')
     price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Giá tính thêm (VNĐ)")
     image_thumbnail = models.ImageField(upload_to='toppings/', blank=True, null=True, verbose_name="Ảnh minh họa nhỏ")
+    category = models.CharField(max_length=10, choices=MenuItem.Category.choices, default=MenuItem.Category.PHO, verbose_name='Topping dùng cho')
+    applies_to_all = models.BooleanField(default=True, verbose_name='Dùng cho tất cả món trong nhóm')
+    allowed_menu_items = models.ManyToManyField(MenuItem, blank=True, related_name='available_toppings', verbose_name='Món được gọi kèm')
+
+    def is_available_for(self, menu_item):
+        return self.category == menu_item.category and (
+            self.applies_to_all or any(item.pk == menu_item.pk for item in self.allowed_menu_items.all())
+        )
 
     class Meta:
         verbose_name = "Topping tính phí"
@@ -295,8 +303,14 @@ class OrderItemCustomization(models.Model):
 # 5. MODULE QUẢN LÝ TỒN KHO & ĐỊNH LƯỢNG (INVENTORY & RECIPE - BOM)
 # ==========================================
 class Ingredient(models.Model):
+    class Usage(models.TextChoices):
+        PHO = 'PHO', 'Bếp phở / món chính'
+        DRINK = 'DRINK', 'Pha chế / nước uống'
+        SHARED = 'SHARED', 'Dùng chung'
+
     name = models.CharField(max_length=255, verbose_name="Tên nguyên liệu (VD: Bánh phở, Thịt bò)")
     unit = models.CharField(max_length=50, verbose_name="Đơn vị tính (kg, gram, lít...)")
+    usage = models.CharField(max_length=10, choices=Usage.choices, default=Usage.PHO, verbose_name='Nhóm sử dụng')
     current_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)], verbose_name="Số lượng tồn hiện tại")
     minimum_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)], verbose_name="Ngưỡng cảnh báo hết hàng")
     ingredient_image = models.ImageField(upload_to='ingredients/', blank=True, null=True, verbose_name="Ảnh minh họa")

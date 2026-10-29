@@ -186,15 +186,15 @@ class LegacyNegativeStockMigrationTests(TransactionTestCase):
             executor.migrate([before])
             IngredientBefore = executor.loader.project_state([before]).apps.get_model('pho_app', 'Ingredient')
             ingredient = IngredientBefore.objects.create(name='Tồn âm cũ', unit='kg', current_stock=-100)
-        finally:
             MigrationExecutor(connection).migrate([after])
+            IngredientAfter = MigrationExecutor(connection).loader.project_state([after]).apps.get_model('pho_app', 'Ingredient')
+            ingredient = IngredientAfter.objects.get(pk=ingredient.pk)
+            self.assertEqual(ingredient.current_stock, -100)
+            with self.assertRaises(IntegrityError), transaction.atomic():
+                IngredientAfter.objects.filter(pk=ingredient.pk).update(current_stock=-99)
+        finally:
+            MigrationExecutor(connection).migrate(latest)
         ingredient = Ingredient.objects.get(pk=ingredient.pk)
-        self.assertEqual(ingredient.current_stock, -100)
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            Ingredient.objects.filter(pk=ingredient.pk).update(current_stock=-99)
-        # The application models now include later columns; restore current schema
-        # before using User/views, and before the test runner flushes the database.
-        MigrationExecutor(connection).migrate(latest)
         admin = User.objects.create_user(username='stock-reconcile-admin', role='ADMIN')
         self.client.force_login(admin)
         response = self.client.post(reverse('admin_ingredient_import', args=[ingredient.pk]), {'quantity': 1}, follow=True)

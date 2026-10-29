@@ -231,6 +231,12 @@ class Command(BaseCommand):
                     ingredient_objs[ingredient_name] = ingredient
                 Recipe.objects.get_or_create(menu_item=item, ingredient=ingredient, defaults={'quantity_required': qty})
 
+        for ingredient in ingredient_objs.values():
+            categories = set(Recipe.objects.filter(ingredient=ingredient, menu_item__isnull=False).values_list('menu_item__category', flat=True))
+            if categories:
+                ingredient.usage = Ingredient.Usage.SHARED if len(categories) > 1 else next(iter(categories))
+                ingredient.save(update_fields=['usage'])
+
         # 7) Orders (10 đơn) - spread by status
         self.stdout.write('Tạo 10 đơn hàng với trạng thái phân bổ hợp lý...')
         customer_users = [created_users['khach_1'], created_users['khach_2'], created_users['khach_3'], created_users['khachhang']]

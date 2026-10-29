@@ -59,6 +59,7 @@
     $('#customError').hidden = true;
     $('#customDishIntro').innerHTML = `<img src="${escape(image(customItem))}" data-image-fallback="${escape(fallbackImage(customItem))}" alt="${escape(customItem.name)}"><div><span class="muted">Một món ngon, đúng khẩu vị</span><strong>${money(customItem.price)}</strong></div>`;
     const isDrink = category(customItem) === 'drink';
+    const availableToppings = toppings.filter(topping => topping.category === customItem.category && (topping.applies_to_all || topping.allowed_menu_items.includes(customItem.id)));
     if (isDrink) {
       $('#customOptions').innerHTML = `<div style="padding: 14px 12px; background: var(--blue-soft, #edf3f9); border-radius: 8px; color: var(--blue, #3f6c8e); font-size: 12.5px; margin-bottom: 8px;">🥤 Đồ uống ướp lạnh mát giải khát. Bạn có thể ghi chú thêm yêu cầu phục vụ (ví dụ: dùng kèm ly đá, ít đá...) ở ô bên dưới.</div>`;
     } else {
@@ -66,8 +67,9 @@
       $('#customOptions').innerHTML = Object.entries(groups).map(([key, label]) => {
         const options = customizationOptions.filter((option) => option.category === key);
         return options.length ? `<fieldset class="choice-group"><legend>${label} <small>· chọn 1</small></legend>${options.map((option, index) => `<label><input type="radio" name="custom-${key}" value="${option.id}" data-category="${key}" ${index === 0 ? 'checked' : ''} required>${escape(option.name)}</label>`).join('')}</fieldset>` : '';
-      }).join('') + (toppings.length ? `<fieldset class="choice-group"><legend>Thêm chút topping <small>· không bắt buộc</small></legend>${toppings.map((topping) => `<label><input type="checkbox" data-topping-id="${topping.id}">${escape(topping.name)}<span>+${money(topping.price)}</span></label>`).join('')}</fieldset>` : '');
+      }).join('');
     }
+    if (availableToppings.length) $('#customOptions').insertAdjacentHTML('beforeend', `<fieldset class="choice-group"><legend>Thêm topping <small>· không bắt buộc</small></legend>${availableToppings.map(topping => `<label><input type="checkbox" data-topping-id="${topping.id}">${escape(topping.name)}<span>+${money(topping.price)}</span></label>`).join('')}</fieldset>`);
     customPrice();
     customDialog.showModal();
   }

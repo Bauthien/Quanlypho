@@ -157,6 +157,11 @@ Hệ thống phân quyền nghiêm ngặt theo 4 vai trò. Khi đăng nhập t�
 6. Thu ngân xác nhận bàn giao cho shipper và hoàn tất đơn hàng.
 
 ### Luồng 4: Định lượng & Quản lý Kho nguyên vật liệu (BOM)
+- Vào **Quản lý tồn kho → Định lượng món → Thiết lập định lượng**, chọn **Món chính / Nước uống / Topping**, thêm nhiều dòng hoặc chọn nhiều nguyên liệu rồi lưu toàn bộ công thức.
+- Nguyên liệu có nhóm **Bếp phở**, **Nước uống** hoặc **Dùng chung**, chỉnh tại màn hình thêm/sửa nguyên liệu. Migration `0020_recipe_groups` phân nhóm dữ liệu đang có theo các công thức, giữ nguyên lượng tồn và lịch sử.
+- Topping có nhóm món dùng kèm và định lượng riêng cho một phần gọi thêm. Có thể áp dụng cho toàn bộ nhóm hoặc chỉ những món được chọn; giỏ hàng kiểm tra lại phạm vi này khi đặt món.
+- Nước đóng chai/lon liên kết với một đơn vị hàng trong kho. Nút **Xóa tất cả** chỉ làm trống bản nháp của sản phẩm đang chọn; công thức đã lưu được thay thế khi lưu lại một danh sách hợp lệ.
+- Nhập g/ml được quy đổi về đơn vị kho hiện có, không làm tròn âm thầm: kho kg/lít hỗ trợ bước 10g/10ml, cần dùng đơn vị kho gram/ml để định lượng nhỏ hơn.
 - Hệ thống thiết lập bảng định lượng (Bill of Materials): mỗi tô Phở Tái tiêu hao 150g thịt bò, 200g bánh phở, 0.5L nước hầm.
 - Khi đơn hàng chuyển trạng thái **ĐÃ THANH TOÁN (PAID)**, signal Django tự động trừ tồn kho nguyên liệu tương ứng và ghi nhận lịch sử giao dịch xuất kho.
 

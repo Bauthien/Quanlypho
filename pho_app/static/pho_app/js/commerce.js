@@ -75,16 +75,31 @@
   $$('[data-filter-list]').forEach(root => {
     const search = $('[data-list-search]', root), rows = $$('[data-list-record]', root);
     const filters = $$('[data-list-filter]', root), categories = $$('[data-list-category]', root), select = $('[data-list-state]', root);
-    let state = select?.value || filters.find(button => button.getAttribute('aria-pressed') === 'true')?.dataset.listFilter || 'all', category = 'all';
+    const categoryParam = root.dataset.listCategoryParam;
+    const categoryKey = `pho-ui-category:${location.pathname}:${categoryParam}`;
+    let savedCategory = '';
+    if (categoryParam) { try { savedCategory = sessionStorage.getItem(categoryKey); } catch (_) {} }
+    const requestedCategory = categoryParam && (new URL(location.href).searchParams.get(categoryParam) || savedCategory);
+    let state = select?.value || filters.find(button => button.getAttribute('aria-pressed') === 'true')?.dataset.listFilter || 'all';
+    let category = categories.find(button => button.dataset.listCategory === requestedCategory)?.dataset.listCategory
+      || categories.find(button => button.getAttribute('aria-pressed') === 'true')?.dataset.listCategory || 'all';
     function filter() {
       const term = normalize(search?.value || ''); let count = 0;
       rows.forEach(row => { const visible = (!term || normalize(row.dataset.search || row.textContent).includes(term)) && (state === 'all' || (row.dataset.state || '').split(' ').includes(state)) && (category === 'all' || (row.dataset.category || '').split(' ').includes(category)); row.hidden = !visible; count += visible; });
       const empty = $('[data-list-empty]', root); if (empty) empty.hidden = count > 0;
       const number = $('[data-list-count]', root); if (number) number.textContent = count;
+      categories.forEach(button => { const active = button.dataset.listCategory === category; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); });
     }
     search?.addEventListener('input', filter);
     filters.forEach(button => button.addEventListener('click', () => { state = button.dataset.listFilter; filters.forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); }); filter(); }));
-    categories.forEach(button => button.addEventListener('click', () => { category = button.dataset.listCategory; categories.forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-pressed', String(item === button)); }); filter(); }));
+    categories.forEach(button => button.addEventListener('click', () => {
+      category = button.dataset.listCategory;
+      if (categoryParam) {
+        const url = new URL(location.href); url.searchParams.set(categoryParam, category); history.replaceState(null, '', url);
+        try { sessionStorage.setItem(categoryKey, category); } catch (_) {}
+      }
+      filter();
+    }));
     select?.addEventListener('change', () => { state = select.value; filter(); });
     filter();
   });
@@ -128,11 +143,6 @@
       if (kind.value === 'ISSUE' && !freeUnits.some(input => input.checked)) freeUnits.forEach(input => { input.checked = true; });
     });
   }
-  $$('[data-recipe-target]').forEach(input => input.addEventListener('change', () => {
-    const topping = input.value === 'TOPPING'; const menu = $('#menuItemSelect'), extra = $('#toppingSelect');
-    menu.disabled = topping; extra.disabled = !topping; menu.required = !topping; extra.required = topping;
-    $('#recipeMenuField').hidden = topping; $('#recipeToppingField').hidden = !topping;
-  }));
   const stockForm = $('[data-stock-operation-form]');
   if (stockForm) {
     const mode = $('[name="action"]', stockForm), order = $('[name="order_id"]', stockForm);

@@ -30,9 +30,27 @@ class TableForm(forms.ModelForm):
 
 
 class IngredientForm(forms.ModelForm):
+    usage = forms.ChoiceField(
+        label='Nhóm sử dụng', required=False, initial=Ingredient.Usage.PHO,
+        choices=[(Ingredient.Usage.PHO, 'Món chính'), (Ingredient.Usage.DRINK, 'Nước uống'),
+                 (Ingredient.Usage.SHARED, 'Dùng chung cho cả hai nhóm')],
+        widget=forms.Select(attrs={'class': 'form-input'}),
+        help_text='Nguyên liệu dùng chung xuất hiện ở cả hai nhóm và dùng cùng một số tồn kho.',
+    )
+
+    def clean_usage(self):
+        usage = self.cleaned_data.get('usage') or Ingredient.Usage.PHO
+        if self.instance.pk and usage != Ingredient.Usage.SHARED:
+            if self.instance.recipe_set.filter(
+                Q(menu_item__isnull=False) & ~Q(menu_item__category=usage)
+                | Q(topping__isnull=False) & ~Q(topping__category=usage)
+            ).exists():
+                raise ValidationError('Nguyên liệu đang dùng ở nhóm khác. Chọn “Dùng chung” hoặc cập nhật các công thức trước.')
+        return usage
+
     class Meta:
         model = Ingredient
-        fields = ['name', 'unit', 'current_stock', 'minimum_stock']
+        fields = ['name', 'unit', 'usage', 'current_stock', 'minimum_stock']
         labels = {'name': 'Tên nguyên liệu / vật tư', 'unit': 'Đơn vị tính',
                   'current_stock': 'Số lượng tồn kho hiện tại', 'minimum_stock': 'Ngưỡng cảnh báo tối thiểu'}
         widgets = {
@@ -54,6 +72,10 @@ class RecipeForm(forms.Form):
         data = super().clean()
         if bool(data.get('menu_item_id')) == bool(data.get('topping_id')):
             raise ValidationError('Vui lòng chọn đúng một món chính hoặc topping cần định lượng.')
+        target = data.get('menu_item_id') or data.get('topping_id')
+        ingredient = data.get('ingredient_id')
+        if target and ingredient and ingredient.usage not in (target.category, Ingredient.Usage.SHARED):
+            raise ValidationError('Nguyên liệu không thuộc nhóm sử dụng của sản phẩm.')
         return data
 
 
@@ -235,9 +257,21 @@ class MenuItemForm(forms.ModelForm):
 
 
 class ToppingForm(forms.ModelForm):
+    category = forms.ChoiceField(label='Topping dùng cho', choices=MenuItem.Category.choices, required=False,
+                                 initial=MenuItem.Category.PHO, widget=forms.Select(attrs={'class': 'form-input'}))
+
+    def clean_category(self):
+        category = self.cleaned_data.get('category') or MenuItem.Category.PHO
+        if self.instance.pk and category != self.instance.category:
+            if self.instance.recipes.exclude(ingredient__usage__in=[category, Ingredient.Usage.SHARED]).exists():
+                raise ValidationError('Định lượng đang có nguyên liệu của nhóm cũ. Cập nhật công thức trước khi chuyển nhóm topping.')
+            if not self.instance.applies_to_all and self.instance.allowed_menu_items.exclude(category=category).exists():
+                raise ValidationError('Topping còn liên kết với món của nhóm cũ. Cập nhật món được gọi kèm trước.')
+        return category
+
     class Meta:
         model = Topping
-        fields = ['name', 'price', 'inventory_mode', 'image_thumbnail']
+        fields = ['name', 'category', 'price', 'inventory_mode', 'image_thumbnail']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Tên topping'}),
             'price': forms.NumberInput(attrs={'class': 'form-input', 'min': 0}),

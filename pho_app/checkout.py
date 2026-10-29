@@ -56,13 +56,15 @@ def resolve_cart(payload):
         product = MenuItem.objects.filter(pk=pk, is_active=True).first()
         if not product or not 1 <= qty <= 99 or len(tids) != len(set(tids)) or len(cids) != len(set(cids)):
             raise BusinessError('Món hoặc số lượng đã thay đổi; hãy tải lại thực đơn.')
-        toppings = list(Topping.objects.filter(pk__in=tids, is_active=True).order_by('pk'))
+        toppings = list(Topping.objects.filter(pk__in=tids, is_active=True).prefetch_related('allowed_menu_items').order_by('pk'))
         choices = list(CustomizationOption.objects.filter(pk__in=cids).order_by('pk'))
         if product.category == 'PHO':
             if len(toppings) != len(tids) or len(choices) != len(cids) or len(choices) != 3 or {c.category for c in choices} != {'BROTH', 'VEGGIE', 'NOODLE'}:
                 raise BusinessError('Tùy chọn món không hợp lệ. Chọn đủ một nước dùng, rau/giá và bánh phở; topping phải còn phục vụ.')
-        elif tids or cids:
-            raise BusinessError('Đồ uống không có tùy chọn phở hoặc topping.')
+        elif cids:
+            raise BusinessError('Đồ uống không có tùy chọn phở.')
+        if len(toppings) != len(tids) or any(not topping.is_available_for(product) for topping in toppings):
+            raise BusinessError('Tùy chọn món không hợp lệ. Topping không còn phục vụ hoặc không dùng cho món đã chọn.')
         price = int(product.base_price + sum((t.price for t in toppings), Decimal(0)))
         lines.append({'product': product, 'qty': qty, 'toppings': toppings, 'choices': choices,
                       'note': str(row.get('note', ''))[:500], 'price': price})
