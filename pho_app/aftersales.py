@@ -199,14 +199,14 @@ def create_replacement(case_id, actor):
     for item_id in case.allocations.values_list('item_id', flat=True).distinct():
         item = original.items.get(pk=item_id)
         qty = case.allocations.filter(item_id=item_id).count()
-        replacement = OrderItem.objects.create(order=order, menu_item=item.menu_item, quantity=qty, item_price=0, note=f'Giao bù yêu cầu #{case.pk}')
+        replacement = OrderItem.objects.create(order=order, menu_item=item.menu_item, quantity=qty, item_price=0, note=f'Giao bù yêu cầu #{case.pk}', bowl_size=item.bowl_size)
         extras = []
         for extra in item.toppings.select_related('topping'):
             per_unit = extra.quantity // item.quantity
             OrderItemTopping.objects.create(order_item=replacement, topping=extra.topping, quantity=per_unit * qty)
             extras.append((extra.topping, per_unit * qty))
         OrderItemCustomization.objects.bulk_create([OrderItemCustomization(order_item=replacement, customization=c.customization) for c in item.customizations.all()])
-        deductions.extend(inventory_deductions([(item.menu_item, qty, extras)]))
+        deductions.extend(inventory_deductions([(item.menu_item, qty, extras, item.bowl_size)]))
     reserve_inventory(order, deductions)
     if order.order_type == 'DELIVERY':
         Delivery.objects.create(order=order)

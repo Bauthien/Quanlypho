@@ -7,7 +7,7 @@ from django.db import transaction
 from django.db.models import F, Prefetch, Q, Sum, prefetch_related_objects
 from django.db.models.functions import Coalesce
 
-from .models import Ingredient, MenuItem, Order, OrderItem, QueueTicket, Recipe, Table, Topping
+from .models import BowlSize, Ingredient, MenuItem, Order, OrderItem, QueueTicket, Recipe, Table, Topping
 from .domain import serialized, BusinessError
 
 
@@ -34,34 +34,43 @@ def _prefetch_inventory_recipes(products, using):
             prefetch_related_objects(group, Prefetch('recipes', queryset=Recipe.objects.using(using).order_by('pk')))
 
 
+def inventory_recipe_rows(product, bowl_size=BowlSize.MEDIUM, rows=None):
+    if bowl_size not in BowlSize.values:
+        raise InvalidOrderTransition('Cỡ tô không hợp lệ.')
+    size = bowl_size if isinstance(product,MenuItem) and product.category == MenuItem.Category.PHO else BowlSize.MEDIUM
+    return [row for row in (rows if rows is not None else product.recipes.all()) if row.bowl_size == size]
+
+
 def inventory_deductions(lines, using='default'):
-    """Resolve (product, quantity, [(topping, total_quantity)]) into exact exports.
+    """Resolve (product, quantity, extras[, bowl_size]) into exact exports.
 
     Checkout and saved orders use the same rules. Topping quantities on saved
     order lines already include the number of bowls and must not be multiplied again.
     """
     lines = list(lines)
-    products = [product for product, _, _ in lines]
-    products.extend(topping for _, _, extras in lines for topping, _ in extras)
+    products = [line[0] for line in lines]
+    products.extend(topping for line in lines for topping, _ in line[2])
     _prefetch_inventory_recipes(products, using)
     deductions = []
 
-    def add_product(product, quantity):
+    def add_product(product, quantity, bowl_size=BowlSize.MEDIUM):
         if product.inventory_mode == 'UNTRACKED':
             if isinstance(product, MenuItem) and product.category == MenuItem.Category.PHO:
                 raise InvalidOrderTransition('Món phở bắt buộc có định lượng nguyên liệu.')
             return
-        recipes = list(product.recipes.all())
+        recipes = inventory_recipe_rows(product,bowl_size)
         if not recipes:
-            raise InvalidOrderTransition(f'Món {product.name} hiện chưa thể phục vụ. Vui lòng chọn món khác hoặc liên hệ nhân viên.')
+            label = f' ({BowlSize(bowl_size).label})' if isinstance(product,MenuItem) and product.category == 'PHO' else ''
+            raise InvalidOrderTransition(f'Món {product.name}{label} hiện chưa thể phục vụ. Vui lòng chọn món khác hoặc liên hệ nhân viên.')
         for recipe in recipes:
             amount = recipe.quantity_required * quantity
             if not amount.is_finite() or amount <= 0:
                 raise InvalidOrderTransition(f'Món {product.name} hiện chưa thể phục vụ. Vui lòng liên hệ nhân viên.')
             deductions.append((recipe.ingredient_id, amount))
 
-    for product, quantity, extras in lines:
-        add_product(product, quantity)
+    for line in lines:
+        product, quantity, extras = line[:3]
+        add_product(product, quantity, line[3] if len(line)>3 else BowlSize.MEDIUM)
         for topping, topping_quantity in extras:
             add_product(topping, topping_quantity)
     return deductions
@@ -75,7 +84,7 @@ def order_inventory_deductions(order, using=None):
         return list(reservation.lines.values_list('ingredient_id', 'quantity'))
     items = order.items.using(using).select_related('menu_item').prefetch_related('toppings__topping')
     return inventory_deductions([
-        (item.menu_item, item.quantity, [(extra.topping, extra.quantity) for extra in item.toppings.all()])
+        (item.menu_item, item.quantity, [(extra.topping, extra.quantity) for extra in item.toppings.all()], item.bowl_size)
         for item in items
     ], using=using)
 
@@ -107,7 +116,7 @@ def ensure_inventory_available(deductions, *, using='default', lock=False):
     return ingredients, required
 
 
-def catalog_stock_limits(products, using='default'):
+def catalog_stock_limits(products, using='default', bowl_size=BowlSize.MEDIUM):
     """Display limits are a snapshot; checkout and payment check fresh balances."""
     products = list(products)
     _prefetch_inventory_recipes(products, using)
@@ -117,7 +126,7 @@ def catalog_stock_limits(products, using='default'):
     limits = {}
     for product in products:
         try:
-            required = inventory_totals(inventory_deductions([(product, 1, [])], using=using))
+            required = inventory_totals(inventory_deductions([(product, 1, [], bowl_size)], using=using))
         except InvalidOrderTransition:
             limits[product.pk] = 0
         else:

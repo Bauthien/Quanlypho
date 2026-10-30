@@ -217,13 +217,20 @@ def evaluate_and_upgrade_tier(user_id):
     account = account_for(user)
     contribution = LoyaltyOrderContribution.objects.filter(account=account).aggregate(total=Sum('current_spend'))['total'] or 0
     # An order contributes at most one good review, including edits and moderation.
-    good_orders = set()
+    good_targets = set()
+    # 1. Đánh giá gắn với đơn hàng đủ điều kiện
     for review in Review.objects.filter(customer=user, is_published=True, order__loyalty_contribution__original_spend__gt=0,
                                         order__order_status='COMPLETED', rating__gte=4).exclude(order__purpose='SERVICE_REPLACEMENT'):
         if len(' '.join(unicodedata.normalize('NFC', review.comment).split())) >= 20:
-            good_orders.add(review.order_id)
-    tier = TierConfig.objects.filter(minimum_spend__lte=contribution, good_reviews__lte=len(good_orders)).order_by('-rank').first()
-    account.total_qualifying_spend, account.good_review_count, account.tier = contribution, len(good_orders), tier
+            good_targets.add(f'order:{review.order_id}')
+            
+    # 2. Đánh giá món ăn độc lập (không cần đơn hàng)
+    for review in Review.objects.filter(customer=user, is_published=True, order__isnull=True, menu_item__isnull=False, rating__gte=4):
+        if len(' '.join(unicodedata.normalize('NFC', review.comment).split())) >= 20:
+            good_targets.add(f'dish:{review.menu_item_id}')
+
+    tier = TierConfig.objects.filter(minimum_spend__lte=contribution, good_reviews__lte=len(good_targets)).order_by('-rank').first()
+    account.total_qualifying_spend, account.good_review_count, account.tier = contribution, len(good_targets), tier
     if tier and tier.rank > account.highest_rank:
         issue_tier_pack(account, tier)
         account.highest_rank = tier.rank
@@ -346,12 +353,11 @@ def reconcile_order_loyalty(order_id):
 @serialized
 def reward_review(review):
     order = review.order
-    if not order or order.customer_id != review.customer_id or order.order_status != 'COMPLETED' or order.purpose != 'REGULAR':
-        return
-    reconcile_order_loyalty(order.pk)
-    contribution = LoyaltyOrderContribution.objects.filter(order=order).first()
-    if contribution and contribution.original_spend > 0:
-        award_points(account_for(review.customer), f'review:{order.pk}', getattr(settings, 'REVIEW_POINTS', 5), 'Thưởng đánh giá đơn đã mua')
+    if order and order.customer_id == review.customer_id and order.order_status == 'COMPLETED' and order.purpose == 'REGULAR':
+        reconcile_order_loyalty(order.pk)
+        contribution = LoyaltyOrderContribution.objects.filter(order=order).first()
+        if contribution and contribution.original_spend > 0:
+            award_points(account_for(review.customer), f'review:{order.pk}', getattr(settings, 'REVIEW_POINTS', 5), 'Thưởng đánh giá đơn đã mua')
     evaluate_and_upgrade_tier(review.customer_id)
 
 

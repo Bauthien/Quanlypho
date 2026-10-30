@@ -8,7 +8,57 @@ và áp dụng khung định lượng chuẩn ẩm thực (Vietnamese Culinary H
 
 import re
 import unicodedata
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+
+
+BOWL_FACTORS = {'S':Decimal('0.8'),'M':Decimal('1'),'L':Decimal('1.2')}
+BOWL_LABELS = {'S':'Tô nhỏ','M':'Tô vừa','L':'Tô lớn'}
+
+
+def scale_food_recipe(result, available_ingredients, bowl_size, reference='standard'):
+    """Scale from a medium recipe once, then round in the actual stock unit."""
+    if not isinstance(bowl_size,str) or bowl_size not in BOWL_FACTORS:
+        return {'ok':False,'rows':[],'error':'Chọn Tô nhỏ, Tô vừa hoặc Tô lớn để tạo định lượng.'}
+    factors = {'g':('mass',Decimal(1)),'gram':('mass',Decimal(1)),'gam':('mass',Decimal(1)),
+               'gr':('mass',Decimal(1)),'kg':('mass',Decimal(1000)),
+               'ml':('volume',Decimal(1)),'l':('volume',Decimal(1000)),
+               'lit':('volume',Decimal(1000)),'liter':('volume',Decimal(1000))}
+    counted = {'chai','lon','hop','goi','cai','qua','vien','phan','dia','chen','ly','to'}
+    catalog = {str(item['id']):item for item in available_ingredients}
+    rows=[]
+    try:
+        for row in result['rows']:
+            ingredient=catalog.get(str(row['ingredient_id']))
+            if not ingredient:
+                raise ValueError('Nguyên liệu của công thức Tô vừa không còn phù hợp. Kiểm tra lại công thức đã lưu.')
+            stock_unit=remove_accents(ingredient['unit'])
+            input_unit=remove_accents(row['input_unit'])
+            source=factors.get(input_unit,('other',Decimal(1)))
+            stock=factors.get(stock_unit,('other',Decimal(1)))
+            if input_unit!=stock_unit and (source[0]=='other' or source[0]!=stock[0]):
+                raise ValueError(f'Chưa có quy đổi phù hợp cho nguyên liệu {ingredient["name"]}.')
+            quantity=Decimal(str(row['quantity']))
+            if not quantity.is_finite() or quantity<=0:
+                raise ValueError('Công thức Tô vừa có số lượng chưa hợp lệ.')
+            base=quantity*source[1]/stock[1]
+            is_counted=stock_unit in counted
+            step=Decimal(1) if is_counted else Decimal('.01')
+            scaled=max(step,(base if is_counted else base*BOWL_FACTORS[bowl_size]).quantize(step,rounding=ROUND_HALF_UP))
+            if scaled>Decimal('99999999.99'):
+                raise ValueError('Số lượng sau khi tính theo cỡ tô vượt giới hạn kho.')
+            output_unit=get_input_unit(ingredient['unit'])
+            output_factor=factors.get(remove_accents(output_unit),('other',Decimal(1)))[1]
+            amount=scaled*stock[1]/output_factor
+            value=format(amount.normalize(),'f')
+            reason=f'Giữ {value} {output_unit} nguyên đơn vị.' if is_counted else f'{BOWL_LABELS[bowl_size]}: {value} {output_unit}, tính từ công thức Tô vừa.'
+            rows.append({**row,'name':ingredient['name'],'quantity':value,'input_unit':output_unit,'reason':reason})
+    except (ValueError,InvalidOperation,KeyError,TypeError) as exc:
+        return {'ok':False,'rows':[],'error':str(exc)}
+    percent=int(BOWL_FACTORS[bowl_size]*100)
+    source_label='công thức Tô vừa đã lưu' if reference=='saved_medium' else 'công thức Tô vừa gợi ý'
+    return {**result,'ok':bool(rows),'rows':rows,'bowl_size':bowl_size,'bowl_label':BOWL_LABELS[bowl_size],
+            'scale_factor':str(BOWL_FACTORS[bowl_size]),'reference':reference,
+            'explanation':f'{BOWL_LABELS[bowl_size]} = {percent}% {source_label}. Làm tròn theo đơn vị kho; nguyên liệu tính bằng quả/chai/lon giữ nguyên.'}
 
 
 def remove_accents(input_str: str) -> str:
@@ -45,7 +95,7 @@ def get_input_unit(base_unit: str) -> str:
     return base_unit
 
 
-def suggest_recipe_bom(product_name: str, category: str = 'PHO', target_kind: str = 'MENU', available_ingredients: list = None) -> dict:
+def suggest_recipe_bom(product_name: str, category: str = 'PHO', target_kind: str = 'MENU', available_ingredients: list = None, bowl_size: str = 'M', medium_rows: list = None) -> dict:
     """
     Thuật toán cốt lõi: Domain-specific Semantic NLP & Heuristic Engine.
     
@@ -60,6 +110,10 @@ def suggest_recipe_bom(product_name: str, category: str = 'PHO', target_kind: st
     """
     if available_ingredients is None:
         available_ingredients = []
+
+    if target_kind=='MENU' and category=='PHO' and medium_rows is not None:
+        return scale_food_recipe({'ok':bool(medium_rows),'mode':'BOM','product_name':product_name,'rows':medium_rows},
+                                 available_ingredients,bowl_size,reference='saved_medium')
 
     name_raw = (product_name or '').strip()
     name_norm = remove_accents(name_raw)
@@ -312,11 +366,14 @@ def suggest_recipe_bom(product_name: str, category: str = 'PHO', target_kind: st
             if beef:
                 rows.append({'ingredient_id': beef['id'], 'name': beef['name'], 'quantity': '80', 'input_unit': get_input_unit(beef['unit']), 'reason': 'Thịt chính chuẩn'})
 
-    return {
+    result = {
         'ok': bool(rows),
         'mode': mode,
         'product_name': name_raw,
         'explanation': ". ".join(explanation_parts) + ".",
         'rows': rows
     }
+    if target_kind=='MENU' and category=='PHO':
+        return scale_food_recipe(result,available_ingredients,bowl_size)
+    return result
 

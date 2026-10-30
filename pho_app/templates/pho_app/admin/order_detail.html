@@ -23,7 +23,7 @@
             {% if order_items %}<p class="order-scroll-hint">Cuộn ngang để xem số lượng, đơn giá và thành tiền →</p><div class="table-scroll" tabindex="0" role="region" aria-label="Danh sách món, cuộn ngang để xem đơn giá">
                 <table class="data-table order-items-table"><thead><tr><th scope="col">Món / tùy chọn</th><th scope="col">Số lượng</th><th scope="col" class="order-money">Đơn giá đã lưu</th><th scope="col" class="order-money">Thành tiền</th></tr></thead>
                 <tbody>{% for item in order_items %}<tr>
-                    <td class="order-item-description"><strong>{{ item.menu_item.name }}</strong>
+                    <td class="order-item-description"><strong>{{ item.menu_item.name }}{% if item.menu_item.category == 'PHO' %} · {{ item.get_bowl_size_display }}{% endif %}</strong>
                         {% if item.toppings.all %}<ul class="order-item-extras">{% for extra in item.toppings.all %}<li>+ {{ extra.topping.name }} <span>× {{ extra.quantity }}</span></li>{% endfor %}</ul><small class="table-person">Số lượng topping tính cho cả dòng món.</small>{% endif %}
                         {% if item.customizations.all %}<ul class="order-customizations">{% for extra in item.customizations.all %}<li>{{ extra.customization.get_category_display }}: {{ extra.customization.name }} <span>Miễn phí</span></li>{% endfor %}</ul>{% endif %}
                         {% if item.note %}<p class="order-item-note"><strong>Ghi chú:</strong> {{ item.note }}</p>{% endif %}

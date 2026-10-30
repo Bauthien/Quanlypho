@@ -77,7 +77,7 @@ def quote_checkout(request):
     try:
         lines, _, _, _, _, _, quote, digest = checkout_inputs(request)
         from .services import ensure_inventory_available
-        ensure_inventory_available(inventory_deductions([(l['product'], l['qty'], [(t, l['qty']) for t in l['toppings']]) for l in lines]))
+        ensure_inventory_available(inventory_deductions([(l['product'], l['qty'], [(t, l['qty']) for t in l['toppings']], l['bowl_size']) for l in lines]))
         quote = {**quote, 'token': signing.dumps({'digest': digest}, salt='checkout')}
         return JsonResponse({'ok': True, **quote})
     except (BusinessError, ValueError) as exc:
@@ -150,12 +150,12 @@ def create_order(request):
         shipping_code=f'VD-{uuid.uuid4().hex[:8].upper()}' if kind == 'DELIVERY' else '')
     saved = []
     for line in lines:
-        item = OrderItem.objects.create(order=order, menu_item=line['product'], quantity=line['qty'], item_price=line['price'], note=line['note'])
+        item = OrderItem.objects.create(order=order, menu_item=line['product'], quantity=line['qty'], item_price=line['price'], note=line['note'], bowl_size=line['bowl_size'])
         OrderItemTopping.objects.bulk_create([OrderItemTopping(order_item=item, topping=t, quantity=line['qty']) for t in line['toppings']])
         OrderItemCustomization.objects.bulk_create([OrderItemCustomization(order_item=item, customization=c) for c in line['choices']])
         saved.append(item)
     save_checkout(order, quote, saved, wallet)
-    deductions = inventory_deductions([(l['product'], l['qty'], [(t, l['qty']) for t in l['toppings']]) for l in lines])
+    deductions = inventory_deductions([(l['product'], l['qty'], [(t, l['qty']) for t in l['toppings']], l['bowl_size']) for l in lines])
     reserve_inventory(order, deductions)
     if kind == 'DELIVERY':
         Delivery.objects.create(order=order)

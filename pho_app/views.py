@@ -265,6 +265,25 @@ def menu_view(request):
     is_door = request.GET.get('door') == '1'
     items = list(MenuItem.objects.filter(is_active=True))
     stock_limits = catalog_stock_limits(items)
+    from .models import BowlSize
+    size_limits = {size:(dict(stock_limits) if size == 'M' else catalog_stock_limits(items,bowl_size=size)) for size in BowlSize.values}
+    bowl_options = {item.pk:[{'value':size,'label':label,'max_quantity':size_limits[size][item.pk]}
+                    for size,label in BowlSize.choices if any(row.bowl_size == size for row in item.recipes.all())]
+                    for item in items if item.category == 'PHO'}
+    for item in items:
+        if item.category == 'PHO':
+            stock_limits[item.pk] = max([option['max_quantity'] for option in bowl_options[item.pk]] or [0])
+    dish_reviews = Review.objects.filter(is_published=True, menu_item__isnull=False).values('menu_item_id').annotate(
+        avg_rating=Avg('rating'),
+        review_count=Count('pk')
+    )
+    rating_map = {
+        r['menu_item_id']: {
+            'avg_rating': round(float(r['avg_rating']), 1) if r['avg_rating'] else 0.0,
+            'review_count': r['review_count']
+        }
+        for r in dish_reviews
+    }
     menu_payload = [
         {
             'id': item.id,
@@ -275,6 +294,9 @@ def menu_view(request):
             'image': item.image_primary.url if item.image_primary else '',
             'is_available': stock_limits[item.pk] > 0,
             'max_quantity': stock_limits[item.pk],
+            'bowl_sizes': bowl_options.get(item.pk,[]),
+            'avg_rating': rating_map.get(item.id, {}).get('avg_rating', 0.0),
+            'review_count': rating_map.get(item.id, {}).get('review_count', 0),
         }
         for item in items
     ]
@@ -1159,16 +1181,31 @@ def admin_table_delete(request, table_id):
 # REVIEWS - ĐÁNH GIÁ KHÁCH HÀNG
 # ==========================================
 def reviews_list(request):
-    reviews = Review.objects.all().select_related('customer', 'menu_item', 'order').order_by('-created_at')
+    reviews = Review.objects.filter(is_published=True).select_related('customer', 'menu_item', 'order').order_by('-created_at')
     
+    # Lọc theo món ăn nếu có
+    item_id = request.GET.get('item')
+    if item_id and item_id.isdigit():
+        reviews = reviews.filter(menu_item_id=int(item_id))
+        
+    # Lọc theo số sao nếu có
+    rating_filter = request.GET.get('rating')
+    if rating_filter and rating_filter.isdigit() and 1 <= int(rating_filter) <= 5:
+        reviews = reviews.filter(rating=int(rating_filter))
+
     # Phân trang - 10 đánh giá mỗi trang
     paginator = Paginator(reviews, 10)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
+    menu_items = MenuItem.objects.filter(is_active=True).order_by('name')
+    
     return render(request, 'pho_app/customer/reviews.html', {
         'page_obj': page_obj,
         'paginator': paginator,
+        'menu_items': menu_items,
+        'selected_item': int(item_id) if item_id and item_id.isdigit() else None,
+        'selected_rating': int(rating_filter) if rating_filter and rating_filter.isdigit() else None,
     })
 
 
@@ -1181,13 +1218,18 @@ def review_form(request):
         messages.error(request, 'Chỉ khách hàng mới được đánh giá.')
         return redirect(request.user.home_url_name())
     
-    # Lấy menu items và recent orders cho dropdown
-    menu_items = MenuItem.objects.all().order_by('name')
+    selected_item_id = request.GET.get('item', '')
+    selected_order_id = request.GET.get('order', '')
+    
+    # Lấy menu items đang hoạt động và recent orders cho dropdown
+    menu_items = MenuItem.objects.filter(is_active=True).order_by('name')
     recent_orders = Order.objects.filter(customer=request.user, order_status='COMPLETED', purpose='REGULAR').order_by('-created_at')[:20]
     
     return render(request, 'pho_app/customer/review_form.html', {
         'menu_items': menu_items,
         'recent_orders': recent_orders,
+        'selected_item_id': selected_item_id,
+        'selected_order_id': selected_order_id,
     })
 
 
@@ -1199,6 +1241,13 @@ def review_list_all(request):
         return redirect(request.user.home_url_name())
     
     reviews = Review.objects.select_related('customer', 'menu_item', 'order').order_by('-created_at')
+    
+    # Lọc theo trạng thái xuất bản nếu có
+    status_filter = request.GET.get('status')
+    if status_filter == 'published':
+        reviews = reviews.filter(is_published=True)
+    elif status_filter == 'hidden':
+        reviews = reviews.filter(is_published=False)
     
     # Tính trung bình đánh giá
     avg_rating = round(Review.objects.aggregate(avg=Avg('rating'))['avg'] or 0, 1)
@@ -1212,7 +1261,23 @@ def review_list_all(request):
         'paginator': paginator,
         'avg_rating': avg_rating,
         'avg_rating_percent': avg_rating * 20,
+        'current_status': status_filter,
     })
+
+
+@admin_required
+@require_POST
+def admin_review_toggle_publish(request, review_id):
+    review = get_object_or_404(Review, pk=review_id)
+    review.is_published = not review.is_published
+    review.save(update_fields=['is_published'])
+    from .loyalty import evaluate_and_upgrade_tier
+    evaluate_and_upgrade_tier(review.customer_id)
+    from .domain import audit
+    audit(request.user, 'REVIEW_MODERATED', review, is_published=review.is_published)
+    status_label = "hiển thị" if review.is_published else "ẩn"
+    messages.success(request, f'Đã {status_label} đánh giá của {review.customer.display_name}.')
+    return redirect('review_list_all')
 
 
 @login_required
@@ -1224,34 +1289,123 @@ def submit_review(request):
     
     rating = request.POST.get('rating')
     comment = request.POST.get('comment', '').strip()[:500]
-    menu_item_id = request.POST.get('menu_item_id')
-    order_id = request.POST.get('order_id')
+    menu_item_id = (request.POST.get('menu_item_id') or '').strip()
+    order_id = (request.POST.get('order_id') or '').strip()
     
     if not rating or not rating.isdigit() or not 1 <= int(rating) <= 5:
         messages.error(request, 'Vui lòng chọn đánh giá từ 1 đến 5 sao.')
-        return redirect('reviews_list')
+        return redirect(f"{reverse('review_form')}{f'?item={menu_item_id}' if menu_item_id else ''}")
     
-    try:
-        menu_item = MenuItem.objects.get(pk=menu_item_id) if menu_item_id else None
-        order = Order.objects.get(pk=order_id, customer=request.user) if order_id else None
-    except (MenuItem.DoesNotExist, Order.DoesNotExist):
-        messages.error(request, 'Món ăn hoặc đơn hàng không hợp lệ.')
-        return redirect('reviews_list')
+    # Khách hàng có thể đánh giá món ăn trực tiếp không cần đơn hàng,
+    # nhưng bắt buộc phải chọn ít nhất món ăn hoặc đơn hàng.
+    if not menu_item_id and not order_id:
+        messages.error(request, 'Vui lòng chọn món ăn hoặc đơn hàng để đánh giá.')
+        return redirect('review_form')
     
-    if order and (order.order_status != 'COMPLETED' or order.purpose != 'REGULAR' or (menu_item and not order.items.filter(menu_item=menu_item).exists())):
-        messages.error(request, 'Chỉ đánh giá món thuộc đơn mua hàng đã hoàn tất.')
-        return redirect('reviews_list')
+    menu_item = None
+    if menu_item_id:
+        try:
+            menu_item = MenuItem.objects.get(pk=int(menu_item_id))
+        except (MenuItem.DoesNotExist, ValueError):
+            messages.error(request, 'Món ăn đã chọn không hợp lệ.')
+            return redirect('review_form')
+            
+    order = None
+    if order_id:
+        try:
+            order = Order.objects.get(pk=int(order_id), customer=request.user)
+        except (Order.DoesNotExist, ValueError):
+            messages.error(request, 'Đơn hàng không hợp lệ hoặc không thuộc về bạn.')
+            return redirect('review_form')
+        
+        if order.order_status != 'COMPLETED' or order.purpose != 'REGULAR':
+            messages.error(request, 'Chỉ có thể liên kết đánh giá với đơn hàng đã hoàn tất.')
+            return redirect('review_form')
+        
+        # Nếu chọn cả đơn hàng và món ăn, kiểm tra xem món có nằm trong đơn hàng đó không.
+        # Nếu không có, linh hoạt ghi nhận đánh giá món độc lập để không cản trở khách.
+        if menu_item and not order.items.filter(menu_item=menu_item).exists():
+            order = None
+            messages.info(request, f'Món "{menu_item.name}" không nằm trong đơn đã chọn, hệ thống đã ghi nhận đánh giá món ăn độc lập.')
+    
+    image_file = request.FILES.get('image')
     review = Review.objects.filter(customer=request.user, menu_item=menu_item, order=order).order_by('-pk').first()
     if review:
-        review.rating, review.comment, review.revision = int(rating), comment, review.revision + 1
-        review.save(update_fields=['rating', 'comment', 'revision'])
+        review.rating = int(rating)
+        review.comment = comment
+        review.revision += 1
+        update_fields = ['rating', 'comment', 'revision']
+        if image_file:
+            review.image = image_file
+            update_fields.append('image')
+        review.save(update_fields=update_fields)
+        messages.success(request, 'Đã cập nhật đánh giá của bạn thành công!')
     else:
-        review = Review.objects.create(customer=request.user, menu_item=menu_item, order=order, rating=int(rating), comment=comment)
+        review = Review.objects.create(
+            customer=request.user,
+            menu_item=menu_item,
+            order=order,
+            rating=int(rating),
+            comment=comment,
+            image=image_file,
+        )
+        messages.success(request, 'Cảm ơn bạn đã gửi đánh giá!')
+    
+    # Tích điểm thưởng thành viên nếu có liên kết đơn hàng hợp lệ
     from .loyalty import reward_review
     reward_review(review)
     
-    messages.success(request, 'Cảm ơn bạn đã đánh giá!')
     return redirect('reviews_list')
+
+
+@login_required
+@require_POST
+def customer_review_delete(request, review_id):
+    if not request.user.is_customer():
+        messages.error(request, 'Chỉ khách hàng mới có quyền xóa đánh giá của mình.')
+        return redirect(request.user.home_url_name())
+    review = get_object_or_404(Review, pk=review_id, customer=request.user)
+    customer_id = review.customer_id
+    from .domain import audit
+    audit(request.user, 'REVIEW_DELETED_BY_CUSTOMER', review, review_id=review_id)
+    review.delete()
+    from .loyalty import evaluate_and_upgrade_tier
+    evaluate_and_upgrade_tier(customer_id)
+    messages.success(request, 'Đã xóa đánh giá của bạn thành công.')
+    return redirect(f"{reverse('account')}?tab=reviews")
+
+
+@admin_required
+@require_POST
+def admin_review_delete(request, review_id):
+    review = get_object_or_404(Review, pk=review_id)
+    customer_id = review.customer_id
+    customer_name = review.customer.display_name
+    from .domain import audit
+    audit(request.user, 'REVIEW_DELETED_BY_ADMIN', review, review_id=review_id, customer=customer_name)
+    review.delete()
+    from .loyalty import evaluate_and_upgrade_tier
+    evaluate_and_upgrade_tier(customer_id)
+    messages.success(request, f'Đã xóa vĩnh viễn đánh giá của {customer_name}.')
+    return redirect('review_list_all')
+
+
+@admin_required
+@require_POST
+def admin_review_reply(request, review_id):
+    review = get_object_or_404(Review, pk=review_id)
+    reply_text = request.POST.get('store_reply', '').strip()[:1000]
+    if not reply_text:
+        messages.error(request, 'Nội dung phản hồi không được để trống.')
+        return redirect('review_list_all')
+    review.store_reply = reply_text
+    review.replied_at = timezone.now()
+    review.replied_by = request.user
+    review.save(update_fields=['store_reply', 'replied_at', 'replied_by'])
+    from .domain import audit
+    audit(request.user, 'REVIEW_REPLIED', review, review_id=review_id, customer=review.customer.display_name)
+    messages.success(request, f'Đã gửi phản hồi đến đánh giá của {review.customer.display_name}.')
+    return redirect('review_list_all')
 
 
 def custom_404_view(request, exception=None):
@@ -1265,21 +1419,32 @@ def custom_404_view(request, exception=None):
 @admin_required
 def admin_inventory(request):
     """Trang quản lý kho nguyên liệu, công thức định lượng và lịch sử biến động kho."""
+    from .models import BowlSize
     ingredients = list(Ingredient.objects.all().order_by('name'))
     from .stock import reserved_totals, available_balances
     from .models import InventoryIncident, InventoryRequirement, StockReservation
     held, available = reserved_totals(), available_balances()
+    from .models import StockMovement
+    recipe_counts = dict(Recipe.objects.values('ingredient_id').annotate(total=Count('pk')).values_list('ingredient_id', 'total'))
+    transaction_counts = dict(InventoryTransaction.objects.values('ingredient_id').annotate(total=Count('pk')).values_list('ingredient_id', 'total'))
+    linked_ids = (set(InventoryRequirement.objects.values_list('ingredient_id', flat=True).distinct())
+                  | set(StockMovement.objects.values_list('ingredient_id', flat=True).distinct())
+                  | set(InventoryIncident.objects.values_list('ingredient_id', flat=True).distinct()))
     for ingredient in ingredients:
         ingredient.held_stock = held.get(ingredient.pk, 0)
         ingredient.available_stock = available.get(ingredient.pk, 0)
-    recipes = Recipe.objects.select_related('menu_item', 'topping', 'ingredient').all().order_by('menu_item__name', 'topping__name')
+        ingredient.recipes_count = recipe_counts.get(ingredient.pk, 0)
+        ingredient.tx_count = transaction_counts.get(ingredient.pk, 0)
+        ingredient.has_relations = bool(ingredient.recipes_count or ingredient.tx_count or ingredient.pk in linked_ids)
+    recipes = Recipe.objects.select_related('menu_item', 'topping', 'ingredient').all().order_by('menu_item__name', 'topping__name', 'pk')
     recent_transactions = list(InventoryTransaction.objects.select_related('ingredient', 'created_by').order_by('-created_at'))
 
     total_ingredients = len(ingredients)
+    inactive_count = sum(not ingredient.is_active for ingredient in ingredients)
     shared_ingredient_count = sum(ingredient.usage == Ingredient.Usage.SHARED for ingredient in ingredients)
     food_ingredient_count = sum(ingredient.usage == Ingredient.Usage.PHO for ingredient in ingredients) + shared_ingredient_count
     drink_ingredient_count = sum(ingredient.usage == Ingredient.Usage.DRINK for ingredient in ingredients) + shared_ingredient_count
-    low_stock_count = Ingredient.objects.filter(current_stock__lte=F('minimum_stock')).count()
+    low_stock_count = Ingredient.objects.filter(is_active=True, current_stock__lte=F('minimum_stock')).count()
     total_recipes = recipes.count()
 
     menu_items = list(MenuItem.objects.filter(is_active=True).order_by('name'))
@@ -1328,6 +1493,7 @@ def admin_inventory(request):
             'available_stock': avail,
             'is_low_stock': is_low,
             'servings': servings,
+            'bowl_label': r.get_bowl_size_display() if r.menu_item_id and r.menu_item.category == 'PHO' else '',
         }
 
     recipe_list = list(recipes)
@@ -1336,7 +1502,9 @@ def admin_inventory(request):
         item_recipes = [r for r in recipe_list if r.menu_item_id == item.pk]
         target = 'DRINK' if item.category == MenuItem.Category.DRINK else 'MENU'
         display_recipes = [format_qty_and_servings(r) for r in item_recipes]
-        servings_list = [d['servings'] for d in display_recipes if d['quantity_required'] > 0]
+        configured_sizes = {r.bowl_size for r in item_recipes} if target == 'MENU' else set()
+        capacity_size = 'M' if 'M' in configured_sizes else next((size for size in ['S','L'] if size in configured_sizes),'M')
+        servings_list = [d['servings'] for r,d in zip(item_recipes,display_recipes) if d['quantity_required'] > 0 and (target != 'MENU' or r.bowl_size == capacity_size)]
         max_servings = min(servings_list) if servings_list else None
         search_kw = ' '.join(d['name'] for d in display_recipes)
         product_recipes.append({
@@ -1353,6 +1521,8 @@ def admin_inventory(request):
             'ingredient_count': len(item_recipes),
             'has_recipe': len(item_recipes) > 0 or item.inventory_mode == 'DIRECT',
             'max_servings': max_servings,
+            'capacity_size_label': dict(BowlSize.choices)[capacity_size] if target == 'MENU' else '',
+            'configured_size_count': len(configured_sizes),
             'search_keywords': search_kw,
             'tone_class': 'tone-red' if target == 'MENU' else 'tone-blue',
         })
@@ -1395,6 +1565,7 @@ def admin_inventory(request):
         'recipe_filter_counts': recipe_filter_counts,
         'recent_transactions': recent_transactions,
         'total_ingredients': total_ingredients,
+        'inactive_count': inactive_count,
         'food_ingredient_count': food_ingredient_count,
         'drink_ingredient_count': drink_ingredient_count,
         'shared_ingredient_count': shared_ingredient_count,
@@ -1404,6 +1575,12 @@ def admin_inventory(request):
         'menu_items': menu_items,
         'toppings': toppings,
         'stock_incidents': InventoryIncident.objects.filter(resolved=False).select_related('ingredient'),
+        'resolved_stock_incidents': InventoryIncident.objects.filter(resolved=True).select_related('ingredient').order_by('-created_at')[:20],
+        'stock_operations_history': list(
+            StockMovement.objects.filter(
+                kind__in=['RETURN_UNUSED', 'WASTE_EXPORTED', 'WASTE_WAREHOUSE']
+            ).select_related('ingredient', 'order', 'actor').order_by('-created_at')[:100]
+        ),
         'stock_request_key': uuid.uuid4().hex,
         'stock_orders': stock_orders, 'stock_order_options': stock_order_options,
         'stock_holds': StockReservation.objects.filter(state='ACTIVE', expires_at__gt=timezone.now()).select_related('order').prefetch_related('lines__ingredient')[:8],
@@ -1473,15 +1650,54 @@ def admin_ingredient_edit(request, ingredient_id):
 @admin_required
 @require_POST
 def admin_ingredient_delete(request, ingredient_id):
-    """Xóa nguyên liệu khỏi kho."""
+    """Xóa nguyên liệu khỏi kho (hỗ trợ ngưng dùng hoặc buộc xóa dữ liệu test)."""
     ingredient = get_object_or_404(Ingredient, pk=ingredient_id)
     name = ingredient.name
+    action = request.POST.get('action')
+    force = request.POST.get('force') in ('1', 'true', True) or action == 'force_delete'
+    deactivate = action == 'deactivate' or request.POST.get('deactivate') in ('1', 'true', True)
+
+    if deactivate:
+        ingredient.is_active = False
+        ingredient.save(update_fields=['is_active'])
+        from .domain import audit
+        audit(request.user, 'INGREDIENT_DEACTIVATED', ingredient)
+        messages.success(request, f'Đã chuyển nguyên liệu "{name}" sang trạng thái ngưng sử dụng.')
+        return redirect('admin_inventory')
+
+    if force:
+        with transaction.atomic():
+            from .commerce_models import InventoryRequirement, StockMovement, InventoryIncident
+            from .domain import audit
+            ingredient.recipe_set.all().delete()
+            ingredient.inventorytransaction_set.all().delete()
+            InventoryRequirement.objects.filter(ingredient=ingredient).delete()
+            StockMovement.objects.filter(ingredient=ingredient).delete()
+            InventoryIncident.objects.filter(ingredient=ingredient).delete()
+            audit(request.user, 'INGREDIENT_FORCE_DELETED', ingredient, name=name)
+            ingredient.delete()
+        messages.success(request, f'Đã xóa vĩnh viễn nguyên liệu "{name}" cùng toàn bộ dữ liệu test liên quan.')
+        return redirect('admin_inventory')
+
     try:
         ingredient.delete()
     except ProtectedError:
-        messages.error(request, f'Không thể xóa nguyên liệu "{name}" đang có định lượng hoặc lịch sử kho. Dữ liệu được giữ nguyên.')
+        messages.error(request, f'Không thể xóa nguyên liệu "{name}" đang có định lượng hoặc lịch sử kho. Hãy chọn "Ngưng sử dụng" hoặc "Xóa vĩnh viễn (dữ liệu test)".')
     else:
         messages.success(request, f'Đã xóa nguyên liệu "{name}" khỏi kho.')
+    return redirect('admin_inventory')
+
+
+@admin_required
+@require_POST
+def admin_ingredient_activate(request, ingredient_id):
+    """Kích hoạt lại nguyên liệu đã ngưng sử dụng."""
+    ingredient = get_object_or_404(Ingredient, pk=ingredient_id)
+    ingredient.is_active = True
+    ingredient.save(update_fields=['is_active'])
+    from .domain import audit
+    audit(request.user, 'INGREDIENT_ACTIVATED', ingredient)
+    messages.success(request, f'Đã kích hoạt lại nguyên liệu "{ingredient.name}".')
     return redirect('admin_inventory')
 
 
@@ -1530,7 +1746,7 @@ def admin_ingredient_import(request, ingredient_id):
 @require_POST
 def admin_recipe_create(request):
     """Thiết lập định lượng (BOM) tiêu hao cho món chính hoặc topping."""
-    if 'rows' in request.POST:
+    if 'rows' in request.POST or 'size_rows' in request.POST:
         from .recipes import RecipeBatchForm, recipe_revision
         form = RecipeBatchForm(request.POST)
         if not form.is_valid():
@@ -1539,10 +1755,10 @@ def admin_recipe_create(request):
         if form.cleaned_data['revision'] != recipe_revision(target):
             return JsonResponse({'ok': False, 'errors': {'revision': [{'message': 'Định lượng đã được cập nhật ở trang khác. Tải lại trang trước khi lưu để tránh ghi đè.', 'code': 'conflict'}]}}, status=409)
         is_topping = isinstance(target, Topping)
-        target.recipes.all().delete()
+        target.recipes.filter(bowl_size__in=form.cleaned_data['cleaned_by_size']).delete()
         Recipe.objects.bulk_create([
-            Recipe(ingredient=ingredient, quantity_required=quantity, **({'topping': target} if is_topping else {'menu_item': target}))
-            for ingredient, quantity in form.cleaned_data['cleaned_rows']
+            Recipe(ingredient=ingredient, quantity_required=quantity, bowl_size=size, **({'topping': target} if is_topping else {'menu_item': target}))
+            for size, rows in form.cleaned_data['cleaned_by_size'].items() for ingredient, quantity in rows
         ])
         if is_topping:
             target.applies_to_all = form.cleaned_data['applies_to_all']
@@ -1552,8 +1768,12 @@ def admin_recipe_create(request):
             target.inventory_mode = (form.cleaned_data.get('inventory_mode') or 'BOM') if target.category == 'DRINK' else 'BOM'
             target.save(update_fields=['inventory_mode'])
         from .domain import audit
-        audit(request.user, 'RECIPE_UPDATED', target, ingredient_count=len(form.cleaned_data['cleaned_rows']))
-        messages.success(request, f'Đã lưu {len(form.cleaned_data["cleaned_rows"])} nguyên liệu cho {target.name}.')
+        audit(request.user, 'RECIPE_UPDATED', target, ingredient_count=len(form.cleaned_data['cleaned_rows']), bowl_sizes=list(form.cleaned_data['cleaned_by_size']))
+        if 'size_rows' in request.POST:
+            count=sum(bool(rows) for rows in form.cleaned_data['cleaned_by_size'].values())
+            messages.success(request, f'Đã lưu định lượng cho {target.name}: {count}/3 cỡ tô có công thức.')
+        else:
+            messages.success(request, f'Đã lưu {len(form.cleaned_data["cleaned_rows"])} nguyên liệu cho {target.name}.')
         return JsonResponse({'ok': True, 'redirect': reverse('admin_inventory') + '?view=recipes'})
     form = RecipeForm(request.POST)
     if not form.is_valid():
@@ -1585,30 +1805,53 @@ def admin_recipe_auto_suggest(request):
     target_kind = request.GET.get('target', 'MENU')
     product_id = request.GET.get('id')
     scope = request.GET.get('scope', 'PHO')
+    bowl_size = request.GET.get('bowl_size','M')
+    if target_kind not in ('MENU','DRINK','TOPPING'):
+        return JsonResponse({'ok':False,'error':'Loại sản phẩm không hợp lệ.'},status=422)
+    try:
+        product_id=int(product_id)
+    except (ValueError,TypeError):
+        return JsonResponse({'ok':False,'error':'Chọn sản phẩm cần tạo định lượng.'},status=422)
 
     product_name = ''
     category = 'PHO'
     if target_kind == 'TOPPING':
-        topping = get_object_or_404(Topping, pk=product_id)
+        topping = get_object_or_404(Topping, pk=product_id, is_active=True)
         product_name = topping.name
         category = topping.category or scope
     else:
-        menu_item = get_object_or_404(MenuItem, pk=product_id)
+        menu_item = get_object_or_404(MenuItem, pk=product_id, is_active=True)
         product_name = menu_item.name
         category = menu_item.category
+        if category != ('PHO' if target_kind=='MENU' else 'DRINK'):
+            return JsonResponse({'ok':False,'error':'Món không thuộc nhóm sản phẩm đã chọn.'},status=422)
 
     ingredients = list(
         Ingredient.objects.filter(usage__in=[category, Ingredient.Usage.SHARED])
         .values('id', 'name', 'unit', 'usage')
     )
 
+    medium_rows = None
+    if target_kind=='MENU' and category=='PHO':
+        saved_medium=list(menu_item.recipes.filter(bowl_size='M').select_related('ingredient').order_by('pk'))
+        if saved_medium:
+            # Existing duplicate ingredient lines represent a summed medium recipe.
+            totals={}
+            for row in saved_medium:
+                item=totals.setdefault(row.ingredient_id,{'ingredient_id':row.ingredient_id,'quantity':Decimal(0),'input_unit':row.ingredient.unit})
+                item['quantity']+=row.quantity_required
+            medium_rows=list(totals.values())
     result = suggest_recipe_bom(
         product_name=product_name,
         category=category,
         target_kind=target_kind,
-        available_ingredients=ingredients
+        available_ingredients=ingredients,
+        bowl_size=bowl_size,
+        medium_rows=medium_rows
     )
-    return JsonResponse(result)
+    response=JsonResponse(result,status=422 if not result['ok'] and result.get('error') else 200)
+    response['Cache-Control']='no-store'
+    return response
 
 
 @admin_required
@@ -1640,5 +1883,5 @@ def admin_recipe_delete(request, recipe_id):
 # All legacy stock/role/order mutation paths share the transaction gate.
 for _name in ('confirm_cash_payment', 'assign_order_table', 'free_table', 'free_order_table',
               'admin_ingredient_create', 'admin_ingredient_edit', 'admin_ingredient_import',
-              'admin_recipe_create', 'admin_recipe_delete', 'admin_recipe_clear_product', 'admin_update_role', 'submit_review', 'simulate_vietqr_payment'):
+              'admin_recipe_create', 'admin_recipe_delete', 'admin_recipe_clear_product', 'admin_update_role', 'submit_review', 'simulate_vietqr_payment', 'admin_ingredient_delete', 'admin_ingredient_activate', 'admin_review_toggle_publish', 'customer_review_delete', 'admin_review_delete', 'admin_review_reply'):
     globals()[_name] = serialized(globals()[_name])

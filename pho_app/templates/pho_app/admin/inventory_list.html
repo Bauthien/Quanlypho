@@ -64,7 +64,7 @@
 </div>
 
 {% if low_stock_count %}<div class="notice notice-warm">{% include 'pho_app/includes/icon.html' with name='bag' %}<div><strong>{{ low_stock_count }} nguyên liệu cần nhập thêm</strong><p>Xem bộ lọc “Cần nhập” để kiểm tra số lượng và bổ sung kịp thời.</p></div></div>{% endif %}
-<nav class="commerce-tabbar" role="tablist" aria-label="Quản lý tồn kho"><button id="tabBtnIngredients" role="tab" aria-selected="true" aria-controls="tabIngredientsSection" data-tab-target="tabIngredientsSection" data-tab-key="ingredients">Nguyên liệu</button><button id="tabBtnRecipes" role="tab" aria-selected="false" aria-controls="tabRecipesSection" data-tab-target="tabRecipesSection" data-tab-key="recipes">Định lượng món</button><button id="tabBtnHistory" role="tab" aria-selected="false" aria-controls="tabHistorySection" data-tab-target="tabHistorySection" data-tab-key="history">Lịch sử xuất nhập</button><button id="stockIncidentsTab" role="tab" aria-selected="false" aria-controls="stockIncidents" data-tab-target="stockIncidents" data-tab-key="incidents">Sự cố kho{% if stock_incidents %}<span class="tab-count">{{ stock_incidents|length }}</span>{% endif %}</button></nav>
+<nav class="commerce-tabbar" role="tablist" aria-label="Quản lý tồn kho"><button id="tabBtnIngredients" role="tab" aria-selected="true" aria-controls="tabIngredientsSection" data-tab-target="tabIngredientsSection" data-tab-key="ingredients">Nguyên liệu</button><button id="tabBtnRecipes" role="tab" aria-selected="false" aria-controls="tabRecipesSection" data-tab-target="tabRecipesSection" data-tab-key="recipes">Định lượng món</button><button id="tabBtnHistory" role="tab" aria-selected="false" aria-controls="tabHistorySection" data-tab-target="tabHistorySection" data-tab-key="history">Lịch sử xuất nhập</button><button id="stockIncidentsTab" role="tab" aria-selected="false" aria-controls="stockIncidents" data-tab-target="stockIncidents" data-tab-key="incidents">Sự cố kho &amp; Hao hụt{% if stock_incidents %}<span class="tab-count">{{ stock_incidents|length }}</span>{% endif %}</button></nav>
 {% include 'pho_app/includes/inventory_ingredients.html' %}
 <section id="tabRecipesSection" role="tabpanel" aria-labelledby="tabBtnRecipes" data-auto-paginate="20" hidden>
   <div class="panel">
@@ -127,7 +127,7 @@
                     <span class="recipe-cat-badge">{{ p.category_display }}</span>
                     {% if p.has_recipe and p.max_servings is not None %}
                       <span class="recipe-servings-hint" title="Ước tính số phần có thể phục vụ từ tồn kho khả dụng hiện tại">
-                        Kho đủ: <strong>~{{ p.max_servings }}</strong> phần
+                        Kho đủ: <strong>~{{ p.max_servings }}</strong> {% if p.capacity_size_label %}{{ p.capacity_size_label|lower }}{% else %}phần{% endif %}
                       </span>
                     {% endif %}
                   </div>
@@ -141,7 +141,7 @@
                 </span>
               {% elif p.has_recipe %}
                 <span class="recipe-status-pill tone-green">
-                  <span class="dot"></span> {{ p.ingredient_count }} nguyên liệu
+                    <span class="dot"></span> {% if p.target == 'MENU' %}{{ p.configured_size_count }}/3 cỡ tô{% else %}{{ p.ingredient_count }} nguyên liệu{% endif %}
                 </span>
               {% else %}
                 <span class="recipe-status-pill tone-orange">
@@ -157,7 +157,7 @@
                   <div class="recipe-chips-list">
                     {% for r in p.display_recipes|slice:":3" %}
                       <span class="recipe-chip-item">
-                        <strong class="chip-name">{{ r.name }}</strong>: 
+                        <strong class="chip-name">{% if r.bowl_label %}{{ r.bowl_label }} · {% endif %}{{ r.name }}</strong>: 
                         <span class="chip-qty">{{ r.formatted_qty }}</span>
                       </span>
                     {% endfor %}
@@ -215,7 +215,7 @@
                     {% if p.max_servings is not None %}
                       <div class="detail-capacity-pill">
                         <span class="capacity-title">Khả năng phục vụ từ kho:</span>
-                        <strong class="capacity-num">~{{ p.max_servings }} phần</strong>
+                        <strong class="capacity-num">~{{ p.max_servings }} {% if p.capacity_size_label %}{{ p.capacity_size_label|lower }}{% else %}phần{% endif %}</strong>
                       </div>
                     {% endif %}
                     <button class="secondary-btn" type="button" data-dialog-open="recipeEditor" data-recipe-target="{{ p.target }}" data-product-id="{{ p.id }}">
@@ -247,6 +247,7 @@
                           <span class="sub-badge-usage">{{ r.usage_display }}</span>
                         </td>
                         <td class="sub-col-qty">
+                          {% if r.bowl_label %}<span class="badge">{{ r.bowl_label }}</span>{% endif %}
                           <span class="sub-qty-val">{{ r.formatted_qty }}</span>
                           {% if r.raw_qty_note %}
                             <small class="sub-qty-raw">({{ r.raw_qty_note }})</small>
@@ -299,7 +300,8 @@
 </div>
 <dialog class="commerce-dialog" id="importEditor" aria-labelledby="importEditorTitle"><header class="commerce-dialog-head"><div><h2 id="importEditorTitle">Nhập thêm nguyên liệu</h2><p data-import-name></p></div><button class="icon-button" type="button" data-dialog-close aria-label="Đóng">{% include 'pho_app/includes/icon.html' with name='close' %}</button></header><form class="commerce-form" method="post">{% csrf_token %}<div class="commerce-dialog-body"><div class="form-grid"><div class="form-group"><label for="importQuantity">Số lượng nhập</label><input id="importQuantity" class="form-input" type="number" min="0.01" step="0.01" name="quantity" required></div><div class="form-group"><label for="importUnit">Đơn vị nhập</label><input id="importUnit" class="form-input" name="input_unit" maxlength="50" required></div></div><p class="notice notice-info">Đơn vị lưu kho: <strong data-import-unit></strong>. Hỗ trợ quy đổi kg ↔ g, lít ↔ ml và ghi lại lượng nhập thực tế.</p></div><footer class="commerce-dialog-actions"><button class="secondary-btn" type="button" data-dialog-close>Để sau</button><button class="primary-btn">Xác nhận nhập kho</button></footer></form></dialog>
 {% include 'pho_app/includes/recipe_editor.html' %}
+{% include 'pho_app/includes/ingredient_delete_dialog.html' %}
 {% endblock %}
 
-{% block extra_css %}<link rel="stylesheet" href="{% static 'pho_app/css/recipes.css' %}">{% endblock %}
-{% block extra_js %}<script src="{% static 'pho_app/js/recipes.js' %}" defer></script>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'pho_app/css/recipes.css' %}?v=20261030-bowl-sizes">{% endblock %}
+{% block extra_js %}<script src="{% static 'pho_app/js/recipes.js' %}?v=20261030-bowl-auto-80-120" defer></script>{% endblock %}

@@ -12,16 +12,21 @@
   const normalized = unit => unit.trim().toLowerCase();
   const inputUnit = unit => normalized(unit) === 'kg' ? 'g' : ['l','lít','lit','liter'].includes(normalized(unit)) ? 'ml' : unit;
   const unitChoices = unit => ['kg','g','gram','gam','gr'].includes(normalized(unit)) ? ['g','kg'] : ['ml','l','lít','lit','liter'].includes(normalized(unit)) ? ['ml','lít'] : [unit];
-  const productKey = p => `${p.kind}:${p.id}`;
-  const storageKey = `pho-recipe-drafts-v2:${data.user_id}`;
-  let kind = 'MENU', scope = 'PHO', selected = {}, drafts = {}, pending = new Set(), clearKey = null;
+  const sizeLabels = {S:'Tô nhỏ',M:'Tô vừa',L:'Tô lớn'};
+  const isBowlProduct = p => p?.kind === 'menu' && p.category === 'PHO';
+  const productKey = (p,size=bowlSize) => `${p.kind}:${p.id}${isBowlProduct(p)?':'+size:''}`;
+  const storageKey = `pho-recipe-drafts-v3:${data.user_id}`;
+  let kind = 'MENU', scope = 'PHO', bowlSize = 'M', selected = {}, drafts = {}, pending = new Set(), clearKey = null;
   try {
     const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
     if (saved && ['MENU','DRINK','TOPPING'].includes(saved.kind) && ['PHO','DRINK'].includes(saved.scope)) {
       kind = saved.kind; scope = saved.scope; selected = saved.selected || {};
+      if (Object.hasOwn(sizeLabels,saved.bowlSize)) bowlSize = saved.bowlSize;
       for (const p of data.products) {
-        const d = saved.drafts?.[productKey(p)];
-        if (d && Array.isArray(d.rows) && d.rows.length <= 200 && d.rows.every(r => r && typeof r.quantity === 'string' && typeof r.input_unit === 'string' && (r.ingredient_id === '' || data.ingredients.some(i => i.id === Number(r.ingredient_id)))) && Array.isArray(d.allowed)) drafts[productKey(p)] = d;
+        for (const size of isBowlProduct(p)?Object.keys(sizeLabels):['M']) {
+          const key=productKey(p,size),d=saved.drafts?.[key];
+          if (d && Array.isArray(d.rows) && d.rows.length <= 200 && d.rows.every(r => r && typeof r.quantity === 'string' && typeof r.input_unit === 'string' && (r.ingredient_id === '' || data.ingredients.some(i => i.id === Number(r.ingredient_id)))) && Array.isArray(d.allowed)) drafts[key] = d;
+        }
       }
     }
   } catch (_) {}
@@ -31,26 +36,29 @@
   const products = () => data.products.filter(p => p.kind === (kind === 'TOPPING' ? 'topping' : 'menu') && p.category === category());
   const product = () => products().find(p => p.id === Number(selected[selectionKey()])) || products()[0];
   const blank = () => ({ingredient_id:'',quantity:'',input_unit:''});
-  const draft = () => {
-    const p = product(); if (!p) return {rows:[],allowed:[],all:false,mode:'BOM'};
-    const key = productKey(p);
-    if (!drafts[key]) drafts[key] = {revision:p.revision,dirty:false,mode:p.inventory_mode === 'DIRECT' ? 'DIRECT' : 'BOM',all:p.applies_to_all,allowed:[...p.allowed_menu_items],rows:p.rows.map(r => {
+  const draftFor = (p,size=bowlSize) => {
+    if (!p) return {rows:[],allowed:[],all:false,mode:'BOM'};
+    const key = productKey(p,size), rows=isBowlProduct(p)?(p.size_rows?.[size]||[]):p.rows;
+    if (!drafts[key]) drafts[key] = {revision:p.revision,dirty:false,mode:p.inventory_mode === 'DIRECT' ? 'DIRECT' : 'BOM',all:p.applies_to_all,allowed:[...p.allowed_menu_items],rows:rows.map(r => {
       const unit = inputUnit(r.input_unit), factor = (units[normalized(r.input_unit)] || 1) / (units[normalized(unit)] || 1);
       return {...r,quantity:String(Number((Number(r.quantity)*factor).toFixed(6))),input_unit:unit};
     })};
     return drafts[key];
   };
+  const draft = () => draftFor(product());
   const direct = () => kind === 'DRINK' && draft().mode === 'DIRECT';
   const ingredients = () => data.ingredients.filter(i => [category(),'SHARED'].includes(i.usage) && (!direct() || countUnits.has(normalized(i.unit))));
-  function remember() { try { sessionStorage.setItem(storageKey, JSON.stringify({kind,scope,selected,drafts})); } catch (_) {} }
+  function remember() { try { sessionStorage.setItem(storageKey, JSON.stringify({kind,scope,bowlSize,selected,drafts})); } catch (_) {} }
   function closePicker() { $('#recipeBatchPicker').hidden = true; $('[data-recipe-pick]').setAttribute('aria-expanded','false'); pending.clear(); }
   function closeClear() { $('#recipeClearConfirm').hidden = true; $('[data-recipe-clear]').setAttribute('aria-expanded','false'); clearKey = null; }
   function errors(messages = []) { const box = $('[data-recipe-errors]'); box.hidden = !messages.length; box.innerHTML = messages.map(m => `<p>${escape(m)}</p>`).join(''); }
   function summary() {
     const p = product(), d = draft(), count = d.rows.filter(r => r.ingredient_id).length;
-    $('[data-recipe-count]').textContent = p ? `${count} nguyên liệu${d.dirty?' · Chưa lưu':''}` : 'Chưa có sản phẩm trong nhóm';
-    $('[data-recipe-save]').textContent = direct() ? 'Lưu liên kết kho' : `Lưu ${count} nguyên liệu`;
-    $('[data-recipe-save]').disabled = !p || !count;
+    const variants=isBowlProduct(p)?Object.keys(sizeLabels).map(size=>draftFor(p,size)):[d];
+    const dirtyCount=variants.filter(item=>item.dirty).length;
+    $('[data-recipe-count]').textContent = p ? `${isBowlProduct(p)?sizeLabels[bowlSize]+' · ':''}${count} nguyên liệu${dirtyCount?` · ${isBowlProduct(p)?dirtyCount+' cỡ chưa lưu':'Chưa lưu'}`:''}` : 'Chưa có sản phẩm trong nhóm';
+    $('[data-recipe-save]').textContent = isBowlProduct(p)?'Lưu cả 3 cỡ tô':direct() ? 'Lưu liên kết kho' : `Lưu ${count} nguyên liệu`;
+    $('[data-recipe-save]').disabled = !p || !variants.some(item=>item.rows.some(row=>row.ingredient_id));
     $('[data-recipe-clear]').disabled = !d.rows.length;
     $('[data-recipe-add]').disabled = !p || d.rows.length >= ingredients().length;
     $('[data-recipe-pick]').disabled = !p || ingredients().every(i => d.rows.some(r => Number(r.ingredient_id) === i.id));
@@ -85,6 +93,9 @@
     $('#menuItemSelect').disabled = kind === 'TOPPING'; $('#menuItemSelect').required = kind !== 'TOPPING';
     $('#toppingSelect').disabled = kind !== 'TOPPING'; $('#toppingSelect').required = kind === 'TOPPING';
     $('[data-menu-label]').textContent = kind === 'DRINK' ? 'Chọn nước uống' : 'Chọn món chính';
+    $('[data-bowl-size-field]').hidden = kind !== 'MENU';
+    $('[data-product-fields]').classList.toggle('has-bowl-size',kind === 'MENU');
+    $('[data-bowl-size]').disabled = kind !== 'MENU'; $('[data-bowl-size]').value = bowlSize;
     const select = kind === 'TOPPING' ? $('#toppingSelect') : $('#menuItemSelect');
     select.innerHTML = products().map(p => `<option value="${p.id}">${escape(p.name)}</option>`).join('') || '<option value="">Chưa có sản phẩm trong nhóm</option>';
     if (p) select.value = p.id;
@@ -92,18 +103,19 @@
     $('[data-drink-mode]').hidden = kind !== 'DRINK';
     all('[name=inventory_mode]').forEach(i => i.checked = i.value === draft().mode);
     if (kind === 'TOPPING') renderEligibility();
-    $('[data-recipe-portion]').textContent = kind === 'MENU' ? 'Lượng tiêu hao cho 1 tô' : kind === 'TOPPING' ? 'Lượng tiêu hao cho 1 phần gọi thêm' : direct() ? 'Trừ 1 chai / lon khi bán' : 'Lượng tiêu hao cho 1 ly';
+    $('[data-recipe-portion]').textContent = kind === 'MENU' ? `Lượng tiêu hao cho 1 ${sizeLabels[bowlSize].toLowerCase()}` : kind === 'TOPPING' ? 'Lượng tiêu hao cho 1 phần gọi thêm' : direct() ? 'Trừ 1 chai / lon khi bán' : 'Lượng tiêu hao cho 1 ly';
     $('[data-recipe-heading]').textContent = direct() ? 'Hàng xuất kho' : 'Danh sách nguyên liệu';
     const sharedCount = ingredients().filter(i => i.usage === 'SHARED').length;
     $('[data-inventory-scope]').textContent = `${direct()?'Hàng xuất kho':'Nguyên liệu'}: ${groupName()}${sharedCount?' + Dùng chung':''}`;
     $('[data-inventory-label]').textContent = `${ingredients().length} lựa chọn phù hợp${sharedCount?` · ${sharedCount} dùng chung`:''}`;
     $('[data-row-actions]').hidden = direct();
-    $('[data-recipe-status]').textContent = !p ? 'Thêm sản phẩm trong Thực đơn và chọn đúng nhóm trước khi thiết lập định lượng.' : '';
+    $('[data-recipe-status]').textContent = !p ? 'Thêm sản phẩm trong Thực đơn và chọn đúng nhóm trước khi thiết lập định lượng.' : kind==='MENU'?'Cỡ tô chưa có nguyên liệu sẽ chưa được bán. Bản nháp được giữ khi chuyển cỡ tô.':'';
     renderRows();
   }
   all('[name=recipe_target]').forEach(i => i.addEventListener('change', () => {kind=i.value;render();remember();}));
   all('[name=topping_scope]').forEach(i => i.addEventListener('change', () => {scope=i.value;render();remember();}));
   [$('#menuItemSelect'),$('#toppingSelect')].forEach(select => select.addEventListener('change', () => {selected[selectionKey()]=Number(select.value);render();remember();}));
+  $('[data-bowl-size]').addEventListener('change',event=>{bowlSize=event.target.value;render();remember();});
   all('[name=inventory_mode]').forEach(i => i.addEventListener('change', () => {
     const d=draft(); d.mode=i.value;
     if (direct()) {d.preparedRows=d.rows; const valid=d.rows.length===1 && ingredients().some(i=>i.id===Number(d.rows[0].ingredient_id)); d.rows=valid?[{...d.rows[0],quantity:'1'}]:[{...blank(),quantity:'1'}];}
@@ -114,6 +126,7 @@
   $('[data-menu-choices]').addEventListener('change', () => {draft().allowed=all('[data-allowed]:checked').map(i=>Number(i.value));changed();});
   $('[data-recipe-rows]').addEventListener('input', e => {if(!e.target.matches('[data-amount]')||direct())return;draft().rows[Number(e.target.closest('.recipe-row').dataset.index)].quantity=e.target.value;changed();});
   $('[data-recipe-rows]').addEventListener('change', e => {
+    if(!e.target.matches('[data-ingredient],[data-unit]'))return;
     const el=e.target.closest('.recipe-row');if(!el)return;const index=Number(el.dataset.index),r=draft().rows[index];
     if(e.target.matches('[data-ingredient]')) {r.ingredient_id=e.target.value;const i=data.ingredients.find(i=>i.id===Number(r.ingredient_id));r.input_unit=i?inputUnit(i.unit):'';r.quantity=direct()?'1':'';renderRows();$(`#recipeAmount${index}`).focus();}
     if(e.target.matches('[data-unit]')) {const before=units[normalized(r.input_unit)]||1,after=units[normalized(e.target.value)]||1,amount=number(r.quantity);r.input_unit=e.target.value;if(Number.isFinite(amount))r.quantity=String(Number((amount*before/after).toFixed(6)));renderRows();}
@@ -145,6 +158,7 @@
     autoBtn.addEventListener('click', async () => {
       const p = product();
       if (!p) return;
+      const requestedKey=productKey(p),requestedDraft=draft(),requestedKind=kind,requestedSize=bowlSize;
       closePicker(); closeClear(); errors();
       autoBtn.disabled = true;
       const originalHtml = autoBtn.innerHTML;
@@ -154,15 +168,18 @@
         url.searchParams.set('target', kind);
         url.searchParams.set('id', p.id);
         url.searchParams.set('scope', scope);
-        const res = await fetch(url.href, {headers: {Accept: 'application/json'}});
+        if(isBowlProduct(p))url.searchParams.set('bowl_size',requestedSize);
+        const res = await fetch(url.href, {headers: {Accept: 'application/json'},cache:'no-store'});
         const data = await res.json();
         if (data.ok && Array.isArray(data.rows) && data.rows.length) {
-          const d = draft();
+          const d = requestedDraft;
           d.rows = data.rows.map(r => ({
             ingredient_id: String(r.ingredient_id),
             quantity: String(r.quantity),
             input_unit: r.input_unit
           }));
+          d.dirty=true;
+          if (!product() || requestedKey!==productKey(product()) || requestedKind!==kind) {remember();return;}
           if (data.mode && kind === 'DRINK') {
             d.mode = data.mode;
             all('[name=inventory_mode]').forEach(i => i.checked = i.value === d.mode);
@@ -171,6 +188,7 @@
           changed();
           if (autoBanner) {
             autoBanner.hidden = false;
+            $('[data-auto-banner-title]').textContent=isBowlProduct(p)?`Đã tạo định lượng cho ${data.bowl_label||sizeLabels[requestedSize]}`:'Đã tự động tính toán định lượng chuẩn';
             $('[data-auto-banner-desc]').textContent = data.explanation || 'Thuật toán đã nhận diện thành phần và điền định lượng tiêu chuẩn.';
           }
           $('[data-recipe-status]').textContent = '✨ ' + (data.explanation || 'Đã tự động tính toán định lượng.');
@@ -188,41 +206,53 @@
 
   $('[data-recipe-form]').addEventListener('submit', async e => {
     e.preventDefault();closeClear();const p=product(),d=draft();if(!p)return;
+    const groups=isBowlProduct(p)?Object.entries(sizeLabels).map(([size])=>({size,d:draftFor(p,size)})):[{size:'M',d}];
+    const invalid=groups.find(group=>{const seen=new Set();return group.d.rows.some(row=>{const ingredient=ingredients().find(item=>item.id===Number(row.ingredient_id)),amount=number(row.quantity);const bad=!ingredient||seen.has(ingredient?.id)||!Number.isFinite(amount)||amount<=0;if(ingredient)seen.add(ingredient.id);return bad;});});
+    if(invalid&&isBowlProduct(p)&&invalid.size!==bowlSize){bowlSize=invalid.size;render();errors([`${sizeLabels[bowlSize]} có dòng chưa hợp lệ. Kiểm tra nguyên liệu và số lượng trước khi lưu.`]);return;}
     const messages=[],seen=new Set();
     all('.recipe-row').forEach((el,index)=>{
       const r=d.rows[index],ingredient=ingredients().find(i=>i.id===Number(r.ingredient_id)),amount=number(r.quantity);
       let message=!ingredient?'Chọn nguyên liệu phù hợp.':seen.has(ingredient.id)?'Nguyên liệu đã có trong công thức.':!Number.isFinite(amount)||amount<=0?'Nhập số lượng lớn hơn 0.':'';
       if(ingredient)seen.add(ingredient.id);const error=el.querySelector('[data-line-error]');error.textContent=message;error.hidden=!message;el.querySelector('[data-ingredient]').setAttribute('aria-invalid',String(!!message));if(message)messages.push(`Dòng ${index+1}: ${message}`);
     });
-    if(!d.rows.length)messages.push('Thêm ít nhất một nguyên liệu trước khi lưu.');
+    if(!groups.some(group=>group.d.rows.length))messages.push('Thêm ít nhất một nguyên liệu trước khi lưu.');
     if(kind==='TOPPING'&&!d.all&&!d.allowed.length)messages.push('Chọn ít nhất một món được gọi kèm topping.');
     if(messages.length){errors(messages);$('[aria-invalid=true]')?.focus();return;}
     const form=e.target,body=new FormData(form),saveKey=productKey(p);
-    body.set('rows',JSON.stringify(d.rows));body.set('revision',d.revision);body.set('inventory_mode',d.mode);
+    body.set('rows',JSON.stringify(d.rows));body.set('revision',(groups.find(group=>group.d.dirty)?.d||d).revision);body.set('inventory_mode',d.mode);
+    if(isBowlProduct(p))body.set('size_rows',JSON.stringify(Object.fromEntries(groups.map(group=>[group.size,group.d.rows]))));
     body.delete('allowed_menu_items');d.allowed.forEach(id=>body.append('allowed_menu_items',id));body.set('applies_to_all',d.all?'1':'');
     const controls=[...form.querySelectorAll('button,input,select')].map(el=>({el,disabled:el.disabled}));controls.forEach(({el})=>el.disabled=true);form.setAttribute('aria-busy','true');$('[data-recipe-save]').textContent='Đang lưu…';
     try {
       const response=await fetch(form.action,{method:'POST',body,headers:{Accept:'application/json'}});
       const result=await response.json();
       if(!response.ok||!result.ok){const messages=Object.values(result.errors||{}).flat().map(error=>error.message);throw new Error(messages.join('\n')||result.error||'Không lưu được định lượng. Hãy kiểm tra phiên đăng nhập và thử lại.');}
-      delete drafts[saveKey];remember();location.assign(result.redirect);
+      if(isBowlProduct(p))Object.keys(sizeLabels).forEach(size=>delete drafts[productKey(p,size)]);else delete drafts[saveKey];remember();location.assign(result.redirect);
     } catch(error) {errors([error.message||'Không kết nối được máy chủ. Bản nháp được giữ để thử lại.']);}
     finally {controls.forEach(({el,disabled})=>el.disabled=disabled);form.removeAttribute('aria-busy');summary();}
   });
   const inventory = document.querySelector('[data-inventory-groups]');
   function syncInventoryGroup() {
     if (!inventory) return;
-    const group = inventory.querySelector('[data-list-category][aria-pressed="true"]')?.dataset.listCategory || 'PHO';
+    const group = inventory.querySelector('[data-list-category][aria-pressed="true"]')?.dataset.listCategory || 'all';
     const create = document.querySelector('[data-inventory-create]');
-    if (create) { const url = new URL(create.href); url.searchParams.set('usage', group); create.href = url.href; }
-    inventory.querySelector('[data-inventory-group-name]').textContent = group === 'DRINK' ? 'Nước uống' : 'Món chính';
-    inventory.querySelector('[data-inventory-recipe]').dataset.recipeTarget = group === 'DRINK' ? 'DRINK' : 'MENU';
+    if (create) {
+      const url = new URL(create.href);
+      if (group === 'PHO' || group === 'DRINK') url.searchParams.set('usage', group);
+      else url.searchParams.delete('usage');
+      create.href = url.href;
+    }
+    const groupName = inventory.querySelector('[data-inventory-group-name]');
+    if (groupName) groupName.textContent = group === 'all' ? 'Tất cả' : group === 'DRINK' ? 'Nước uống' : 'Món chính';
+    const recipeButton = inventory.querySelector('[data-inventory-recipe]');
+    if (recipeButton) recipeButton.dataset.recipeTarget = group === 'DRINK' ? 'DRINK' : 'MENU';
   }
   inventory?.addEventListener('click', event => { if (event.target.closest('[data-list-category]')) syncInventoryGroup(); });
   document.addEventListener('click', event => {
     const opener = event.target.closest('[data-dialog-open="recipeEditor"][data-recipe-target]');
     if (!opener || !['MENU','DRINK','TOPPING'].includes(opener.dataset.recipeTarget)) return;
     kind = opener.dataset.recipeTarget;
+    if(kind==='MENU'&&Object.hasOwn(sizeLabels,opener.dataset.bowlSize))bowlSize=opener.dataset.bowlSize;
     if (kind !== 'TOPPING') scope = kind === 'DRINK' ? 'DRINK' : 'PHO';
     if (opener.dataset.productId) {
       selected[selectionKey()] = Number(opener.dataset.productId);

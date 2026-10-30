@@ -48,7 +48,7 @@ def available_balances():
 
 
 def reserve_inventory(order, deductions, snapshot=None):
-    from .services import ensure_inventory_available, inventory_totals
+    from .services import ensure_inventory_available, inventory_totals, inventory_recipe_rows
     ingredients, required = ensure_inventory_available(deductions, lock=True)
     if snapshot is None:
         import hashlib
@@ -56,12 +56,12 @@ def reserve_inventory(order, deductions, snapshot=None):
         from .models import BOMVersion
         snapshot = []
         for item in order.items.select_related('menu_item').prefetch_related('toppings__topping'):
-            products = [(item.menu_item, item.quantity)] + [(extra.topping, extra.quantity) for extra in item.toppings.all()]
-            for product, quantity in products:
+            products = [(item.menu_item, item.quantity, item.bowl_size)] + [(extra.topping, extra.quantity, 'M') for extra in item.toppings.all()]
+            for product, quantity, bowl_size in products:
                 data = {'mode': product.inventory_mode, 'name': product.name, 'product_id': product.pk,
-                    'type': type(product).__name__, 'recipes': [{'ingredient': row.ingredient_id,
+                    'type': type(product).__name__, 'bowl_size':bowl_size, 'recipes': [{'ingredient': row.ingredient_id,
                         'quantity': str(row.quantity_required), 'unit': row.ingredient.unit}
-                        for row in product.recipes.select_related('ingredient').order_by('pk')]}
+                        for row in inventory_recipe_rows(product,bowl_size,product.recipes.select_related('ingredient').order_by('pk'))]}
                 fingerprint = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
                 version, _ = BOMVersion.objects.get_or_create(fingerprint=fingerprint, defaults={
                     'product_type': type(product).__name__, 'product_id': product.pk, 'snapshot': data})

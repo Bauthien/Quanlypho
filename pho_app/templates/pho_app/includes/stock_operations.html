@@ -1,3 +1,212 @@
-<section id="stockIncidents" role="tabpanel" aria-labelledby="stockIncidentsTab" hidden><div class="commerce-section-head"><div><h2>Kiểm tra chênh lệch kho</h2><p>Nguyên liệu đang khóa cần xử lý lượng đã cam kết trước khi mở bán lại.</p></div></div>{% for incident in stock_incidents %}<article class="panel"><div class="commerce-section-head"><div class="section-title"><span class="stat-icon tone-orange">{% include 'pho_app/includes/icon.html' with name='bag' %}</span><h3>{{ incident.ingredient.name }}</h3></div><span class="badge badge-orange">Đang khóa</span></div><p class="commerce-muted">{{ incident.detail }}</p><form class="commerce-form" method="post" action="{% url 'stock_operation' %}">{% csrf_token %}<input type="hidden" name="action" value="resolve"><input type="hidden" name="incident_id" value="{{ incident.pk }}"><div class="form-actions"><div class="form-group form-save-note"><label for="incident-{{ incident.pk }}">Kết quả xử lý các đơn cam kết</label><input id="incident-{{ incident.pk }}" class="form-input" name="evidence" required placeholder="Đã kiểm kê, xử lý các đơn liên quan…"></div><button class="secondary-btn">Xác nhận điều kiện mở kho</button></div></form></article>{% empty %}<div class="panel commerce-empty"><span class="stat-icon tone-green">{% include 'pho_app/includes/icon.html' with name='check' %}</span><strong>Kho đang hoạt động bình thường</strong><p>Không có sự cố chênh lệch kho cần xử lý.</p></div>{% endfor %}</section>
-<dialog class="commerce-dialog" id="stockEditor" aria-labelledby="stockEditorTitle"><header class="commerce-dialog-head"><div><h2 id="stockEditorTitle">Hoàn kho / Ghi hao hụt</h2><p>Chọn đúng nghiệp vụ cho nguyên liệu và đơn hàng.</p></div><button class="icon-button" type="button" data-dialog-close aria-label="Đóng">{% include 'pho_app/includes/icon.html' with name='close' %}</button></header><form class="commerce-form" method="post" action="{% url 'stock_operation' %}" data-stock-operation-form>{% csrf_token %}<input type="hidden" name="request_key" value="{{ stock_request_key }}"><div class="commerce-dialog-body"><div class="form-grid"><div class="form-group field-wide"><label for="stockMode">Nghiệp vụ</label><select id="stockMode" class="form-input" name="action"><option value="return">Hoàn nguyên liệu chưa dùng</option><option value="waste">Ghi hao hụt</option></select></div><p class="notice notice-warm field-wide" data-stock-mode-help></p><div class="form-group field-wide"><label for="stockOrder">Đơn đã xuất nguyên liệu</label><select id="stockOrder" class="form-input" name="order_id"><option value="">Không gắn đơn · hao hụt kho chưa xuất</option>{% for stock_order in stock_orders %}<option value="{{ stock_order.pk }}" data-order-state="{{ stock_order.order_status }}">{{ stock_order.order_code }} · {{ stock_order.get_order_status_display }}</option>{% endfor %}</select><p class="field-help">100 đơn xuất gần nhất. Hoàn kho chỉ chọn được đơn đã hủy.</p></div><div class="form-group"><label for="stockIngredient">Nguyên liệu</label><select id="stockIngredient" class="form-input" name="ingredient_id" required>{% for ingredient in ingredients %}<option value="{{ ingredient.pk }}">{{ ingredient.name }} ({{ ingredient.unit }})</option>{% endfor %}</select></div><div class="form-group"><label for="stockQuantity">Số lượng theo đơn vị kho</label><input id="stockQuantity" class="form-input" name="quantity" type="number" min="0.01" step="0.01" required></div><div class="form-group field-wide"><label for="stockEvidence">Lý do / xác nhận của bếp</label><textarea id="stockEvidence" class="form-input" name="evidence" required rows="3" placeholder="Tình trạng nguyên liệu, số lượng và người xác nhận…"></textarea></div></div><p class="commerce-muted">Món đã chế biến được ghi hao hụt; nguyên liệu đã xuất không bị trừ kho lần thứ hai.</p></div><footer class="commerce-dialog-actions"><button class="secondary-btn" type="button" data-dialog-close>Để sau</button><button class="primary-btn">Ghi nhận nghiệp vụ</button></footer></form></dialog>
+<section id="stockIncidents" role="tabpanel" aria-labelledby="stockIncidentsTab" hidden>
+  <div class="commerce-section-head">
+    <div>
+      <h2>Kiểm tra chênh lệch kho</h2>
+      <p>Nguyên liệu đang khóa cần xử lý lượng đã cam kết trước khi mở bán lại.</p>
+    </div>
+  </div>
+
+  {% for incident in stock_incidents %}
+    <article class="panel">
+      <div class="commerce-section-head">
+        <div class="section-title">
+          <span class="stat-icon tone-orange">{% include 'pho_app/includes/icon.html' with name='bag' %}</span>
+          <h3>{{ incident.ingredient.name }}</h3>
+        </div>
+        <span class="badge badge-orange">Đang khóa</span>
+      </div>
+      <p class="commerce-muted">{{ incident.detail }}</p>
+      <form class="commerce-form" method="post" action="{% url 'stock_operation' %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="resolve">
+        <input type="hidden" name="incident_id" value="{{ incident.pk }}">
+        <div class="form-actions">
+          <div class="form-group form-save-note">
+            <label for="incident-{{ incident.pk }}">Kết quả xử lý các đơn cam kết</label>
+            <input id="incident-{{ incident.pk }}" class="form-input" name="evidence" required placeholder="Đã kiểm kê, xử lý các đơn liên quan…">
+          </div>
+          <button class="secondary-btn">Xác nhận điều kiện mở kho</button>
+        </div>
+      </form>
+    </article>
+  {% empty %}
+    <div class="panel commerce-empty" style="margin-bottom: 1.5rem;">
+      <span class="stat-icon tone-green">{% include 'pho_app/includes/icon.html' with name='check' %}</span>
+      <strong>Kho đang hoạt động bình thường</strong>
+      <p>Không có sự cố chênh lệch kho cần xử lý.</p>
+    </div>
+  {% endfor %}
+
+  <!-- Lịch sử hoàn kho và ghi nhận hao hụt -->
+  <div class="panel" style="margin-top: 1.5rem;">
+    <div class="commerce-section-head">
+      <div>
+        <h2>Lịch sử hoàn kho &amp; ghi nhận hao hụt</h2>
+        <p>Nhật ký theo dõi các lượt hoàn nguyên liệu từ đơn hủy hoặc ghi nhận hao hụt kho / bếp chế biến.</p>
+      </div>
+      <button class="secondary-btn" type="button" data-dialog-open="stockEditor">
+        {% include 'pho_app/includes/icon.html' with name='plus' %} Hoàn kho / Ghi hao hụt
+      </button>
+    </div>
+
+    <div class="table-scroll commerce-table-wrap">
+      <table class="data-table commerce-table">
+        <thead>
+          <tr>
+            <th style="min-width: 140px;">Thời gian</th>
+            <th>Nguyên liệu</th>
+            <th style="min-width: 130px;">Nghiệp vụ</th>
+            <th style="min-width: 110px;">Biến động</th>
+            <th>Đơn hàng</th>
+            <th>Lý do / Bằng chứng</th>
+            <th>Người thực hiện</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in stock_operations_history %}
+            <tr>
+              <td>{{ item.created_at|date:'H:i · d/m/Y' }}</td>
+              <td class="table-title"><strong>{{ item.ingredient.name }}</strong></td>
+              <td>
+                {% if item.kind == 'RETURN_UNUSED' %}
+                  <span class="badge badge-green">Hoàn kho (chưa dùng)</span>
+                {% elif item.kind == 'WASTE_EXPORTED' %}
+                  <span class="badge badge-orange">Hao hụt theo đơn</span>
+                {% elif item.kind == 'WASTE_WAREHOUSE' %}
+                  <span class="badge badge-red">Hao hụt tại kho</span>
+                {% else %}
+                  <span class="badge">{{ item.kind }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if item.kind == 'RETURN_UNUSED' %}
+                  <span class="commerce-value value-green" style="font-weight: 600;">+{{ item.quantity|floatformat:2 }} {{ item.ingredient.unit }}</span>
+                {% else %}
+                  <span class="commerce-value value-brand" style="font-weight: 600;">-{{ item.quantity|floatformat:2 }} {{ item.ingredient.unit }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if item.order %}
+                  <a href="{% url 'order_detail' item.order.pk %}" class="badge badge-blue" style="text-decoration: none;">
+                    #{{ item.order.order_code }}
+                  </a>
+                {% else %}
+                  <span class="commerce-muted">Kho tổng</span>
+                {% endif %}
+              </td>
+              <td>
+                <span>{{ item.evidence|default:'—' }}</span>
+              </td>
+              <td>
+                {{ item.actor.display_name|default:item.actor.username|default:'Hệ thống' }}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7">
+                <div class="commerce-empty">
+                  <span class="stat-icon tone-gray">{% include 'pho_app/includes/icon.html' with name='bowl' %}</span>
+                  <strong>Chưa có lịch sử hoàn kho hay hao hụt</strong>
+                  <p>Các giao dịch hoàn trả nguyên liệu hoặc ghi nhận hao hụt sẽ được lưu vết chi tiết tại đây.</p>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if resolved_stock_incidents %}
+  <div class="panel" style="margin-top: 1.5rem;">
+    <details class="delivery-history">
+      <summary style="cursor: pointer; font-weight: 600; padding: 0.5rem 0;">
+        Lịch sử sự cố chênh lệch đã mở kho ({{ resolved_stock_incidents|length }})
+      </summary>
+      <div class="table-scroll commerce-table-wrap" style="margin-top: 1rem;">
+        <table class="data-table commerce-table">
+          <thead>
+            <tr>
+              <th style="min-width: 140px;">Thời gian</th>
+              <th>Nguyên liệu</th>
+              <th>Trạng thái</th>
+              <th>Nội dung sự cố &amp; kết quả xử lý</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inc in resolved_stock_incidents %}
+            <tr>
+              <td style="white-space: nowrap;">{{ inc.created_at|date:'H:i · d/m/Y' }}</td>
+              <td class="table-title"><strong>{{ inc.ingredient.name }}</strong></td>
+              <td><span class="badge badge-green">Đã mở kho</span></td>
+              <td style="white-space: pre-line;">{{ inc.detail }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+</section>
+
+<dialog class="commerce-dialog" id="stockEditor" aria-labelledby="stockEditorTitle">
+  <header class="commerce-dialog-head">
+    <div>
+      <h2 id="stockEditorTitle">Hoàn kho / Ghi hao hụt</h2>
+      <p>Chọn đúng nghiệp vụ cho nguyên liệu và đơn hàng.</p>
+    </div>
+    <button class="icon-button" type="button" data-dialog-close aria-label="Đóng">
+      {% include 'pho_app/includes/icon.html' with name='close' %}
+    </button>
+  </header>
+  <form class="commerce-form" method="post" action="{% url 'stock_operation' %}" data-stock-operation-form>
+    {% csrf_token %}
+    <input type="hidden" name="request_key" value="{{ stock_request_key }}">
+    <div class="commerce-dialog-body">
+      <div class="form-grid">
+        <div class="form-group field-wide">
+          <label for="stockMode">Nghiệp vụ</label>
+          <select id="stockMode" class="form-input" name="action">
+            <option value="return">Hoàn nguyên liệu chưa dùng</option>
+            <option value="waste">Ghi hao hụt</option>
+          </select>
+        </div>
+        <p class="notice notice-warm field-wide" data-stock-mode-help></p>
+        <div class="form-group field-wide">
+          <label for="stockOrder">Đơn đã xuất nguyên liệu</label>
+          <select id="stockOrder" class="form-input" name="order_id">
+            <option value="">Không gắn đơn · hao hụt kho chưa xuất</option>
+            {% for stock_order in stock_orders %}
+              <option value="{{ stock_order.pk }}" data-order-state="{{ stock_order.order_status }}">{{ stock_order.order_code }} · {{ stock_order.get_order_status_display }}</option>
+            {% endfor %}
+          </select>
+          <p class="field-help">100 đơn xuất gần nhất. Hoàn kho chỉ chọn được đơn đã hủy.</p>
+        </div>
+        <div class="form-group">
+          <label for="stockIngredient">Nguyên liệu</label>
+          <select id="stockIngredient" class="form-input" name="ingredient_id" required>
+            {% for ingredient in ingredients %}
+              <option value="{{ ingredient.pk }}">{{ ingredient.name }} ({{ ingredient.unit }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="stockQuantity">Số lượng theo đơn vị kho</label>
+          <input id="stockQuantity" class="form-input" name="quantity" type="number" min="0.01" step="0.01" required>
+        </div>
+        <div class="form-group field-wide">
+          <label for="stockEvidence">Lý do / xác nhận của bếp</label>
+          <textarea id="stockEvidence" class="form-input" name="evidence" required rows="3" placeholder="Tình trạng nguyên liệu, số lượng và người xác nhận…"></textarea>
+        </div>
+      </div>
+      <p class="commerce-muted">Món đã chế biến được ghi hao hụt; nguyên liệu đã xuất không bị trừ kho lần thứ hai.</p>
+    </div>
+    <footer class="commerce-dialog-actions">
+      <button class="secondary-btn" type="button" data-dialog-close>Để sau</button>
+      <button class="primary-btn">Ghi nhận nghiệp vụ</button>
+    </footer>
+  </form>
+</dialog>
+
 {{ stock_order_options|json_script:'stock-order-options' }}

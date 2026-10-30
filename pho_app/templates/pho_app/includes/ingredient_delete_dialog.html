@@ -1,0 +1,20 @@
+<dialog class="commerce-dialog ingredient-delete-dialog" id="deleteIngredientDialog" aria-labelledby="deleteIngredientTitle">
+  <header class="commerce-dialog-head">
+    <div><h2 id="deleteIngredientTitle">Xóa hoặc ngưng dùng nguyên liệu</h2><p data-delete-name></p></div>
+    <button class="icon-button" type="button" data-dialog-close aria-label="Đóng">{% include 'pho_app/includes/icon.html' with name='close' %}</button>
+  </header>
+  <div class="commerce-dialog-body">
+    <div class="notice notice-warm"><strong>Nguyên liệu đang có dữ liệu liên kết</strong><p data-delete-info></p></div>
+    <form method="post" data-delete-form class="ingredient-delete-option">
+      {% csrf_token %}<input type="hidden" name="action" value="deactivate">
+      <div><h3>Ngưng sử dụng</h3><p>Giữ công thức, số tồn và lịch sử kho. Có thể kích hoạt lại trong bộ lọc Ngưng dùng.</p></div>
+      <button class="secondary-btn" type="submit">Ngưng dùng</button>
+    </form>
+    <form method="post" data-delete-form class="ingredient-delete-option ingredient-delete-option-danger" data-confirm="Xóa vĩnh viễn nguyên liệu này cùng TOÀN BỘ định lượng, lịch sử kho và dữ liệu liên quan? Chỉ dùng cho dữ liệu test; không thể hoàn tác.">
+      {% csrf_token %}<input type="hidden" name="action" value="force_delete">
+      <div><h3>Xóa vĩnh viễn (dữ liệu test)</h3><p>Xóa cả nguyên liệu, định lượng và lịch sử kho liên quan. Thao tác không thể hoàn tác.</p></div>
+      <button class="primary-btn" type="submit">Xóa vĩnh viễn</button>
+    </form>
+  </div>
+  <footer class="commerce-dialog-actions"><button class="secondary-btn" type="button" data-dialog-close>Hủy bỏ</button></footer>
+</dialog>

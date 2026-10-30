@@ -117,6 +117,12 @@ class QueueTicket(models.Model):
 # ==========================================
 # 3. MODULE QUẢN LÝ THỰC ĐƠN (MENU MANAGEMENT)
 # ==========================================
+class BowlSize(models.TextChoices):
+    SMALL = 'S', 'Tô nhỏ'
+    MEDIUM = 'M', 'Tô vừa'
+    LARGE = 'L', 'Tô lớn'
+
+
 class MenuItem(models.Model):
     class Category(models.TextChoices):
         PHO = 'PHO', 'Phở'
@@ -271,12 +277,14 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items', verbose_name="Đơn hàng")
     menu_item = models.ForeignKey(MenuItem, on_delete=models.CASCADE, verbose_name="Món chính")
     quantity = models.PositiveIntegerField(default=1, verbose_name="Số lượng")
+    bowl_size = models.CharField(max_length=1, choices=BowlSize.choices, default=BowlSize.MEDIUM, db_default=BowlSize.MEDIUM, verbose_name='Cỡ tô')
     item_price = models.DecimalField(max_digits=10, decimal_places=0, verbose_name="Đơn giá thời điểm đặt")
     note = models.TextField(blank=True, null=True, verbose_name="Ghi chú thêm")
 
     class Meta:
         verbose_name = "Chi tiết món đặt"
         verbose_name_plural = "Chi tiết các món đặt"
+        constraints = [models.CheckConstraint(condition=models.Q(bowl_size__in=['S','M','L']), name='order_item_valid_bowl_size')]
 
     def __str__(self):
         return f"{self.quantity}x {self.menu_item.name} (Đơn {self.order.order_code})"
@@ -314,6 +322,7 @@ class Ingredient(models.Model):
     current_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)], verbose_name="Số lượng tồn hiện tại")
     minimum_stock = models.DecimalField(max_digits=10, decimal_places=2, default=0, validators=[MinValueValidator(0)], verbose_name="Ngưỡng cảnh báo hết hàng")
     ingredient_image = models.ImageField(upload_to='ingredients/', blank=True, null=True, verbose_name="Ảnh minh họa")
+    is_active = models.BooleanField(default=True, verbose_name="Còn sử dụng")
 
     class Meta:
         verbose_name = "Nguyên liệu kho"
@@ -332,11 +341,13 @@ class Recipe(models.Model):
     topping = models.ForeignKey(Topping, on_delete=models.CASCADE, blank=True, null=True, related_name='recipes', verbose_name="Dùng cho Topping")
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, verbose_name="Nguyên liệu hao phí")
     quantity_required = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))], verbose_name="Định lượng hao phí/1 đơn vị bán")
+    bowl_size = models.CharField(max_length=1, choices=BowlSize.choices, default=BowlSize.MEDIUM, db_default=BowlSize.MEDIUM, verbose_name='Cỡ tô')
 
     class Meta:
         verbose_name = "Định lượng sản phẩm (BOM)"
         verbose_name_plural = "Công thức Định lượng kho"
         constraints = [
+            models.CheckConstraint(condition=models.Q(bowl_size__in=['S','M','L']), name='recipe_valid_bowl_size'),
             models.CheckConstraint(
                 condition=(models.Q(menu_item__isnull=False, topping__isnull=True)
                            | models.Q(menu_item__isnull=True, topping__isnull=False)),
@@ -382,6 +393,10 @@ class Review(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Thời gian")
     is_published = models.BooleanField(default=True)
     revision = models.PositiveIntegerField(default=1)
+    image = models.ImageField(upload_to='reviews/', blank=True, null=True, verbose_name="Ảnh đánh giá")
+    store_reply = models.TextField(blank=True, verbose_name="Phản hồi của quán")
+    replied_at = models.DateTimeField(null=True, blank=True, verbose_name="Thời gian phản hồi")
+    replied_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='replied_reviews', verbose_name="Người phản hồi")
 
     class Meta:
         verbose_name = "Đánh giá"

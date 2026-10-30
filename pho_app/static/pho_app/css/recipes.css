@@ -2,6 +2,10 @@
 @media(max-width:600px){.recipe-editor{width:calc(100vw - 16px)}.recipe-editor .commerce-dialog-body,.recipe-editor .commerce-dialog-head,.recipe-editor .commerce-dialog-actions{padding:18px 14px}.recipe-column-head{display:none}.recipe-row{grid-template-columns:minmax(0,1fr) 90px 44px;gap:8px;border-bottom:1px solid var(--border,#e4dfd7);padding:12px 0}.recipe-ingredient-field{grid-column:1/3}.recipe-amount-field{grid-column:1;grid-row:2}.recipe-unit-field{grid-column:2;grid-row:2}.recipe-delete{grid-column:3;grid-row:1;margin-top:26px}.recipe-mobile-label{display:block;font-size:13px;color:var(--muted,#70685f);margin-bottom:5px}.recipe-editor .form-input{font-size:16px}.recipe-picker-options{grid-template-columns:1fr}.recipe-count{flex-basis:100%}.recipe-segments span{font-size:14px}}
 
 .recipe-editor .commerce-dialog-actions { flex-wrap: wrap; }
+.recipe-product-fields.has-bowl-size { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.recipe-product-fields > .form-group { min-width:0; }
+.recipe-product-fields .form-input { width:100%; }
+@media(max-width:600px) { .recipe-product-fields.has-bowl-size { grid-template-columns:minmax(0,1fr); gap:0; } }
 .recipe-editor .commerce-dialog-actions button { flex-shrink: 0; white-space: nowrap; }
 
 .inventory-group-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 20px; margin-bottom:18px; }
@@ -29,6 +33,15 @@
   transition: all 0.2s ease-in-out;
   cursor: pointer;
 }
+
+.ingredient-delete-dialog [data-delete-name] { margin-top:6px; font-weight:600; overflow-wrap:anywhere; }
+.ingredient-delete-option { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:16px; padding:16px; border:1px solid var(--border); border-radius:10px; }
+.ingredient-delete-option > div { min-width:0; }
+.ingredient-delete-option p { margin-top:6px; color:var(--muted); font-size:12px; }
+.ingredient-delete-option button { flex-shrink:0; }
+.ingredient-delete-option-danger h3 { color:var(--brand); }
+.ingredient-delete-dialog .notice { display:block; }
+@media(max-width:600px) { .ingredient-delete-option { flex-direction:column; align-items:stretch; padding:12px; } .ingredient-delete-option button { min-height:44px; } }
 .recipe-auto-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #8b2319 0%, #a62f24 100%) !important;
   transform: translateY(-1px);

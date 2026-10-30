@@ -343,7 +343,7 @@
                             <div class="reviewer-role">{{ review.customer.get_role_display }}</div>
                         </div>
                     </div>
-                    <div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
                         <div class="stars">
                             {% for i in "12345" %}
                                 {% if i|add:0 <= review.rating %}
@@ -354,6 +354,25 @@
                             {% endfor %}
                         </div>
                         <div class="review-date">{{ review.created_at|date:"d/m/Y H:i" }}</div>
+                        <div style="display: flex; gap: 6px; align-items: center; margin-top: 4px;">
+                            {% if review.is_published %}
+                                <span class="badge badge-green" style="font-size: 0.72rem;">Hiển thị</span>
+                            {% else %}
+                                <span class="badge badge-red" style="font-size: 0.72rem;">Đã ẩn</span>
+                            {% endif %}
+                            <form method="post" action="{% url 'admin_review_toggle_publish' review.pk %}" style="display: inline;">
+                                {% csrf_token %}
+                                {% if review.is_published %}
+                                    <button type="submit" class="text-button" style="font-size: 0.78rem; padding: 2px 6px; color: #C18A35;" title="Ẩn đánh giá khỏi trang khách hàng">Ẩn</button>
+                                {% else %}
+                                    <button type="submit" class="text-button" style="font-size: 0.78rem; padding: 2px 6px; color: var(--green);" title="Hiển thị lại đánh giá">Hiện</button>
+                                {% endif %}
+                            </form>
+                            <form method="post" action="{% url 'admin_review_delete' review.pk %}" style="display: inline;" onsubmit="return confirm('Bạn có chắc chắn muốn xóa vĩnh viễn đánh giá này không?');">
+                                {% csrf_token %}
+                                <button type="submit" class="text-button danger" style="font-size: 0.78rem; padding: 2px 6px;" title="Xóa vĩnh viễn đánh giá này">Xóa</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
                 
@@ -380,6 +399,45 @@
                     "{{ review.comment }}"
                 </div>
                 {% endif %}
+
+                {% if review.image %}
+                <div class="review-image-wrapper" style="margin-top: 12px;">
+                    <a href="{{ review.image.url }}" target="_blank" rel="noopener">
+                        <img src="{{ review.image.url }}" alt="Ảnh đánh giá" style="max-width: 220px; max-height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid #E5D6C5;">
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if review.store_reply %}
+                <div class="store-reply-box" style="margin-top: 14px; background: #FFF9ED; border-left: 3px solid #C18A35; padding: 12px 16px; border-radius: 0 8px 8px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 600; font-size: 0.88rem; color: #8A4B1A;">
+                            🍲 Phản hồi của quán{% if review.replied_by %} (bởi {{ review.replied_by.display_name }}){% endif %}
+                        </span>
+                        {% if review.replied_at %}
+                        <span style="font-size: 0.78rem; color: #A07855;">{{ review.replied_at|date:"d/m/Y H:i" }}</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.9rem; color: #4A332A; line-height: 1.5;">
+                        {{ review.store_reply }}
+                    </div>
+                </div>
+                {% endif %}
+
+                <details style="margin-top: 14px; border-top: 1px dashed #E5D6C5; padding-top: 10px;">
+                    <summary style="cursor: pointer; font-size: 0.88rem; font-weight: 600; color: #A94330; user-select: none;">
+                        {% if review.store_reply %}✏️ Chỉnh sửa phản hồi của quán{% else %}💬 Gửi phản hồi cho khách hàng{% endif %}
+                    </summary>
+                    <form method="post" action="{% url 'admin_review_reply' review.pk %}" style="margin-top: 10px;">
+                        {% csrf_token %}
+                        <textarea name="store_reply" class="form-input" rows="3" placeholder="Nhập lời cảm ơn hoặc phản hồi chính thức từ quán..." maxlength="1000" required style="width: 100%; box-sizing: border-box; font-size: 0.9rem; padding: 10px; border-radius: 6px; border: 1px solid #E5D6C5; background: #FCF8F1;">{{ review.store_reply }}</textarea>
+                        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px;">
+                            <button type="submit" class="secondary-btn" style="padding: 6px 16px; font-size: 0.85rem;">
+                                {% if review.store_reply %}Cập nhật phản hồi{% else %}Gửi phản hồi{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </details>
             </div>
             {% endfor %}
             

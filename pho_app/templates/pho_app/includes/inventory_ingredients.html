@@ -2,7 +2,8 @@
   <div class="panel">
     <div class="inventory-group-toolbar">
       <div class="catalog-tabs inventory-group-tabs" role="group" aria-label="Nhóm nguyên liệu">
-        <button type="button" class="active" data-list-category="PHO" aria-pressed="true">Món chính <span class="tab-count">{{ food_ingredient_count }}</span></button>
+        <button type="button" class="active" data-list-category="all" aria-pressed="true">Tất cả <span class="tab-count">{{ total_ingredients }}</span></button>
+        <button type="button" data-list-category="PHO" aria-pressed="false">Món chính <span class="tab-count">{{ food_ingredient_count }}</span></button>
         <button type="button" data-list-category="DRINK" aria-pressed="false">Nước uống <span class="tab-count">{{ drink_ingredient_count }}</span></button>
       </div>
       <p class="field-help">Nguyên liệu dùng chung (hành, tỏi, gia vị...) hiển thị ở cả 2 nhóm và dùng chung tồn kho.</p>
@@ -13,8 +14,9 @@
         <input type="search" data-list-search placeholder="Tìm tên nguyên liệu…" aria-label="Tìm tên nguyên liệu">
       </label>
       <div class="catalog-tabs" role="group" aria-label="Trạng thái nguyên liệu">
-        <button type="button" class="active" data-list-filter="all" aria-pressed="true">Tất cả</button>
+        <button type="button" class="active" data-list-filter="all" aria-pressed="true">Đang dùng</button>
         <button type="button" data-list-filter="low" aria-pressed="false">⚠️ Cần nhập thêm</button>
+        <button type="button" data-list-filter="inactive" aria-pressed="false">Ngưng dùng{% if inactive_count %} <span class="tab-count">{{ inactive_count }}</span>{% endif %}</button>
       </div>
     </div>
     <div class="table-scroll commerce-table-wrap">
@@ -32,7 +34,7 @@
         </thead>
         <tbody>
           {% for ing in ingredients %}
-          <tr data-list-record data-search="{{ ing.name }}" data-category="{% if ing.usage == 'SHARED' %}PHO DRINK{% else %}{{ ing.usage }}{% endif %}" data-state="{% if ing.current_stock <= ing.minimum_stock %}low{% endif %} {% if ing.held_stock %}held{% endif %}">
+          <tr data-list-record data-search="{{ ing.name }}" data-category="{% if ing.usage == 'SHARED' %}PHO DRINK{% else %}{{ ing.usage }}{% endif %}" data-state="{% if not ing.is_active %}inactive{% else %}{% if ing.current_stock <= ing.minimum_stock %}low{% endif %} {% if ing.held_stock %}held{% endif %}{% endif %}">
             <td>
               <div class="stock-row-title">
                 <span class="stat-icon {% if ing.current_stock <= ing.minimum_stock %}tone-red{% else %}tone-blue{% endif %}">
@@ -71,24 +73,34 @@
               <span class="stock-min-val">{{ ing.minimum_stock|floatformat:1 }} <small>{{ ing.unit }}</small></span>
             </td>
             <td>
+              {% if not ing.is_active %}<span class="badge">Ngưng dùng</span>{% else %}
               <span class="badge badge-{% if ing.current_stock <= ing.minimum_stock %}orange{% elif ing.held_stock %}blue{% else %}green{% endif %}">
                 {% if ing.current_stock <= ing.minimum_stock %}Cần nhập{% elif ing.held_stock %}Đang giữ{% else %}Ổn định{% endif %}
               </span>
+              {% endif %}
             </td>
             <td class="text-right">
               <div class="table-actions" style="justify-content: flex-end;">
+                {% if ing.is_active %}
                 <button class="secondary-btn btn-sm" type="button" data-dialog-open="importEditor" data-import-url="{% url 'admin_ingredient_import' ing.pk %}" data-ingredient-name="{{ ing.name }}" data-ingredient-unit="{{ ing.unit }}" title="Nhập thêm vào kho">
                   {% include 'pho_app/includes/icon.html' with name='plus' %} Nhập kho
                 </button>
+                {% else %}
+                <form method="post" action="{% url 'admin_ingredient_activate' ing.pk %}" data-confirm="Kích hoạt lại nguyên liệu {{ ing.name }}?">{% csrf_token %}<button class="secondary-btn btn-sm" type="submit">Dùng lại</button></form>
+                {% endif %}
                 <a class="icon-button" href="{% url 'admin_ingredient_edit' ing.pk %}" aria-label="Sửa {{ ing.name }}" title="Sửa thông tin nguyên liệu">
                   {% include 'pho_app/includes/icon.html' with name='edit' %}
                 </a>
+                {% if ing.has_relations %}
+                <button class="icon-button danger" type="button" data-dialog-open="deleteIngredientDialog" data-delete-url="{% url 'admin_ingredient_delete' ing.pk %}" data-ingredient-name="{{ ing.name }} (NL-{{ ing.pk }})" data-ingredient-info="Đang có {{ ing.recipes_count }} công thức định lượng và {{ ing.tx_count }} giao dịch trong lịch sử kho." aria-label="Xóa hoặc ngưng dùng {{ ing.name }}" title="Xóa hoặc ngưng dùng nguyên liệu">{% include 'pho_app/includes/icon.html' with name='trash' %}</button>
+                {% else %}
                 <form method="post" action="{% url 'admin_ingredient_delete' ing.pk %}" data-confirm="Xóa nguyên liệu {{ ing.name }} khỏi kho?">
                   {% csrf_token %}
                   <button class="icon-button danger" aria-label="Xóa {{ ing.name }}" title="Xóa nguyên liệu">
                     {% include 'pho_app/includes/icon.html' with name='trash' %}
                   </button>
                 </form>
+                {% endif %}
               </div>
             </td>
           </tr>

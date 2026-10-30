@@ -13,6 +13,8 @@
   const icon = (name) => `<svg class="icon" width="20" height="20" aria-hidden="true"><use href="#icon-${name}"></use></svg>`;
   const normalize = (value) => String(value).toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
   const category = (item) => item.category === 'drink' ? 'drink' : 'pho';
+  const bowlLabels = {S:'Tô nhỏ',M:'Tô vừa',L:'Tô lớn'};
+  const variantLimit = (item,size='M') => category(item)==='drink' ? (item.max_quantity??99) : (item.bowl_sizes?.find(option=>option.value===size)?.max_quantity??0);
   const fallbackImage = (item) => {
     const name = normalize(item.name);
     const filename = category(item) === 'drink' ? 'nuoc-uong.jpg' : name.includes('dac biet') ? 'pho-dac-biet.jpg' : name.includes('nam') ? 'pho-nam.jpg' : 'pho-tai.jpg';
@@ -22,14 +24,17 @@
   const grid = $('#menuGrid'), cartDialog = $('#cartSidebar'), customDialog = $('#customizeDialog');
   const form = $('#checkoutForm'), orderType = $('#orderType'), payment = $('#paymentMethod');
   const tableSelect = $('#tableSelect'), address = $('#deliveryAddress');
-  let cart = [], activeCategory = 'all', customItem = null, customQuantity = 1;
+  let cart = [], activeCategory = 'all', customItem = null, customQuantity = 1, customBowlSize = 'M';
   let remainingCapacity = config.remainingCapacity, queueStatus = config.queueStatus;
   let deliveryAllowed = false;
   const locationRoot = $('[data-location-picker]', form);
   const locationPicker = locationRoot.locationPicker;
   try {
     const saved = JSON.parse(localStorage.getItem(CART_KEY) || '[]');
-    if (Array.isArray(saved)) cart = saved.filter((entry) => entry && menuItems.some((item) => item.id === entry.id) && Number.isInteger(entry.qty) && entry.qty > 0 && Array.isArray(entry.customizations) && Array.isArray(entry.toppings)).map((entry) => ({ ...entry, qty: Math.min(99, entry.qty) }));
+    if (Array.isArray(saved)) cart = saved.filter((entry) => entry && menuItems.some((item) => item.id === entry.id) && Number.isInteger(entry.qty) && entry.qty > 0 && Array.isArray(entry.customizations) && Array.isArray(entry.toppings) && (entry.bowl_size===undefined||Object.hasOwn(bowlLabels,entry.bowl_size))).map((entry) => {
+      const bowl_size=entry.bowl_size||'M';
+      return {...entry,qty:Math.min(99,entry.qty),bowl_size,variantKey:JSON.stringify([entry.id,entry.customizations,entry.toppings,entry.note,bowl_size])};
+    });
   } catch (_) { cart = []; }
   function save() { try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch (_) { window.phoToast?.('Giỏ hàng được giữ trong phiên này; trình duyệt đang tắt lưu trữ.'); } }
   const product = (entry) => menuItems.find((item) => item.id === entry.id);
@@ -39,13 +44,20 @@
     const query = normalize($('#searchInput').value.trim());
     const items = menuItems.filter((item) => (activeCategory === 'all' || category(item) === activeCategory) && normalize(item.name).includes(query));
     $('#menuResultCount').textContent = `${items.length} món dành cho bạn`;
-    grid.innerHTML = items.map((item) => `<article class="food-card" data-menu-id="${item.id}">
+    grid.innerHTML = items.map((item) => {
+      const ratingBadge = item.review_count > 0
+        ? `<a href="/danh-gia/?item=${item.id}" class="rating-badge" title="Xem ${item.review_count} đánh giá" style="text-decoration:none; font-size:0.75rem; font-weight:600; color:#d97706; background:#fef3c7; border:1px solid #fde68a; padding:2px 8px; border-radius:999px; display:inline-flex; align-items:center; gap:3px;">★ ${item.avg_rating} <span style="color:#92400e; font-weight:normal;">(${item.review_count})</span></a>`
+        : `<a href="/danh-gia/viet/?item=${item.id}" class="rating-badge" title="Viết đánh giá đầu tiên cho món này" style="text-decoration:none; font-size:0.72rem; color:#80695a; background:#f5f0eb; padding:2px 7px; border-radius:999px; display:inline-flex; align-items:center;">Chưa có đánh giá</a>`;
+      return `<article class="food-card" data-menu-id="${item.id}">
       <div class="food-img-wrapper"><img src="${escape(image(item))}" data-image-fallback="${escape(fallbackImage(item))}" width="360" height="240" alt="${escape(item.name)}" loading="lazy"></div>
-      <div class="food-info"><span class="eyebrow">${category(item) === 'drink' ? 'MÁT LÀNH, THẢNH THƠI' : 'PHỞ NHÀ · ĐẬM VỊ VIỆT'}</span><h2 class="food-title">${escape(item.name)}</h2><p class="food-desc">${category(item) === 'drink' ? 'Một chút mát lành cho bữa ăn thêm trọn vị.' : 'Nước dùng đậm đà, thịt tươi và rau thơm. Chọn khẩu vị theo cách của bạn.'}</p><div class="food-footer"><span class="food-price">${money(item.price)}</span><button class="add-btn" type="button" data-customize="${item.id}" ${item.is_available === false ? 'disabled' : ''} aria-label="${item.is_available === false ? 'Tạm hết món' : 'Chọn'} ${escape(item.name)}">${icon('plus')} ${item.is_available === false ? 'Tạm hết món' : 'Chọn món'}</button></div></div></article>`).join('') || `<div class="panel empty-state">${icon('search')}<strong>Chưa tìm thấy món phù hợp</strong>Thử tên món khác hoặc chọn tất cả món nhé.</div>`;
+      <div class="food-info"><div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:2px;"><span class="eyebrow" style="margin-bottom:0;">${category(item) === 'drink' ? 'MÁT LÀNH, THẢNH THƠI' : 'PHỞ NHÀ · ĐẬM VỊ VIỆT'}</span>${ratingBadge}</div><h2 class="food-title">${escape(item.name)}</h2><p class="food-desc">${category(item) === 'drink' ? 'Một chút mát lành cho bữa ăn thêm trọn vị.' : 'Nước dùng đậm đà, thịt tươi và rau thơm. Chọn khẩu vị theo cách của bạn.'}</p><div class="food-footer"><span class="food-price">${money(item.price)}</span><button class="add-btn" type="button" data-customize="${item.id}" ${item.is_available === false ? 'disabled' : ''} aria-label="${item.is_available === false ? 'Tạm hết món' : 'Chọn'} ${escape(item.name)}">${icon('plus')} ${item.is_available === false ? 'Tạm hết món' : 'Chọn món'}</button></div></div></article>`;
+    }).join('') || `<div class="panel empty-state">${icon('search')}<strong>Chưa tìm thấy món phù hợp</strong>Thử tên món khác hoặc chọn tất cả món nhé.</div>`;
   }
 
   function customPrice() {
     if (!customItem || customItem.is_available === false) return;
+    customBowlSize = $('#customBowlSize')?.value || 'M';
+    customQuantity = Math.min(Math.max(1,variantLimit(customItem,customBowlSize)),customQuantity);
     const extra = [...$('#customOptions').querySelectorAll('[data-topping-id]:checked')].reduce((total, input) => total + Number(toppings.find((item) => item.id === Number(input.dataset.toppingId))?.price || 0), 0);
     $('#customTotal').textContent = money((Number(customItem.price) + extra) * customQuantity);
     $('#customQty').textContent = customQuantity;
@@ -68,6 +80,9 @@
         const options = customizationOptions.filter((option) => option.category === key);
         return options.length ? `<fieldset class="choice-group"><legend>${label} <small>· chọn 1</small></legend>${options.map((option, index) => `<label><input type="radio" name="custom-${key}" value="${option.id}" data-category="${key}" ${index === 0 ? 'checked' : ''} required>${escape(option.name)}</label>`).join('')}</fieldset>` : '';
       }).join('');
+      const sizes=customItem.bowl_sizes||[],preferred=sizes.find(option=>option.value==='M'&&option.max_quantity>0)||sizes.find(option=>option.max_quantity>0);
+      customBowlSize=preferred?.value||'M';
+      $('#customOptions').insertAdjacentHTML('afterbegin',`<div class="form-group"><label for="customBowlSize">Cỡ tô</label><select class="form-input" id="customBowlSize">${sizes.map(option=>`<option value="${escape(option.value)}"${option.value===customBowlSize?' selected':''}${option.max_quantity<=0?' disabled':''}>${escape(option.label)}${option.max_quantity<=0?' · Tạm hết':''}</option>`).join('')}</select></div>`);
     }
     if (availableToppings.length) $('#customOptions').insertAdjacentHTML('beforeend', `<fieldset class="choice-group"><legend>Thêm topping <small>· không bắt buộc</small></legend>${availableToppings.map(topping => `<label><input type="checkbox" data-topping-id="${topping.id}">${escape(topping.name)}<span>+${money(topping.price)}</span></label>`).join('')}</fieldset>`);
     customPrice();
@@ -75,13 +90,13 @@
   }
   grid.addEventListener('click', (event) => { const button = event.target.closest('[data-customize]'); if (button) customize(Number(button.dataset.customize)); });
   $('#customOptions').addEventListener('change', customPrice);
-  document.querySelectorAll('[data-custom-qty]').forEach((button) => button.addEventListener('click', () => { customQuantity = Math.min(customItem?.max_quantity ?? 99, Math.max(1, customQuantity + Number(button.dataset.customQty))); customPrice(); }));
+  document.querySelectorAll('[data-custom-qty]').forEach((button) => button.addEventListener('click', () => { customQuantity = Math.min(variantLimit(customItem,customBowlSize), Math.max(1, customQuantity + Number(button.dataset.customQty))); customPrice(); }));
   $('[data-close-customize]').addEventListener('click', () => customDialog.close());
   $('#customizeForm').addEventListener('submit', (event) => {
     event.preventDefault();
     if (!customItem) return;
-    const alreadyInCart = cart.filter((entry) => entry.id === customItem.id).reduce((total, entry) => total + entry.qty, 0);
-    if (customItem.is_available === false || alreadyInCart + customQuantity > (customItem.max_quantity ?? 99)) {
+    const alreadyInCart = cart.filter((entry) => entry.id === customItem.id && entry.bowl_size===customBowlSize).reduce((total, entry) => total + entry.qty, 0);
+    if (customItem.is_available === false || alreadyInCart + customQuantity > variantLimit(customItem,customBowlSize)) {
       $('#customError').textContent = 'Món này không còn đủ số lượng. Vui lòng giảm số lượng hoặc chọn món khác.';
       $('#customError').hidden = false;
       return;
@@ -89,10 +104,10 @@
     const choices = [...$('#customOptions').querySelectorAll('input[type="radio"]:checked')].map((input) => Number(input.value)).sort((a, b) => a - b);
     const extras = [...$('#customOptions').querySelectorAll('[data-topping-id]:checked')].map((input) => Number(input.dataset.toppingId)).sort((a, b) => a - b);
     const note = $('#customNote').value.trim();
-    const variantKey = JSON.stringify([customItem.id, choices, extras, note]);
+    const variantKey = JSON.stringify([customItem.id, choices, extras, note, customBowlSize]);
     const entry = cart.find((item) => item.variantKey === variantKey);
     if (entry) entry.qty = Math.min(99, entry.qty + customQuantity);
-    else cart.push({ id: customItem.id, qty: customQuantity, customizations: choices, toppings: extras, note, variantKey });
+    else cart.push({ id: customItem.id, qty: customQuantity, customizations: choices, toppings: extras, note, variantKey, bowl_size:customBowlSize });
     save(); renderCart(); customDialog.close();
     window.phoToast?.(`Đã thêm ${customItem.name} vào giỏ hàng.`);
   });
@@ -145,7 +160,7 @@
   async function refreshQuote(number) {
       if (!cart.length) { $('#serverQuote').textContent = 'Chọn món để xem tổng tiền.'; $('#serverQuote').classList.remove('is-error', 'is-loading'); return; }
     const body = new FormData(form);
-    body.set('cart', JSON.stringify(cart.map(({ id, qty, customizations, toppings, note }) => ({ id, qty, customizations, toppings, note }))));
+    body.set('cart', JSON.stringify(cart.map(({ id, qty, customizations, toppings, note, bowl_size }) => ({ id, qty, customizations, toppings, note, bowl_size }))));
     body.set('account_generation', document.querySelector('meta[name="account-generation"]').content);
     if (orderType.value !== 'DELIVERY') body.delete('address_id');
     try {
@@ -192,17 +207,17 @@
     $('#cartTotalAmount').textContent = money(subtotal + (count ? fee : 0));
     $('#cartItemsList').innerHTML = cart.map((entry, index) => {
       const item = product(entry);
-      const details = [...entry.customizations.map((id) => customizationOptions.find((option) => option.id === id)?.name), ...entry.toppings.map((id) => toppings.find((option) => option.id === id)?.name), entry.note].filter(Boolean).join(' · ');
+      const details = [category(item)==='pho'?bowlLabels[entry.bowl_size]:'',...entry.customizations.map((id) => customizationOptions.find((option) => option.id === id)?.name), ...entry.toppings.map((id) => toppings.find((option) => option.id === id)?.name), entry.note].filter(Boolean).join(' · ');
       return `<div class="cart-item"><img src="${escape(image(item))}" data-image-fallback="${escape(fallbackImage(item))}" alt=""><div><div class="cart-item-name">${escape(item.name)}</div><small>${escape(details)}</small><div class="cart-item-price">${money(linePrice(entry) * entry.qty)}</div></div><div class="qty-controls"><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="-1" aria-label="Giảm số lượng ${escape(item.name)}">−</button><span>${entry.qty}</span><button class="qty-btn" type="button" data-cart-index="${index}" data-delta="1" aria-label="Tăng số lượng ${escape(item.name)}">+</button></div></div>`;
     }).join('') || `<div class="empty-state">${icon('bag')}<strong>Giỏ hàng đang chờ món ngon</strong>Chọn một tô phở yêu thích để bắt đầu nhé.</div>`;
     const waiting = orderType.value === 'QUEUE_CART' && queueStatus !== 'CALLED';
     const full = orderType.value === 'DINE_IN' && remainingCapacity < 999 && phoCount > remainingCapacity;
     const blocked = orderType.value === 'DELIVERY' && !deliveryAllowed;
     const quantities = new Map();
-    cart.forEach(entry => quantities.set(entry.id, (quantities.get(entry.id) || 0) + entry.qty));
+    cart.forEach(entry => {const key=entry.id+':'+entry.bowl_size;quantities.set(key,(quantities.get(key)||0)+entry.qty);});
     const unavailable = cart.find(entry => {
       const item = product(entry);
-      return item?.is_available === false || quantities.get(entry.id) > (item?.max_quantity ?? 99);
+      return item?.is_available === false || quantities.get(entry.id+':'+entry.bowl_size) > variantLimit(item,entry.bowl_size);
     });
     $('#checkoutError').hidden = !unavailable;
     $('#checkoutError').textContent = unavailable ? `${product(unavailable).name} không còn đủ số lượng. Vui lòng giảm số lượng hoặc chọn món khác.` : '';
@@ -293,7 +308,7 @@
   }
   form.addEventListener('submit', (event) => {
     if (!quoteReady || $('#checkoutBtn').disabled || !cart.length) { event.preventDefault(); return; }
-    $('#cartPayload').value = JSON.stringify(cart.map(({ id, qty, customizations, toppings, note }) => ({ id, qty, customizations, toppings, note })));
+    $('#cartPayload').value = JSON.stringify(cart.map(({ id, qty, customizations, toppings, note, bowl_size }) => ({ id, qty, customizations, toppings, note, bowl_size })));
     payment.disabled = false;
     if (orderType.value !== 'DELIVERY') $('#checkoutAddressId').disabled = true;
     const csrfToken = getCookie('csrftoken');

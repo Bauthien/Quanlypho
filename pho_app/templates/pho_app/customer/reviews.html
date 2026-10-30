@@ -404,6 +404,24 @@
         </div>
     </div>
     
+    <!-- Thanh lọc theo món và số sao -->
+    <div class="filter-bar" style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; justify-content: space-between; background: #FCF8F1; padding: 14px 20px; border-radius: 12px; border: 1px solid #E5D6C5;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <span style="font-weight: 600; font-size: 0.9rem; color: #3B241D;">🍜 Món ăn:</span>
+            <select class="form-input" style="padding: 6px 12px; width: auto; font-size: 0.88rem;" onchange="location.href=this.value;">
+                <option value="{% url 'reviews_list' %}">Tất cả món ăn</option>
+                {% for item in menu_items %}
+                <option value="{% url 'reviews_list' %}?item={{ item.id }}" {% if selected_item == item.id %}selected{% endif %}>{{ item.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+            <a href="{% url 'reviews_list' %}{% if selected_item %}?item={{ selected_item }}{% endif %}" class="badge {% if not selected_rating %}badge-green{% endif %}" style="text-decoration: none; padding: 6px 12px; border-radius: 6px;">Tất cả sao</a>
+            <a href="{% url 'reviews_list' %}?rating=5{% if selected_item %}&item={{ selected_item }}{% endif %}" class="badge {% if selected_rating == 5 %}badge-orange{% endif %}" style="text-decoration: none; padding: 6px 12px; border-radius: 6px;">5 ★</a>
+            <a href="{% url 'reviews_list' %}?rating=4{% if selected_item %}&item={{ selected_item }}{% endif %}" class="badge {% if selected_rating == 4 %}badge-orange{% endif %}" style="text-decoration: none; padding: 6px 12px; border-radius: 6px;">4 ★</a>
+        </div>
+    </div>
+
     <div class="reviews-section">
         {% if page_obj %}
             {% for review in page_obj %}
@@ -432,8 +450,20 @@
                 {% if review.menu_item %}
                 <div class="review-item">
                     <div class="review-item-name">🍲 {{ review.menu_item.name }}</div>
-                    <div style="font-size: 0.85rem; color: #80695A;">
-                        Giá: {{ review.menu_item.base_price|add:0 }}đ
+                    <div style="font-size: 0.85rem; color: #80695A; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                        <span>Giá: {{ review.menu_item.base_price|add:0 }}đ</span>
+                        {% if review.order %}
+                            <span class="badge badge-green" style="font-size: 0.72rem;">✓ Đã xác thực mua hàng</span>
+                        {% else %}
+                            <span class="badge" style="font-size: 0.72rem; background: #f0ebe1; color: #80695A;">Đánh giá món trực tiếp</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% elif review.order %}
+                <div class="review-item">
+                    <div class="review-item-name">📦 Đơn hàng #{{ review.order.order_code }}</div>
+                    <div style="font-size: 0.85rem; color: #80695A; margin-top: 4px;">
+                        <span class="badge badge-green" style="font-size: 0.72rem;">✓ Đã hoàn tất</span>
                     </div>
                 </div>
                 {% endif %}
@@ -441,6 +471,30 @@
                 {% if review.comment %}
                 <div class="review-comment">
                     "{{ review.comment }}"
+                </div>
+                {% endif %}
+
+                {% if review.image %}
+                <div class="review-image-wrapper" style="margin-top: 12px;">
+                    <a href="{{ review.image.url }}" target="_blank" rel="noopener">
+                        <img src="{{ review.image.url }}" alt="Ảnh đánh giá từ {{ review.customer.display_name }}" style="max-width: 220px; max-height: 180px; object-fit: cover; border-radius: 8px; border: 1px solid #E5D6C5; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if review.store_reply %}
+                <div class="store-reply-box" style="margin-top: 14px; background: #FFF9ED; border-left: 3px solid #C18A35; padding: 12px 16px; border-radius: 0 8px 8px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 600; font-size: 0.88rem; color: #8A4B1A; display: flex; align-items: center; gap: 6px;">
+                            <span>🍲 Phản hồi từ Phở Nhà</span>
+                        </span>
+                        {% if review.replied_at %}
+                        <span style="font-size: 0.78rem; color: #A07855;">{{ review.replied_at|date:"d/m/Y H:i" }}</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.9rem; color: #4A332A; line-height: 1.5;">
+                        {{ review.store_reply }}
+                    </div>
                 </div>
                 {% endif %}
             </div>

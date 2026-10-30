@@ -22,6 +22,7 @@ from .domain import BusinessError, serialized, audit
 from .loyalty import (account_for, daily_checkin, evaluate_and_upgrade_tier, exchange_reward,
     expire_points, issue_period_benefits, point_balance, process_events, reward_review)
 from .models import (DailyCheckin, DomainEvent, Ingredient, InventoryIncident, Order, PaymentReceipt,
+    Review,
     RefundAttempt, RefundPlan, RewardCatalog, ServiceRequest, TierConfig, User, UserAddress,
     UserVoucher, Voucher)
 from .permissions import admin_required, staff_required
@@ -136,6 +137,7 @@ def account_home(request):
         context['all_vouchers'] = vouchers
         context['voucher_count'] = sum(v.ui_state == 'available' and not v.not_started for v in vouchers)
         context['account_cases'] = ServiceRequest.objects.filter(order__customer=user).select_related('order', 'replacement').prefetch_related('refund_plans__attempts', 'allocations').order_by('-created_at')[:10]
+        context['my_reviews'] = list(Review.objects.filter(customer=user).select_related('menu_item', 'order').order_by('-created_at'))
     return render(request, 'pho_app/customer/account.html', context)
 
 

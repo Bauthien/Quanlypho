@@ -61,6 +61,11 @@
         $('[name="input_unit"]', dialog).value = opener.dataset.ingredientUnit;
         $('[name="quantity"]', dialog).value = '';
       }
+      if (dialog && opener.dataset.deleteUrl) {
+        $$('[data-delete-form]', dialog).forEach(form => { form.setAttribute('action', opener.dataset.deleteUrl); });
+        $('[data-delete-name]', dialog).textContent = opener.dataset.ingredientName || '';
+        $('[data-delete-info]', dialog).textContent = opener.dataset.ingredientInfo || '';
+      }
       openEditor(dialog);
     }
     const closer = event.target.closest('[data-dialog-close]'); if (closer) closer.closest('dialog').close();
@@ -85,7 +90,7 @@
       || categories.find(button => button.getAttribute('aria-pressed') === 'true')?.dataset.listCategory || 'all';
     function filter() {
       const term = normalize(search?.value || ''); let count = 0;
-      rows.forEach(row => { const visible = (!term || normalize(row.dataset.search || row.textContent).includes(term)) && (state === 'all' || (row.dataset.state || '').split(' ').includes(state)) && (category === 'all' || (row.dataset.category || '').split(' ').includes(category)); row.hidden = !visible; count += visible; });
+      rows.forEach(row => { const states = (row.dataset.state || '').split(' '); const visible = (!term || normalize(row.dataset.search || row.textContent).includes(term)) && (state === 'all' || states.includes(state)) && (!root.hasAttribute('data-inventory-groups') || state === 'inactive' || !states.includes('inactive')) && (category === 'all' || (row.dataset.category || '').split(' ').includes(category)); row.hidden = !visible; count += visible; });
       const empty = $('[data-list-empty]', root); if (empty) empty.hidden = count > 0;
       const number = $('[data-list-count]', root); if (number) number.textContent = count;
       categories.forEach(button => { const active = button.dataset.listCategory === category; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); });

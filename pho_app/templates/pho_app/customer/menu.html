@@ -37,5 +37,5 @@
 {% block extra_js %}
 {{ menu_payload|json_script:'menu-data' }}{{ customization_options|json_script:'customization-data' }}{{ toppings|json_script:'topping-data' }}
 <script id="menu-config" type="application/json">{"userId":"{{ request.user.id|default:''|escapejs }}","remainingCapacity":{{ remaining_capacity|default:999 }},"queueStatus":"{{ active_ticket.status|default:''|escapejs }}","queueUrl":"{% url 'queue_status' %}","quoteUrl":"{% url 'checkout_quote' %}","deliveryUrl":"{% url 'delivery_fee_quote' %}","imageBase":"{% static 'pho_app/images/' %}"}</script>
-<script src="{% static 'pho_app/js/menu.js' %}" defer></script>
+<script src="{% static 'pho_app/js/menu.js' %}?v=20261030-bowl-sizes" defer></script>
 {% endblock %}

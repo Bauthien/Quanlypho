@@ -9,7 +9,7 @@ from django.utils import timezone
 from .domain import BusinessError, serialized
 from .loyalty import (account_for, debit_points, point_balance, settle_point_holds,
                       voucher_policy, grant_voucher)
-from .models import (CustomizationOption, LoyaltyAccount, TierConfig, MenuItem, OrderAllocation, Topping, UserVoucher, Voucher)
+from .models import (BowlSize, CustomizationOption, LoyaltyAccount, TierConfig, MenuItem, OrderAllocation, Topping, UserVoucher, Voucher)
 
 
 def split_integer(total, weights, caps=None):
@@ -56,6 +56,9 @@ def resolve_cart(payload):
         product = MenuItem.objects.filter(pk=pk, is_active=True).first()
         if not product or not 1 <= qty <= 99 or len(tids) != len(set(tids)) or len(cids) != len(set(cids)):
             raise BusinessError('Món hoặc số lượng đã thay đổi; hãy tải lại thực đơn.')
+        bowl_size = row.get('bowl_size',BowlSize.MEDIUM)
+        if bowl_size not in BowlSize.values or (product.category != 'PHO' and bowl_size != BowlSize.MEDIUM):
+            raise BusinessError('Cỡ tô không hợp lệ với món đã chọn.')
         toppings = list(Topping.objects.filter(pk__in=tids, is_active=True).prefetch_related('allowed_menu_items').order_by('pk'))
         choices = list(CustomizationOption.objects.filter(pk__in=cids).order_by('pk'))
         if product.category == 'PHO':
@@ -67,7 +70,7 @@ def resolve_cart(payload):
             raise BusinessError('Tùy chọn món không hợp lệ. Topping không còn phục vụ hoặc không dùng cho món đã chọn.')
         price = int(product.base_price + sum((t.price for t in toppings), Decimal(0)))
         lines.append({'product': product, 'qty': qty, 'toppings': toppings, 'choices': choices,
-                      'note': str(row.get('note', ''))[:500], 'price': price})
+                      'note': str(row.get('note', ''))[:500], 'price': price, 'bowl_size':bowl_size})
     return lines
 
 

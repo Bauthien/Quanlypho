@@ -10,7 +10,10 @@
       </div></fieldset>
       <p class="field-help">Chọn loại sản phẩm để lọc nguyên liệu đúng nhóm. Bản nháp được giữ khi chuyển món.</p>
       <fieldset class="recipe-scope" data-topping-scope hidden><legend>Topping dùng cho</legend><div class="recipe-inline-choices"><label class="check-row"><input type="radio" name="topping_scope" value="PHO" checked>Món chính</label><label class="check-row"><input type="radio" name="topping_scope" value="DRINK">Nước uống</label></div></fieldset>
-      <div class="form-group" data-menu-field><label for="menuItemSelect" data-menu-label>Chọn món chính</label><select id="menuItemSelect" name="menu_item_id" class="form-input" required></select></div>
+      <div class="recipe-product-fields has-bowl-size" data-product-fields>
+        <div class="form-group" data-menu-field><label for="menuItemSelect" data-menu-label>Chọn món chính</label><select id="menuItemSelect" name="menu_item_id" class="form-input" required></select></div>
+        <div class="form-group" data-bowl-size-field><label for="recipeBowlSize">Cỡ tô</label><select id="recipeBowlSize" name="bowl_size" class="form-input" data-bowl-size><option value="S">Tô nhỏ</option><option value="M" selected>Tô vừa</option><option value="L">Tô lớn</option></select></div>
+      </div>
       <div class="form-group" data-topping-field hidden><label for="toppingSelect">Chọn topping</label><select id="toppingSelect" name="topping_id" class="form-input" disabled></select></div>
       <fieldset class="recipe-scope" data-drink-mode hidden><legend>Cách bán nước uống</legend><div class="recipe-inline-choices"><label class="check-row"><input type="radio" name="inventory_mode" value="BOM" checked>Pha chế</label><label class="check-row"><input type="radio" name="inventory_mode" value="DIRECT">Đóng chai / lon</label></div></fieldset>
       <fieldset class="recipe-scope" data-topping-eligibility hidden><legend>Món được gọi kèm topping này</legend><label class="check-row"><input type="checkbox" name="applies_to_all" value="1" data-all-menu>Tất cả món trong nhóm</label><div class="recipe-menu-choices" data-menu-choices></div><p class="field-help">Chỉ trừ định lượng của một phần gọi thêm; công thức món gốc được tính riêng.</p></fieldset>

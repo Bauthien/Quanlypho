@@ -9,7 +9,7 @@
   <nav class="commerce-tabbar" role="tablist" aria-label="Tài khoản của tôi">
     <button id="profile-tab" role="tab" aria-selected="true" aria-controls="profile" data-tab-target="profile">Hồ sơ cá nhân</button>
     <button id="addresses-tab" role="tab" aria-selected="false" aria-controls="addresses" data-tab-target="addresses">Sổ địa chỉ</button>
-    {% if wallet %}<button id="membership-tab" role="tab" aria-selected="false" aria-controls="membership" data-tab-target="membership">Thành viên & điểm</button><button id="wallet-tab" role="tab" aria-selected="false" aria-controls="member-wallet" data-tab-target="member-wallet" data-tab-key="wallet">Ví voucher <span class="tab-count">{{ voucher_count }}</span></button><button id="orders-tab" role="tab" aria-selected="false" aria-controls="my-orders" data-tab-target="my-orders">Đơn của tôi</button>{% endif %}
+    {% if wallet %}<button id="membership-tab" role="tab" aria-selected="false" aria-controls="membership" data-tab-target="membership">Thành viên & điểm</button><button id="wallet-tab" role="tab" aria-selected="false" aria-controls="member-wallet" data-tab-target="member-wallet" data-tab-key="wallet">Ví voucher <span class="tab-count">{{ voucher_count }}</span></button><button id="orders-tab" role="tab" aria-selected="false" aria-controls="my-orders" data-tab-target="my-orders">Đơn của tôi</button><button id="reviews-tab" role="tab" aria-selected="false" aria-controls="my-reviews" data-tab-target="my-reviews" data-tab-key="reviews">Đánh giá của tôi{% if my_reviews %}<span class="tab-count">{{ my_reviews|length }}</span>{% endif %}</button>{% endif %}
   </nav>
   <section id="profile" role="tabpanel" aria-labelledby="profile-tab">{% include 'pho_app/customer/account_profile.html' %}</section>
   <section id="addresses" role="tabpanel" aria-labelledby="addresses-tab" hidden>{% include 'pho_app/customer/account_addresses.html' %}</section>
@@ -20,6 +20,94 @@
     <div class="xp-stack"><div class="commerce-section-head"><div><h2>Đơn của tôi</h2><p>Theo dõi 30 đơn gần nhất và gửi yêu cầu hỗ trợ.</p></div><a class="secondary-btn" href="{% url 'menu' %}">Đặt món mới</a></div>
       <div class="xp-card table-scroll commerce-table-wrap"><table class="data-table commerce-table"><thead><tr><th>Đơn hàng</th><th>Thực trả</th><th>Trạng thái</th><th></th></tr></thead><tbody>{% for order in orders %}<tr><td><a class="table-title" href="{% url 'order_detail' order.pk %}">{{ order.order_code }}</a><small>{{ order.created_at|date:'H:i · d/m/Y' }}</small></td><td class="commerce-value" data-money="{{ order.amount_due }}">{{ order.amount_due }}đ</td><td><span class="badge badge-{{ order.order_status|state_tone }}">{{ order.get_order_status_display }}</span></td><td><a class="text-button" href="{% url 'order_detail' order.pk %}">Chi tiết {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></td></tr>{% empty %}<tr><td colspan="4"><div class="commerce-empty"><strong>Bữa phở đầu tiên đang chờ bạn</strong><p>Chọn món yêu thích, đặt đơn và theo dõi tại đây.</p><a class="primary-btn" href="{% url 'menu' %}">Khám phá thực đơn</a></div></td></tr>{% endfor %}</tbody></table></div>
       {% if account_cases %}<div class="xp-card"><h2>Yêu cầu hỗ trợ gần đây</h2>{% for case in account_cases %}<div class="refund-entry"><div class="commerce-section-head"><div><strong>#{{ case.pk }} · {{ case.order.order_code }}</strong><p class="commerce-muted">{{ case.reason }}</p></div><span class="badge badge-{{ case.state|state_tone }}">{{ case.get_state_display }}</span></div><a class="text-button" href="{% url 'order_support' case.order_id %}">Theo dõi yêu cầu {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></div>{% endfor %}</div>{% endif %}
+    </div>
+  </section>
+  <section id="my-reviews" role="tabpanel" aria-labelledby="reviews-tab" hidden>
+    <div class="xp-stack">
+      <div class="commerce-section-head">
+        <div>
+          <h2>Đánh giá của tôi</h2>
+          <p>Danh sách các nhận xét món ăn và đơn hàng bạn đã chia sẻ.</p>
+        </div>
+        <a class="secondary-btn" href="{% url 'review_form' %}">Viết đánh giá mới</a>
+      </div>
+
+      {% for review in my_reviews %}
+        <article class="panel review-card" style="margin-bottom: 14px; background: white; border: 1px solid #E5D6C5; border-radius: 12px; padding: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 260px;">
+              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
+                <span class="stars" style="color: #C18A35; font-size: 1.15rem; letter-spacing: 2px;">
+                  {% for i in "12345" %}{% if i|add:0 <= review.rating %}★{% else %}<span style="color: #E5D6C5;">★</span>{% endif %}{% endfor %}
+                </span>
+                <span style="font-size: 0.85rem; color: #80695A;">{{ review.created_at|date:'H:i · d/m/Y' }}</span>
+                {% if not review.is_published %}
+                  <span class="badge badge-red" style="font-size: 0.72rem;">Đang ẩn</span>
+                {% endif %}
+              </div>
+              
+              {% if review.menu_item %}
+                <div style="font-weight: 600; color: #3B241D; font-size: 1.05rem; margin-bottom: 4px;">
+                  🍲 {{ review.menu_item.name }}
+                </div>
+              {% endif %}
+              
+              {% if review.order %}
+                <div style="font-size: 0.85rem; color: #80695A; margin-bottom: 4px;">
+                  📦 Đơn hàng #{{ review.order.order_code }}
+                </div>
+              {% endif %}
+
+              {% if review.comment %}
+                <p style="color: #3B241D; font-size: 0.95rem; margin-top: 8px; line-height: 1.5;">
+                  "{{ review.comment }}"
+                </p>
+              {% else %}
+                <p style="color: #80695A; font-size: 0.85rem; font-style: italic; margin-top: 4px;">(Không có nhận xét)</p>
+              {% endif %}
+
+              {% if review.image %}
+                <div style="margin-top: 10px;">
+                  <a href="{{ review.image.url }}" target="_blank" rel="noopener">
+                    <img src="{{ review.image.url }}" alt="Ảnh đánh giá" style="max-width: 160px; max-height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #E5D6C5;">
+                  </a>
+                </div>
+              {% endif %}
+
+              {% if review.store_reply %}
+                <div style="margin-top: 12px; background: #FFF9ED; border-left: 3px solid #C18A35; padding: 10px 14px; border-radius: 0 8px 8px 0;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <span style="font-weight: 600; font-size: 0.85rem; color: #8A4B1A;">🍲 Phản hồi từ Phở Nhà</span>
+                    {% if review.replied_at %}
+                      <span style="font-size: 0.75rem; color: #A07855;">{{ review.replied_at|date:'H:i · d/m/Y' }}</span>
+                    {% endif %}
+                  </div>
+                  <div style="font-size: 0.88rem; color: #4A332A; line-height: 1.5;">
+                    {{ review.store_reply }}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <a class="text-button" href="{% url 'review_form' %}{% if review.menu_item %}?item={{ review.menu_item.pk }}{% elif review.order %}?order={{ review.order.pk }}{% endif %}">
+                Sửa
+              </a>
+              <form method="post" action="{% url 'customer_review_delete' review.pk %}" onsubmit="return confirm('Bạn có chắc chắn muốn xóa đánh giá này không?');">
+                {% csrf_token %}
+                <button class="text-button danger" type="submit">Xóa</button>
+              </form>
+            </div>
+          </div>
+        </article>
+      {% empty %}
+        <div class="xp-card commerce-empty">
+          <span class="stat-icon tone-gray">{% include 'pho_app/includes/icon.html' with name='bowl' %}</span>
+          <strong>Bạn chưa viết đánh giá nào</strong>
+          <p>Chia sẻ cảm nhận về món ăn để giúp Phở Nhà hoàn thiện hơn và tích điểm lên hạng thành viên.</p>
+          <a class="primary-btn" href="{% url 'review_form' %}">Viết đánh giá ngay</a>
+        </div>
+      {% endfor %}
     </div>
   </section>{% endif %}
 </main>
