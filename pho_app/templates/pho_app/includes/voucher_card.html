@@ -1,0 +1,12 @@
+<article class="voucher-ticket{% if voucher.policy.kind == 'SHIPPING' %} voucher-shipping{% endif %}">
+  <div class="voucher-ticket-value">
+    {% include 'pho_app/includes/icon.html' with name='wallet' %}
+    <strong>{% if voucher.policy.kind == 'PERCENT' %}{{ voucher.policy.value }}%{% elif voucher.policy.kind == 'FIXED' %}<span data-money="{{ voucher.policy.value }}">{{ voucher.policy.value }}đ</span>{% elif voucher.policy.kind == 'FREE_ITEM' %}01 món{% else %}Freeship{% endif %}</strong>
+    <span>{% if voucher.policy.kind == 'SHIPPING' %}Phí giao hàng{% else %}Ưu đãi tiền món{% endif %}</span>
+  </div>
+  <div class="voucher-ticket-body"><span class="badge badge-{% if voucher.policy.kind == 'SHIPPING' %}blue{% else %}red{% endif %}">{% if voucher.source == 'MONTHLY' %}Quyền lợi tháng{% elif voucher.source == 'TIER' %}Quà lên hạng{% elif voucher.source == 'EXCHANGE' %}Đổi từ điểm{% elif voucher.source == 'BIRTHDAY' %}Quà sinh nhật{% else %}Dành cho bạn{% endif %}</span>
+    <h3>{{ voucher.policy.name }}</h3>
+    <p>{% if voucher.policy.kind == 'PERCENT' and voucher.policy.cap %}Giảm tối đa <span data-money="{{ voucher.policy.cap }}">{{ voucher.policy.cap }}đ</span>.{% elif voucher.policy.kind == 'FREE_ITEM' %}Một món phở có giá gốc dưới 100.000đ, không gồm topping.{% elif voucher.policy.shipping_scope == 'FAR' %}Áp dụng cho địa chỉ trên 5km, trong phạm vi giao.{% else %}Chọn áp dụng khi thanh toán đơn hàng.{% endif %}{% if voucher.policy.minimum %} Đơn từ <span data-money="{{ voucher.policy.minimum }}">{{ voucher.policy.minimum }}đ</span>.{% endif %}</p>
+    <div class="voucher-ticket-footer"><span>{% include 'pho_app/includes/icon.html' with name='clock' %} HSD {{ voucher.expires_at|date:'d/m/Y' }}</span><a class="text-button" href="{% url 'menu' %}">Dùng ngay {% include 'pho_app/includes/icon.html' with name='arrow' %}</a></div>
+  </div>
+</article>

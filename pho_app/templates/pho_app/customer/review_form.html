@@ -1,0 +1,312 @@
+{% extends "pho_app/base.html" %}
+{% load static %}
+{% block title %}Viết Đánh Giá - Phở Nhà<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('.review-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const item = document.getElementById('menu_item_select').value;
+            const order = document.getElementById('order_select').value;
+            if (!item && !order) {
+                e.preventDefault();
+                alert('Vui lòng chọn ít nhất một món ăn hoặc một đơn hàng để gửi đánh giá.');
+                document.getElementById('menu_item_select').focus();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;500;600;700&family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+{% block content %}
+<style>
+    body {
+        background: #F7F1E7;
+        font-family: 'Be Vietnam Pro', sans-serif;
+        color: #3B241D;
+    }
+    
+    .review-form-page {
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 24px 20px 80px;
+    }
+    
+    .form-header {
+        text-align: center;
+        margin-bottom: 32px;
+        padding: 40px 32px;
+        background: #FCF8F1;
+        border-radius: 12px;
+        border: 1px solid #E5D6C5;
+    }
+    
+    .form-header h1 {
+        font-family: 'Noto Serif', serif;
+        font-size: 2rem;
+        font-weight: 600;
+        color: #3B241D;
+        margin-bottom: 10px;
+    }
+    
+    .form-header p {
+        color: #80695A;
+        font-size: 0.95rem;
+    }
+    
+    .review-form {
+        background: white;
+        border-radius: 12px;
+        padding: 40px;
+        border: 1px solid #E5D6C5;
+        box-shadow: 0 2px 16px rgba(59, 36, 29, 0.06);
+    }
+    
+    .form-group {
+        margin-bottom: 24px;
+    }
+    
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #3B241D;
+        margin-bottom: 10px;
+        font-size: 0.95rem;
+    }
+    
+    .form-input {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1.5px solid #E5D6C5;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        transition: all 220ms ease;
+        box-sizing: border-box;
+        font-family: 'Be Vietnam Pro', sans-serif;
+        color: #3B241D;
+        background: #FCF8F1;
+    }
+    
+    .form-input:focus {
+        outline: none;
+        border-color: #C18A35;
+        background: white;
+        box-shadow: 0 0 0 3px rgba(193, 138, 53, 0.1);
+    }
+    
+    .form-input::placeholder {
+        color: #80695A;
+    }
+    
+    textarea.form-input {
+        min-height: 120px;
+        resize: vertical;
+    }
+    
+    .rating-group {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        margin: 24px 0;
+    }
+    
+    .rating-option {
+        text-align: center;
+        cursor: pointer;
+        transition: transform 180ms ease;
+    }
+    
+    .rating-option:hover {
+        transform: scale(1.05);
+    }
+    
+    .rating-option input {
+        display: none;
+    }
+    
+    .rating-star {
+        font-size: 2.5rem;
+        color: #E5D6C5;
+        transition: color 180ms ease;
+    }
+    
+    .rating-option:hover .rating-star {
+        color: #C18A35;
+    }
+    
+    .rating-option input:checked + .rating-star {
+        color: #C18A35;
+    }
+    
+    .rating-label {
+        font-size: 0.85rem;
+        color: #80695A;
+        margin-top: 6px;
+        font-weight: 500;
+    }
+    
+    .submit-btn {
+        width: 100%;
+        background: #A94330;
+        color: white;
+        border: none;
+        padding: 14px;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 220ms ease;
+        font-family: 'Be Vietnam Pro', sans-serif;
+        letter-spacing: 0.3px;
+    }
+    
+    .submit-btn:hover {
+        background: #84291F;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(132, 41, 31, 0.15);
+    }
+    
+    .submit-btn:focus {
+        outline: 2px solid #C18A35;
+        outline-offset: 2px;
+    }
+    
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #80695A;
+        text-decoration: none;
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+        transition: color 180ms ease;
+    }
+    
+    .back-link:hover {
+        color: #A94330;
+    }
+    
+    @media (max-width: 640px) {
+        .review-form-page {
+            padding: 16px 16px 60px;
+        }
+        
+        .form-header {
+            padding: 28px 20px;
+        }
+        
+        .form-header h1 {
+            font-size: 1.6rem;
+        }
+        
+        .review-form {
+            padding: 28px 20px;
+        }
+        
+        .rating-group {
+            gap: 8px;
+        }
+        
+        .rating-star {
+            font-size: 2rem;
+        }
+    }
+</style>
+
+<div class="review-form-page">
+    <a href="{% url 'reviews_list' %}" class="back-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Quay lại danh sách
+    </a>
+    
+    <div class="form-header">
+        <h1>⭐ Viết Đánh Giá</h1>
+        <p>Chia sẻ trải nghiệm của bạn với chúng tôi</p>
+    </div>
+    
+    <form method="post" action="{% url 'submit_review' %}" class="review-form" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        {% if selected_item_id %}
+        <div class="notice notice-info" style="margin-bottom: 20px; padding: 12px 16px; background: #EDF3F9; border-radius: 8px; color: #3F6C8E; font-size: 0.9rem;">
+            🍜 Bạn đang viết đánh giá cho món ăn từ thực đơn. Không cần đơn hàng vẫn có thể chia sẻ cảm nhận!
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label for="menu_item_select">🍜 Món ăn muốn đánh giá <span style="color: #80695A; font-weight: normal; font-size: 0.85rem;">(Đánh giá tự do, không cần đơn hàng)</span></label>
+            <select class="form-input" name="menu_item_id" id="menu_item_select">
+                <option value="">-- Chọn món ăn từ thực đơn --</option>
+                {% for item in menu_items %}
+                <option value="{{ item.id }}" {% if selected_item_id == item.id|stringformat:'s' %}selected{% endif %}>{{ item.name }} - {{ item.base_price|add:0 }}đ</option>
+                {% endfor %}
+            </select>
+            <small style="color: #80695A; margin-top: 6px; display: block;">Bạn có thể đánh giá bất kỳ món nào mình từng thưởng thức mà không bắt buộc phải có đơn trên app.</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="order_select">📦 Gắn với đơn hàng đã mua <span style="color: #80695A; font-weight: normal; font-size: 0.85rem;">(Tùy chọn · Nhận thêm điểm thưởng)</span></label>
+            <select class="form-input" name="order_id" id="order_select">
+                <option value="">-- Không gắn đơn hàng (Đánh giá món độc lập) --</option>
+                {% for order in recent_orders %}
+                <option value="{{ order.id }}" {% if selected_order_id == order.id|stringformat:'s' %}selected{% endif %}>Đơn #{{ order.order_code }} - {{ order.created_at|date:"d/m/Y H:i" }}</option>
+                {% endfor %}
+            </select>
+            <small style="color: #80695A; margin-top: 6px; display: block;">💡 Nếu bạn đã đặt món này trên app, chọn đơn tương ứng để được cộng điểm tích lũy thành viên.</small>
+        </div>
+        
+        <div class="form-group">
+            <label>Đánh giá của bạn <span style="color: #A94330;">*</span></label>
+            <div class="rating-group">
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="1" required>
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Kém</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="2">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Tạm ổn</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="3">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Bình thường</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="4">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Ngon</div>
+                </label>
+                <label class="rating-option">
+                    <input type="radio" name="rating" value="5">
+                    <div class="rating-star">★</div>
+                    <div class="rating-label">Rất ngon</div>
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label>Nhận xét của bạn</label>
+            <textarea class="form-input" name="comment" placeholder="Món ăn ngon, phục vụ nhanh, không gian đẹp..." maxlength="500"></textarea>
+            <small style="color: #80695A; margin-top: 6px; display: block;">Tối đa 500 ký tự. 💡 <em>Mẹo: Đánh giá từ 4★ và nhận xét từ 20 ký tự trở lên sẽ được tính vào điều kiện thăng hạng thành viên.</em></small>
+        </div>
+
+        <div class="form-group">
+            <label for="review_image">📸 Hình ảnh thực tế món ăn <span style="color: #80695A; font-weight: normal; font-size: 0.85rem;">(Tùy chọn)</span></label>
+            <input type="file" name="image" id="review_image" class="form-input" accept="image/*" style="padding: 9px 14px; background: white;">
+            <small style="color: #80695A; margin-top: 6px; display: block;">Tải lên ảnh chụp thực tế bát phở hoặc đồ uống để chia sẻ với mọi người.</small>
+        </div>
+        
+        <button type="submit" class="submit-btn">
+            Gửi Đánh Giá →
+        </button>
+    </form>
+</div>
+{% endblock %}

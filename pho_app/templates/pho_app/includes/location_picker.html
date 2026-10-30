@@ -1,0 +1,17 @@
+{% load l10n %}
+<div class="location-picker" data-location-picker data-fee-url="{% url 'delivery_fee_quote' %}" data-shop-lat="{{ location_shop_lat|unlocalize }}" data-shop-lng="{{ location_shop_lng|unlocalize }}" data-max-km="{{ location_max_km|unlocalize }}">
+  <div class="location-actions"><button class="secondary-btn" type="button" data-location-gps{% if not location_form %} id="locateBtn"{% endif %}>{% include 'pho_app/includes/icon.html' with name='location' %} Dùng vị trí hiện tại</button><button class="secondary-btn" type="button" data-location-map-toggle aria-expanded="false">{% include 'pho_app/includes/icon.html' with name='location' %} Chọn trên bản đồ</button></div>
+  <p class="field-help">Chỉ dùng GPS nếu bạn đang ở nơi nhận món. Bạn có thể chọn điểm trên bản đồ hoặc nhập tọa độ bên dưới.</p>
+  <div class="location-map" data-location-map role="region" aria-label="Bản đồ chọn vị trí nhận món" hidden></div>
+  <p class="field-help" data-location-map-help hidden>Chạm lên bản đồ hoặc kéo ghim đến nơi nhận món. Có thể nhập tọa độ để chọn vị trí bằng bàn phím.</p>
+  <div class="checkout-fields-two location-coordinate-fields">
+    {% if location_form %}{% include 'pho_app/includes/commerce_field.html' with field=location_form.latitude %}{% include 'pho_app/includes/commerce_field.html' with field=location_form.longitude %}{% else %}
+    <div class="form-group"><label for="customerLat">Vĩ độ</label><input class="form-input" id="customerLat" name="customer_lat" inputmode="decimal" autocomplete="off" maxlength="24" placeholder="Ví dụ: 10.7769000" data-location-lat></div>
+    <div class="form-group"><label for="customerLng">Kinh độ</label><input class="form-input" id="customerLng" name="customer_lng" inputmode="decimal" autocomplete="off" maxlength="24" placeholder="Ví dụ: 106.7009000" data-location-lng></div>{% endif %}
+  </div>
+  <p class="location-status field-help" data-location-status role="status" aria-live="polite">Chưa chọn vị trí nhận món.</p>
+  <p class="location-fee" data-location-fee{% if not location_form %} id="deliveryFeeHint"{% endif %} aria-live="polite">Phí giao sẽ được xác nhận sau khi có vị trí. Phạm vi {{ location_max_km }} km.</p>
+  <button class="text-button" type="button" data-location-retry>Kiểm tra lại phí giao</button>
+  <a class="text-button" data-location-preview target="_blank" rel="noopener" hidden>Xem vị trí đã chọn trên Google Maps {% include 'pho_app/includes/icon.html' with name='arrow' %}</a>
+  <a class="text-button" data-location-address-edit hidden>Cập nhật vị trí trong sổ địa chỉ</a>
+</div>

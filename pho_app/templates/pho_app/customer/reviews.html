@@ -1,0 +1,540 @@
+{% extends "pho_app/base.html" %}
+{% load static %}
+{% block title %}Đánh giá của bạn - Phở Nhà{% endblock %}
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;500;600;700&family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+{% endblock %}
+{% block content %}
+<style>
+    body {
+        background: #F7F1E7;
+        font-family: 'Be Vietnam Pro', sans-serif;
+        color: #3B241D;
+    }
+    
+    .reviews-page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 24px 20px 80px;
+    }
+    
+    .hero-banner {
+        background: #FCF8F1;
+        border-radius: 16px;
+        padding: 0;
+        display: flex;
+        align-items: stretch;
+        box-shadow: 0 2px 20px rgba(59, 36, 29, 0.06);
+        margin-bottom: 24px;
+        overflow: hidden;
+        border: 1px solid #E5D6C5;
+    }
+    
+    .hero-left {
+        flex: 1;
+        padding: 48px 40px;
+        background: linear-gradient(135deg, #FCF8F1 0%, #F7F1E7 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        position: relative;
+    }
+    
+    .hero-left::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cpath d='M10 70 Q20 60 30 70 T50 70 T70 70' stroke='%23C18A35' stroke-width='0.5' fill='none' opacity='0.15'/%3E%3Ccircle cx='40' cy='40' r='1.5' fill='%23C18A35' opacity='0.08'/%3E%3Ccircle cx='60' cy='20' r='1' fill='%23C18A35' opacity='0.06'/%3E%3C/svg%3E");
+        background-repeat: repeat;
+        pointer-events: none;
+    }
+    
+    .hero-icon {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 20px;
+        color: #C18A35;
+    }
+    
+    .hero-title {
+        font-family: 'Noto Serif', serif;
+        font-size: 2.4rem;
+        font-weight: 600;
+        color: #3B241D;
+        margin-bottom: 12px;
+        line-height: 1.3;
+        position: relative;
+    }
+    
+    .hero-subtitle {
+        font-size: 1rem;
+        color: #80695A;
+        margin-bottom: 28px;
+        line-height: 1.6;
+        font-weight: 400;
+    }
+    
+    .primary-btn {
+        background: #A94330;
+        color: white;
+        border: none;
+        padding: 14px 32px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 220ms ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: 'Be Vietnam Pro', sans-serif;
+        letter-spacing: 0.3px;
+    }
+    
+    .primary-btn:hover {
+        background: #84291F;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(132, 41, 31, 0.15);
+    }
+    
+    .primary-btn:focus {
+        outline: 2px solid #C18A35;
+        outline-offset: 2px;
+    }
+    
+    .hero-right {
+        width: 45%;
+        min-width: 380px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .hero-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+    }
+    
+    .hero-right::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(to right, rgba(247, 241, 231, 0.3), transparent 40%);
+        pointer-events: none;
+    }
+    
+    .reviews-section {
+        background: #FCF8F1;
+        border-radius: 12px;
+        padding: 40px;
+        border: 1px solid #E5D6C5;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 70px 40px;
+        position: relative;
+    }
+    
+    .empty-illustration {
+        margin-bottom: 24px;
+        position: relative;
+        display: inline-block;
+    }
+    
+    .empty-illustration svg {
+        width: 120px;
+        height: 120px;
+    }
+    
+    .empty-title {
+        font-family: 'Noto Serif', serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #3B241D;
+        margin-bottom: 10px;
+    }
+    
+    .empty-subtitle {
+        font-size: 0.95rem;
+        color: #80695A;
+        margin-bottom: 28px;
+        line-height: 1.5;
+    }
+    
+    .secondary-btn {
+        background: transparent;
+        color: #A94330;
+        border: 1.5px solid #A94330;
+        padding: 12px 28px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 220ms ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: 'Be Vietnam Pro', sans-serif;
+    }
+    
+    .secondary-btn:hover {
+        background: #A94330;
+        color: white;
+    }
+    
+    .secondary-btn:focus {
+        outline: 2px solid #C18A35;
+        outline-offset: 2px;
+    }
+    
+    .review-card {
+        background: white;
+        border-radius: 10px;
+        padding: 28px;
+        margin-bottom: 18px;
+        border: 1px solid #E5D6C5;
+        transition: all 220ms ease;
+    }
+    
+    .review-card:hover {
+        box-shadow: 0 4px 16px rgba(59, 36, 29, 0.06);
+        border-color: #D4C4B0;
+    }
+    
+    .review-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #E5D6C5;
+    }
+    
+    .reviewer-info {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    
+    .reviewer-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #C18A35, #A94330);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 1.2rem;
+        font-family: 'Noto Serif', serif;
+    }
+    
+    .reviewer-name {
+        font-weight: 600;
+        font-size: 1rem;
+        color: #3B241D;
+    }
+    
+    .review-date {
+        color: #80695A;
+        font-size: 0.85rem;
+        margin-top: 2px;
+    }
+    
+    .stars {
+        color: #C18A35;
+        font-size: 1.3rem;
+        letter-spacing: 2px;
+    }
+    
+    .stars .empty {
+        color: #E5D6C5;
+    }
+    
+    .review-item {
+        background: #FCF8F1;
+        border-radius: 8px;
+        padding: 16px;
+        margin-top: 12px;
+    }
+    
+    .review-item-name {
+        font-weight: 600;
+        color: #A94330;
+        font-size: 0.95rem;
+        margin-bottom: 6px;
+    }
+    
+    .review-comment {
+        color: #3B241D;
+        line-height: 1.7;
+        margin-top: 12px;
+        font-style: italic;
+        padding: 14px;
+        background: #F7F1E7;
+        border-radius: 8px;
+        border-left: 3px solid #C18A35;
+        font-size: 0.95rem;
+    }
+    
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 32px;
+        padding: 16px;
+    }
+    
+    .pagination a, .pagination span {
+        padding: 10px 16px;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #3B241D;
+        background: white;
+        border: 1px solid #E5D6C5;
+        transition: all 220ms ease;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+    
+    .pagination a:hover {
+        background: #A94330;
+        color: white;
+        border-color: #A94330;
+    }
+    
+    .pagination .current {
+        background: #A94330;
+        color: white;
+        border-color: #A94330;
+    }
+    
+    @media (max-width: 968px) {
+        .hero-banner {
+            flex-direction: column;
+        }
+        
+        .hero-left {
+            padding: 32px 28px;
+        }
+        
+        .hero-right {
+            width: 100%;
+            min-width: auto;
+            height: 280px;
+        }
+        
+        .hero-title {
+            font-size: 1.9rem;
+        }
+    }
+    
+    @media (max-width: 640px) {
+        .reviews-page {
+            padding: 16px 16px 60px;
+        }
+        
+        .hero-left {
+            padding: 28px 20px;
+        }
+        
+        .hero-title {
+            font-size: 1.6rem;
+        }
+        
+        .hero-subtitle {
+            font-size: 0.95rem;
+        }
+        
+        .reviews-section {
+            padding: 28px 20px;
+        }
+        
+        .empty-state {
+            padding: 50px 20px;
+        }
+        
+        .empty-illustration svg {
+            width: 100px;
+            height: 100px;
+        }
+        
+        .primary-btn, .secondary-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+
+<div class="reviews-page">
+    <div class="hero-banner">
+        <div class="hero-left">
+            <div class="hero-icon">
+                <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M24 4C14.06 4 6 12.06 6 22C6 31.94 14.06 40 24 40C33.94 40 42 31.94 42 22C42 12.06 33.94 4 24 4Z" fill="#C18A35" fill-opacity="0.15"/>
+                    <path d="M24 8C16.27 8 10 14.27 10 22C10 29.73 16.27 36 24 36C31.73 36 38 29.73 38 22C38 14.27 31.73 8 24 8Z" stroke="#C18A35" stroke-width="1.5" fill="none"/>
+                    <path d="M16 22L21 27L32 16" stroke="#A94330" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <h1 class="hero-title">Đánh Giá Của Bạn</h1>
+            <p class="hero-subtitle">Chia sẻ trải nghiệm và giúp chúng tôi phục vụ tốt hơn</p>
+            <a href="{% url 'review_form' %}" class="primary-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                Viết Đánh Giá Mới
+            </a>
+        </div>
+        <div class="hero-right">
+            <img src="{% static 'pho_app/images/pho-dac-biet.jpg' %}" alt="Phở đặc biệt" class="hero-image">
+        </div>
+    </div>
+    
+    <!-- Thanh lọc theo món và số sao -->
+    <div class="filter-bar" style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; justify-content: space-between; background: #FCF8F1; padding: 14px 20px; border-radius: 12px; border: 1px solid #E5D6C5;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <span style="font-weight: 600; font-size: 0.9rem; color: #3B241D;">🍜 Món ăn:</span>
+            <select class="form-input" style="padding: 6px 12px; width: auto; font-size: 0.88rem;" onchange="location.href=this.value;">
+                <option value="{% url 'reviews_list' %}">Tất cả món ăn</option>
+                {% for item in menu_items %}
+                <option value="{% url 'reviews_list' %}?item={{ item.id }}" {% if selected_item == item.id %}selected{% endif %}>{{ item.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+            <a href="{% url 'reviews_list' %}{% if selected_item %}?item={{ selected_item }}{% endif %}" class="badge {% if not selected_rating %}badge-green{% endif %}" style="text-decoration: none; padding: 6px 12px; border-radius: 6px;">Tất cả sao</a>
+            <a href="{% url 'reviews_list' %}?rating=5{% if selected_item %}&item={{ selected_item }}{% endif %}" class="badge {% if selected_rating == 5 %}badge-orange{% endif %}" style="text-decoration: none; padding: 6px 12px; border-radius: 6px;">5 ★</a>
+            <a href="{% url 'reviews_list' %}?rating=4{% if selected_item %}&item={{ selected_item }}{% endif %}" class="badge {% if selected_rating == 4 %}badge-orange{% endif %}" style="text-decoration: none; padding: 6px 12px; border-radius: 6px;">4 ★</a>
+        </div>
+    </div>
+
+    <div class="reviews-section">
+        {% if page_obj %}
+            {% for review in page_obj %}
+            <div class="review-card">
+                <div class="review-header">
+                    <div class="reviewer-info">
+                        <div class="reviewer-avatar">
+                            {{ review.customer.display_name|first|upper }}
+                        </div>
+                        <div>
+                            <div class="reviewer-name">{{ review.customer.display_name }}</div>
+                            <div class="review-date">{{ review.created_at|date:"d/m/Y H:i" }}</div>
+                        </div>
+                    </div>
+                    <div class="stars">
+                        {% for i in "12345" %}
+                            {% if i|add:0 <= review.rating %}
+                                ★
+                            {% else %}
+                                <span class="empty">★</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                {% if review.menu_item %}
+                <div class="review-item">
+                    <div class="review-item-name">🍲 {{ review.menu_item.name }}</div>
+                    <div style="font-size: 0.85rem; color: #80695A; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px;">
+                        <span>Giá: {{ review.menu_item.base_price|add:0 }}đ</span>
+                        {% if review.order %}
+                            <span class="badge badge-green" style="font-size: 0.72rem;">✓ Đã xác thực mua hàng</span>
+                        {% else %}
+                            <span class="badge" style="font-size: 0.72rem; background: #f0ebe1; color: #80695A;">Đánh giá món trực tiếp</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% elif review.order %}
+                <div class="review-item">
+                    <div class="review-item-name">📦 Đơn hàng #{{ review.order.order_code }}</div>
+                    <div style="font-size: 0.85rem; color: #80695A; margin-top: 4px;">
+                        <span class="badge badge-green" style="font-size: 0.72rem;">✓ Đã hoàn tất</span>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if review.comment %}
+                <div class="review-comment">
+                    "{{ review.comment }}"
+                </div>
+                {% endif %}
+
+                {% if review.image %}
+                <div class="review-image-wrapper" style="margin-top: 12px;">
+                    <a href="{{ review.image.url }}" target="_blank" rel="noopener">
+                        <img src="{{ review.image.url }}" alt="Ảnh đánh giá từ {{ review.customer.display_name }}" style="max-width: 220px; max-height: 180px; object-fit: cover; border-radius: 8px; border: 1px solid #E5D6C5; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                    </a>
+                </div>
+                {% endif %}
+
+                {% if review.store_reply %}
+                <div class="store-reply-box" style="margin-top: 14px; background: #FFF9ED; border-left: 3px solid #C18A35; padding: 12px 16px; border-radius: 0 8px 8px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 600; font-size: 0.88rem; color: #8A4B1A; display: flex; align-items: center; gap: 6px;">
+                            <span>🍲 Phản hồi từ Phở Nhà</span>
+                        </span>
+                        {% if review.replied_at %}
+                        <span style="font-size: 0.78rem; color: #A07855;">{{ review.replied_at|date:"d/m/Y H:i" }}</span>
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.9rem; color: #4A332A; line-height: 1.5;">
+                        {{ review.store_reply }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+            
+            <div class="pagination">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}">← Trước</a>
+                {% endif %}
+                
+                <span class="current">Trang {{ page_obj.number }}</span>
+                
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}">Tiếp →</a>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-illustration">
+                    <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="60" cy="50" r="28" fill="#C18A35" fill-opacity="0.1"/>
+                        <path d="M60 25L64 38H78L67 46L71 59L60 51L49 59L53 46L42 38H56L60 25Z" fill="#C18A35" fill-opacity="0.8"/>
+                        <path d="M35 70Q40 65 45 70T55 70T65 70T75 70" stroke="#C18A35" stroke-width="1.5" fill="none" opacity="0.4"/>
+                        <path d="M30 80Q38 72 46 80T62 80T78 80" stroke="#C18A35" stroke-width="1" fill="none" opacity="0.3"/>
+                        <ellipse cx="50" cy="85" rx="18" ry="6" fill="#C18A35" fill-opacity="0.15"/>
+                        <path d="M50 80C50 80 45 82 42 85" stroke="#C18A35" stroke-width="1.5" fill="none" opacity="0.5"/>
+                        <path d="M50 80C50 80 55 82 58 85" stroke="#C18A35" stroke-width="1.5" fill="none" opacity="0.5"/>
+                    </svg>
+                </div>
+                <h3 class="empty-title">Chưa có đánh giá nào</h3>
+                <p class="empty-subtitle">Hãy là người đầu tiên chia sẻ trải nghiệm!</p>
+                <a href="{% url 'review_form' %}" class="secondary-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                    Viết Đánh Giá
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

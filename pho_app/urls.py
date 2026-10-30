@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, checkout_views, commerce_views, assistant_views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -9,7 +9,26 @@ urlpatterns = [
     path('dang-xuat/', views.logout_view, name='logout'),
 
     path('thuc-don/', views.menu_view, name='menu'),
-    path('thuc-don/dat-mon/', views.place_order, name='place_order'),
+    path('thuc-don/dat-mon/', checkout_views.place_order, name='place_order'),
+    path('thuc-don/bao-gia/', checkout_views.quote_checkout, name='checkout_quote'),
+    path('tro-ly/goi-y/', assistant_views.assistant_reply, name='assistant_reply'),
+    path('tai-khoan/', commerce_views.account_home, name='account'),
+    path('tai-khoan/ngu-canh/', commerce_views.browser_context, name='browser_context'),
+    path('tai-khoan/dia-chi/phi-giao/', commerce_views.address_preview, name='address_preview'),
+    path('tai-khoan/chuyen/', commerce_views.account_switch, name='account_switch'),
+    path('tai-khoan/dia-chi/them/', commerce_views.address_edit, name='address_create'),
+    path('tai-khoan/dia-chi/<int:address_id>/', commerce_views.address_edit, name='address_edit'),
+    path('tai-khoan/dia-chi/<int:address_id>/xu-ly/', commerce_views.address_action, name='address_action'),
+    path('tai-khoan/diem/', commerce_views.loyalty_action, name='loyalty_action'),
+    path('don/<int:order_id>/ho-tro/', commerce_views.order_support, name='order_support'),
+    path('thu-ngan/ho-tro/', commerce_views.service_queue, name='service_queue'),
+    path('thu-ngan/giao-nhan/', commerce_views.delivery_queue, name='delivery_queue'),
+    path('thu-ngan/ho-tro/<int:case_id>/', commerce_views.service_action, name='service_action'),
+    path('thu-ngan/giao-nhan/<int:order_id>/', commerce_views.delivery_update, name='delivery_update'),
+    path('quan-ly/doi-soat/', commerce_views.reconcile_receipt, name='reconcile_receipt'),
+    path('quan-ly/khuyen-mai/', commerce_views.promotions, name='promotions'),
+    path('quan-ly/kho/xu-ly/', commerce_views.stock_operation, name='stock_operation'),
+    path('quan-ly/bao-tri/', commerce_views.maintenance, name='commerce_maintenance'),
     path('thuc-don/don/<int:order_id>/', views.order_detail, name='order_detail'),
     path('hang-doi/lay-so/', views.take_queue_number, name='take_queue'),
     path('hang-doi/trang-thai/', views.queue_status, name='queue_status'),
@@ -18,6 +37,8 @@ urlpatterns = [
     path('thanh-toan/vietqr/simulate/<int:order_id>/', views.simulate_vietqr_payment, name='simulate_vietqr_payment'),
 
     path('thu-ngan/', views.staff_home, name='staff_home'),
+    path('so-do-ban/', views.table_map, name='table_map'),
+    path('thu-ngan/so-do-ban/', views.staff_table_map, name='staff_table_map'),
     path('thu-ngan/xac-nhan-tien-mat/<int:order_id>/', views.confirm_cash_payment, name='confirm_cash'),
     path('thu-ngan/huy-don/<int:order_id>/', views.cancel_cash_order, name='cancel_order'),
     path('thu-ngan/goi-so/', views.call_next_queue, name='call_next_queue'),
@@ -25,6 +46,8 @@ urlpatterns = [
     path('thu-ngan/giao-xong/<int:order_id>/', views.complete_delivery, name='complete_delivery'),
     path('thu-ngan/phuc-vu-xong/<int:order_id>/', views.complete_dine_in, name='complete_dine_in'),
     path('thu-ngan/ban/<int:table_id>/da-don/', views.free_table, name='free_table'),
+    path('thu-ngan/don/<int:order_id>/da-an-xong/', views.free_order_table, name='free_order_table'),
+    path('thu-ngan/don/<int:order_id>/dieu-huong-ban/', views.assign_order_table, name='assign_order_table'),
 
     path('bep/', views.kitchen_home, name='kitchen_home'),
     path('bep/bat-dau/<int:order_id>/', views.kitchen_start, name='kitchen_start'),
@@ -32,6 +55,9 @@ urlpatterns = [
     path('bep/tem-giao-hang/<int:order_id>/', views.delivery_labels, name='delivery_labels'),
 
     path('quan-ly/', views.admin_home, name='admin_home'),
+    path('quan-ly/don-hang/', views.admin_orders, name='admin_orders'),
+    path('quan-ly/don-hang/<int:order_id>/', views.admin_order_detail, name='admin_order_detail'),
+    path('quan-ly/don-hang/<int:order_id>/xu-ly/', views.admin_order_action, name='admin_order_action'),
     path('quan-ly/ban/', views.admin_table_list, name='admin_table_list'),
     path('quan-ly/ban/them/', views.admin_table_create, name='admin_table_create'),
     path('quan-ly/ban/<int:table_id>/sua/', views.admin_table_edit, name='admin_table_edit'),
@@ -45,4 +71,26 @@ urlpatterns = [
     path('quan-ly/topping/them/', views.admin_topping_create, name='admin_topping_create'),
     path('quan-ly/topping/<int:topping_id>/sua/', views.admin_topping_edit, name='admin_topping_edit'),
     path('quan-ly/topping/<int:topping_id>/xoa/', views.admin_topping_delete, name='admin_topping_delete'),
+
+    path('danh-gia/', views.reviews_list, name='reviews_list'),
+    path('danh-gia/viet/', views.review_form, name='review_form'),
+    path('danh-gia/submit/', views.submit_review, name='submit_review'),
+    path('quan-ly/danh-gia/', views.review_list_all, name='review_list_all'),
+    path('quan-ly/danh-gia/<int:review_id>/toggle/', views.admin_review_toggle_publish, name='admin_review_toggle_publish'),
+    path('tai-khoan/danh-gia/<int:review_id>/xoa/', views.customer_review_delete, name='customer_review_delete'),
+    path('quan-ly/danh-gia/<int:review_id>/xoa/', views.admin_review_delete, name='admin_review_delete'),
+    path('quan-ly/danh-gia/<int:review_id>/phan-hoi/', views.admin_review_reply, name='admin_review_reply'),
+
+    path('quan-ly/ton-kho/', views.admin_inventory, name='admin_inventory'),
+    path('quan-ly/ton-kho/them/', views.admin_ingredient_create, name='admin_ingredient_create'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/sua/', views.admin_ingredient_edit, name='admin_ingredient_edit'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/xoa/', views.admin_ingredient_delete, name='admin_ingredient_delete'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/kich-hoat/', views.admin_ingredient_activate, name='admin_ingredient_activate'),
+    path('quan-ly/ton-kho/<int:ingredient_id>/nhap-kho/', views.admin_ingredient_import, name='admin_ingredient_import'),
+    path('quan-ly/ton-kho/dinh-luong/them/', views.admin_recipe_create, name='admin_recipe_create'),
+    path('quan-ly/ton-kho/tu-dong-dinh-luong/', views.admin_recipe_auto_suggest, name='admin_recipe_auto_suggest'),
+    path('quan-ly/ton-kho/dinh-luong/<int:recipe_id>/xoa/', views.admin_recipe_delete, name='admin_recipe_delete'),
+    path('quan-ly/ton-kho/dinh-luong/<str:kind>/<int:product_id>/xoa-het/', views.admin_recipe_clear_product, name='admin_recipe_clear_product'),
+
+    path('404/', views.custom_404_view, name='custom_404'),
 ]

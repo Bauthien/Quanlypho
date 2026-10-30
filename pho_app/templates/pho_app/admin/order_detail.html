@@ -1,0 +1,60 @@
+{% extends 'pho_app/admin/shell.html' %}
+{% load static order_format %}
+{% block title %}Đơn {{ order.order_code }} · Phở Nhà{% endblock %}
+{% block breadcrumb %}Đơn hàng / Chi tiết{% endblock %}
+{% block admin_content %}
+<a class="order-back-link" href="{% url 'admin_orders' %}">← Danh sách đơn hàng</a>
+<div class="page-heading order-detail-heading"><div><span class="order-eyebrow">CHI TIẾT ĐƠN HÀNG</span><h1>{{ order.order_code }}</h1><p>Tạo lúc <time datetime="{{ order.created_at|date:'c' }}">{{ order.created_at|date:'d/m/Y H:i' }}</time></p></div><span class="badge status-{{ order.order_status }}">{{ order.get_order_status_display }}</span></div>
+<div class="order-management-detail">
+    <div class="order-detail-main">
+        <section class="panel"><div class="panel-heading"><h2>Thông tin đơn hàng</h2>{% include 'pho_app/includes/icon.html' with name='orders' %}</div>
+            <dl class="order-meta-grid">
+                <div><dt>Khách hàng</dt><dd>{% if order.customer %}{{ order.customer.display_name }}{% else %}{{ order.guest_name|default:'Khách tại quán' }}{% endif %}</dd></div>
+                <div><dt>Hình thức</dt><dd>{{ order.get_order_type_display }}</dd></div>
+                <div><dt>Bàn ăn</dt><dd>{% if order.table %}Bàn {{ order.table.table_number }}{% else %}—{% endif %}</dd></div>
+                {% if order.customer.phone_number %}<div><dt>Số điện thoại</dt><dd>{{ order.customer.phone_number }}</dd></div>{% endif %}
+                {% if order.queue_ticket %}<div><dt>Vé xếp hàng</dt><dd>{{ order.queue_ticket.ticket_number }}</dd></div>{% endif %}
+                <div><dt>Cập nhật cuối</dt><dd><time datetime="{{ order.updated_at|date:'c' }}">{{ order.updated_at|date:'d/m/Y H:i' }}</time></dd></div>
+                {% if order.order_type == 'DINE_IN' %}<div><dt>Dọn bàn</dt><dd>{% if order.is_cleared %}Đã dọn bàn{% else %}Chưa dọn bàn{% endif %}</dd></div>{% endif %}
+            </dl>
+        </section>
+        <section class="panel" aria-labelledby="order-items-heading">
+            <div class="panel-heading"><div><h2 id="order-items-heading">Món trong đơn <span class="badge">{{ order_items|length }} dòng món</span></h2><p>Đơn giá lúc đặt đã gồm topping. Tùy chọn miễn phí không tính thêm tiền.</p></div></div>
+            {% if order_items %}<p class="order-scroll-hint">Cuộn ngang để xem số lượng, đơn giá và thành tiền →</p><div class="table-scroll" tabindex="0" role="region" aria-label="Danh sách món, cuộn ngang để xem đơn giá">
+                <table class="data-table order-items-table"><thead><tr><th scope="col">Món / tùy chọn</th><th scope="col">Số lượng</th><th scope="col" class="order-money">Đơn giá đã lưu</th><th scope="col" class="order-money">Thành tiền</th></tr></thead>
+                <tbody>{% for item in order_items %}<tr>
+                    <td class="order-item-description"><strong>{{ item.menu_item.name }}{% if item.menu_item.category == 'PHO' %} · {{ item.get_bowl_size_display }}{% endif %}</strong>
+                        {% if item.toppings.all %}<ul class="order-item-extras">{% for extra in item.toppings.all %}<li>+ {{ extra.topping.name }} <span>× {{ extra.quantity }}</span></li>{% endfor %}</ul><small class="table-person">Số lượng topping tính cho cả dòng món.</small>{% endif %}
+                        {% if item.customizations.all %}<ul class="order-customizations">{% for extra in item.customizations.all %}<li>{{ extra.customization.get_category_display }}: {{ extra.customization.name }} <span>Miễn phí</span></li>{% endfor %}</ul>{% endif %}
+                        {% if item.note %}<p class="order-item-note"><strong>Ghi chú:</strong> {{ item.note }}</p>{% endif %}
+                    </td><td>{{ item.quantity }}</td><td class="order-money">{{ item.item_price|vnd }}</td><td class="order-money"><strong>{{ item.line_total|vnd }}</strong></td>
+                </tr>{% endfor %}</tbody></table>
+            </div>{% else %}<div class="empty-state">Đơn này chưa có món được lưu.</div>{% endif %}
+        </section>
+        {% if order.order_type == 'DELIVERY' %}
+        <section class="panel"><div class="panel-heading"><h2>Thông tin giao hàng</h2>{% include 'pho_app/includes/icon.html' with name='truck' %}</div>
+            <dl class="order-meta-grid"><div class="order-meta-wide"><dt>Địa chỉ nhận hàng</dt><dd>{{ order.delivery_address|default:'Chưa có địa chỉ'|linebreaksbr }}</dd></div><div><dt>Khoảng cách đường thẳng</dt><dd>{% if order.delivery_distance_km != None %}{{ order.delivery_distance_km|floatformat:2 }} km{% else %}Đơn cũ chưa lưu khoảng cách{% endif %}</dd></div><div><dt>Mã vận đơn</dt><dd>{{ order.shipping_code|default:'Chưa cấp mã' }}</dd></div></dl>
+            {% include 'pho_app/includes/delivery_destination.html' %}
+            {% if can_print_labels %}<a class="secondary-btn order-label-link" href="{% url 'delivery_labels' order.pk %}">{% include 'pho_app/includes/icon.html' with name='print' %} In 2 tem giao hàng</a>{% endif %}
+        </section>
+        {% endif %}
+    </div>
+    <aside class="order-detail-aside" aria-label="Thanh toán và xử lý đơn">
+        <section class="panel order-payment-panel"><div class="panel-heading"><h2>Thanh toán</h2>{% include 'pho_app/includes/icon.html' with name='wallet' %}</div>
+            <div class="order-payment-status"><strong>{{ order.get_payment_method_display }}</strong><span class="badge status-{{ order.payment_status }}">{{ order.get_payment_status_display }}</span></div>
+            <dl class="order-totals"><div><dt>Tiền món</dt><dd>{{ order.total_amount|vnd }}</dd></div><div><dt>Phí giao hàng</dt><dd>{{ order.delivery_fee|vnd }}</dd></div><div class="order-total-final"><dt>Tổng thanh toán</dt><dd>{{ grand_total|vnd }}</dd></div></dl>
+            {% if order.payment_method == 'VIETQR' and order.payment_status == 'PENDING' %}<p class="order-info-note">Chờ xác minh thanh toán VietQR. Đơn sẽ được chuyển xuống bếp sau khi xác nhận thành công.</p>{% endif %}
+        </section>
+        <section class="panel order-action-panel"><div class="panel-heading"><h2>Xử lý đơn hàng</h2>{% include 'pho_app/includes/icon.html' with name='chef' %}</div>
+            <p class="order-current-status">Hiện tại <span class="badge status-{{ order.order_status }}">{{ order.get_order_status_display }}</span></p>
+            {% for action in order_actions %}
+            <form method="post" action="{% url 'admin_order_action' order.pk %}" data-order-action{% if action.name == 'cancel_cash' %} data-confirm="Hủy đơn {{ order.order_code }}? Chỉ đơn tiền mặt chưa thanh toán mới được hủy."{% elif action.name == 'confirm_cash' %} data-confirm="Bạn đã nhận đủ {{ grand_total|vnd }} tiền mặt cho đơn {{ order.order_code }}?"{% endif %}>
+                {% csrf_token %}<input type="hidden" name="action" value="{{ action.name }}"><button type="submit" class="{% if action.name == 'cancel_cash' %}secondary-btn order-cancel-btn{% else %}primary-btn{% endif %}">{% include 'pho_app/includes/icon.html' with name='check' %} {{ action.label }}</button>
+            </form>
+            {% empty %}<p class="order-info-note">{% if order.order_status == 'COMPLETED' %}Đơn đã hoàn tất.{% elif order.order_status == 'CANCELLED' %}Đơn đã hủy.{% else %}Chưa có thao tác hợp lệ ở trạng thái này.{% endif %}</p>{% endfor %}
+            {% if order.order_type == 'DINE_IN' and order.order_status == 'COMPLETED' and not order.is_cleared %}<p class="order-info-note">Khách đang dùng bữa. Dọn và giải phóng bàn riêng tại màn hình thu ngân.</p><a class="text-button" href="{% url 'staff_home' %}#queue">Đi đến thu ngân →</a>{% endif %}
+        </section>
+    </aside>
+</div>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'pho_app/js/orders.js' %}" defer></script>{% endblock %}

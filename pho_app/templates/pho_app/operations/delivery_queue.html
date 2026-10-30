@@ -1,0 +1,186 @@
+{% extends 'pho_app/base.html' %}
+{% load commerce_ui %}
+{% block title %}Điều phối giao hàng · Phở Nhà{% endblock %}
+{% block breadcrumb %}Điều phối giao hàng{% endblock %}
+{% block content %}
+<main class="workspace commerce-page figma-module">
+  <header class="page-heading">
+    <div>
+      <span class="eyebrow">ĐIỀU PHỐI VẬN CHUYỂN &amp; SHIPPER</span>
+      <h1>Điều phối giao hàng</h1>
+      <p>Theo dõi đơn bếp đã nấu xong, bàn giao cho shipper và cập nhật trạng thái giao tận nơi.</p>
+    </div>
+    {% if user.is_admin_role %}
+    <form method="post" action="{% url 'commerce_maintenance' %}" data-commerce-submit>
+      {% csrf_token %}
+      <button class="secondary-btn">{% include 'pho_app/includes/icon.html' with name='clock' %} Xử lý đơn quá hạn</button>
+    </form>
+    {% endif %}
+  </header>
+
+  <!-- Thanh bộ lọc trạng thái giao hàng -->
+  <div class="xp-stack" data-filter-list>
+    <div class="commerce-tabbar" aria-label="Lọc giao nhận">
+      <button class="active" data-list-filter="all" aria-pressed="true">
+        Tất cả <span class="tab-count">{{ delivery_orders|length }}</span>
+      </button>
+      <button data-list-filter="READY" aria-pressed="false">
+        ⏳ Chờ bàn giao <span class="tab-count">{{ ready_count }}</span>
+      </button>
+      <button data-list-filter="DELIVERING" aria-pressed="false">
+        🛵 Đang giao <span class="tab-count">{{ delivering_count }}</span>
+      </button>
+      <button data-list-filter="DELIVERY_EXCEPTION" aria-pressed="false">
+        ⚠️ Sự cố <span class="tab-count">{{ exception_count }}</span>
+      </button>
+      <button data-list-filter="COMPLETED" aria-pressed="false">
+        ✅ Đã hoàn tất <span class="tab-count">{{ completed_count }}</span>
+      </button>
+    </div>
+
+    <!-- Thanh tìm kiếm đơn giao hàng -->
+    <div class="commerce-toolbar">
+      <label class="search-field">
+        {% include 'pho_app/includes/icon.html' with name='search' %}
+        <input type="search" data-list-search placeholder="Tìm theo mã đơn, tên khách, số điện thoại hoặc địa chỉ…" aria-label="Tìm đơn giao hàng">
+      </label>
+      <span class="commerce-muted">
+        Hiển thị <span data-list-count>{{ delivery_orders|length }}</span> đơn trong danh sách gần nhất
+      </span>
+    </div>
+
+    <!-- Danh sách thẻ đơn giao hàng -->
+    <div class="commerce-grid delivery-orders-grid">
+      {% for order in delivery_orders %}
+      <article class="delivery-record" data-list-record data-state="{{ order.order_status }}" data-search="{{ order.order_code }} {{ order.delivery_snapshot.recipient_name }} {{ order.delivery_snapshot.phone }} {{ order.delivery_address }}">
+        <div class="delivery-record-head">
+          <div>
+            <span class="xp-eyebrow">ĐƠN GIAO HÀNG</span>
+            <h2 class="delivery-recipient-title">{{ order.delivery_snapshot.recipient_name|default:'Khách hàng' }}</h2>
+            <p class="commerce-muted">
+              {% if order.delivery_snapshot.phone %}
+                <a href="tel:{{ order.delivery_snapshot.phone }}" class="phone-link" title="Nhấn để gọi">📞 {{ order.delivery_snapshot.phone }}</a>
+              {% else %}
+                Chưa có SĐT
+              {% endif %}
+            </p>
+          </div>
+          <div class="delivery-head-badge">
+            <span class="badge badge-{{ order.order_status|state_tone }}">{{ order.get_order_status_display }}</span>
+            <strong class="order-code-tag">{{ order.order_code }}</strong>
+          </div>
+        </div>
+
+        <div class="delivery-address-box">
+          <p class="delivery-dest">📍 <strong>{{ order.delivery_address }}</strong></p>
+          <div class="delivery-chips-meta">
+            {% if order.delivery_distance_km != None %}
+              <span class="meta-chip">📏 {{ order.delivery_distance_km }} km</span>
+            {% endif %}
+            <span class="meta-chip">💰 Phí ship: <strong data-money="{{ order.delivery_fee }}">{{ order.delivery_fee }}đ</strong></span>
+            <span class="meta-chip">📦 Tổng tiền: <strong>{{ order.amount_due|default:order.total_amount }}đ</strong></span>
+            {% if order.shipping_code %}
+              <span class="meta-chip">🔖 Mã vận đơn: {{ order.shipping_code }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if order.delivery_snapshot.note %}
+          <div class="delivery-customer-note">
+            <span class="note-label">📝 Ghi chú khách:</span> {{ order.delivery_snapshot.note }}
+          </div>
+        {% endif %}
+
+        {% include 'pho_app/includes/delivery_destination.html' %}
+
+        <!-- Thanh tiến trình vận chuyển -->
+        <div class="figma-delivery-steps">
+          <span class="is-done">1. Bếp nấu xong</span>
+          <span class="{% if order.order_status != 'READY' %}is-done{% endif %}">2. Bàn giao shipper</span>
+          <span class="{% if order.order_status == 'COMPLETED' %}is-done{% endif %}">3. Khách đã nhận</span>
+        </div>
+
+        <!-- Thao tác cập nhật giao nhận -->
+        {% if order.order_status != 'COMPLETED' and order.delivery %}
+        <details class="delivery-update" {% if order.order_status == 'READY' or order.order_status == 'DELIVERING' %}open{% endif %}>
+          <summary>Thao tác giao nhận {% include 'pho_app/includes/icon.html' with name='arrow' %}</summary>
+          <form class="commerce-form" method="post" action="{% url 'delivery_update' order.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="version" value="{{ order.delivery.version }}">
+            <div class="form-grid">
+              <div class="form-group field-wide">
+                <label for="delivery-action-{{ order.pk }}">Hành động</label>
+                <select id="delivery-action-{{ order.pk }}" class="form-input" name="action">
+                  {% if order.order_status == 'READY' %}
+                    <option value="handover">🛵 Bàn giao cho người giao (Shipper)</option>
+                  {% elif order.order_status == 'DELIVERING' %}
+                    <option value="delivered">✅ Người nhận đã nhận món thành công</option>
+                    <option value="failed">❌ Ghi nhận giao thất bại / khách không nhận</option>
+                  {% else %}
+                    <option value="retry">🔄 Tạo lượt giao lại</option>
+                    {% if order.delivery.state != 'RETURNED_TO_SHOP' %}
+                      <option value="returned">🏪 Đã mang món về lại cửa hàng</option>
+                    {% endif %}
+                  {% endif %}
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="courier-{{ order.pk }}">Người giao (Shipper)</label>
+                <input id="courier-{{ order.pk }}" class="form-input" name="courier" value="{{ order.delivery.courier|default:'' }}" placeholder="Tên / SĐT / Đơn vị giao">
+              </div>
+              <div class="form-group">
+                <label for="proof-{{ order.pk }}">Ghi chú / Bằng chứng</label>
+                <input id="proof-{{ order.pk }}" class="form-input" name="evidence" required maxlength="2000" placeholder="VD: Đã giao đúng giờ / Khách nhờ gửi bảo vệ…">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="primary-btn">Cập nhật trạng thái</button>
+            </div>
+          </form>
+        </details>
+        {% elif order.order_status == 'COMPLETED' %}
+          <div class="notice notice-success">
+            {% include 'pho_app/includes/icon.html' with name='check' %}
+            <span>Đã giao thành công{% if order.completed_at %} vào lúc {{ order.completed_at|date:'H:i · d/m/Y' }}{% endif %}.</span>
+          </div>
+        {% else %}
+          <p class="notice notice-warm">Đơn hàng chưa có thông tin hồ sơ giao nhận.</p>
+        {% endif %}
+
+        <!-- Lịch sử các lần giao -->
+        <details class="delivery-history">
+          <summary>Lịch sử lượt giao ({% if order.delivery %}{{ order.delivery.attempts.count }}{% else %}0{% endif %})</summary>
+          {% if order.delivery %}
+            {% for attempt in order.delivery.attempts.all %}
+              <div class="attempt-log">
+                <strong>Lượt {{ attempt.sequence }}: {{ attempt.get_state_display }}</strong>
+                <small>{{ attempt.courier }} · {{ attempt.evidence }}</small>
+              </div>
+            {% empty %}
+              <p class="commerce-muted">Chưa có lịch sử giao nhận.</p>
+            {% endfor %}
+          {% endif %}
+        </details>
+
+        <div class="address-actions">
+          <a class="text-button" href="{% url 'order_detail' order.pk %}">Xem chi tiết đơn hàng</a>
+          <a class="text-button" href="{% url 'order_support' order.pk %}">Tạo khiếu nại / hỗ trợ</a>
+        </div>
+      </article>
+      {% empty %}
+      <div class="xp-card commerce-empty" data-list-empty>
+        <span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='truck' %}</span>
+        <strong>Chưa có đơn hàng giao tận nơi</strong>
+        <p>Đơn giao tận nơi từ khách hàng sau khi thanh toán sẽ xuất hiện tại đây.</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="xp-card commerce-empty" data-list-empty hidden>
+      <span class="stat-icon tone-blue">{% include 'pho_app/includes/icon.html' with name='truck' %}</span>
+      <strong>Không tìm thấy đơn phù hợp trong nhóm này</strong>
+      <p>Thử đổi bộ lọc trạng thái hoặc từ khóa tìm kiếm.</p>
+    </div>
+  </div>
+</main>
+{% endblock %}

@@ -16,6 +16,12 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / '.env')
+except ImportError:
+    pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
@@ -26,7 +32,11 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-only-chang
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = [host.strip() for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if host.strip()]
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',')
+    if host.strip()
+]
 
 # CSRF settings for development
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
@@ -48,10 +58,12 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'pho_app.middleware.ShopTransactionMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'pho_app.middleware.AccountContextMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -68,6 +80,9 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'pho_app.context_processors.inventory_alerts',
+                'pho_app.context_processors.delivery_location',
+                'pho_app.commerce_views.account_context',
             ],
         },
     },
@@ -139,6 +154,10 @@ VIETQR_ACCOUNT_NAME = os.environ.get('VIETQR_ACCOUNT_NAME', '')
 PAYMENT_WEBHOOK_SECRET = os.environ.get('PAYMENT_WEBHOOK_SECRET', '')
 DELIVERY_FLAT_FEE = int(os.environ.get('DELIVERY_FLAT_FEE', '30000'))
 DELIVERY_MAX_KM = int(os.environ.get('DELIVERY_MAX_KM', '20'))  # Tăng lên 20km để test
+DELIVERY_BASE_FEE = int(os.environ.get('DELIVERY_BASE_FEE', '15000'))
+DELIVERY_FEE_PER_KM = int(os.environ.get('DELIVERY_FEE_PER_KM', '8000'))
+RESTAURANT_LAT = float(os.environ.get('RESTAURANT_LAT', '10.7769'))
+RESTAURANT_LNG = float(os.environ.get('RESTAURANT_LNG', '106.7009'))
 
 
 # Email
@@ -196,3 +215,14 @@ if os.name == 'nt':
 # ------------------------------------------------
 
 AUTH_USER_MODEL = 'pho_app.User'
+
+CHECKOUT_HOLD_MINUTES = int(os.environ.get('CHECKOUT_HOLD_MINUTES', '15'))
+SAVED_ACCOUNT_DAYS = int(os.environ.get('SAVED_ACCOUNT_DAYS', '7'))
+CHECKIN_BASE_POINTS = int(os.environ.get('CHECKIN_BASE_POINTS', '1'))
+REVIEW_POINTS = int(os.environ.get('REVIEW_POINTS', '5'))
+REFERRAL_POINTS = int(os.environ.get('REFERRAL_POINTS', '50'))
+ISSUE_REPORT_HOURS = int(os.environ.get('ISSUE_REPORT_HOURS', '2'))
+TIER_VOUCHER_DAYS = int(os.environ.get('TIER_VOUCHER_DAYS', '90'))
+VIP_HOTLINE = os.environ.get('VIP_HOTLINE', '')
+BIRTHDAY_STANDARD_VOUCHER = os.environ.get('BIRTHDAY_STANDARD_VOUCHER', '')
+BIRTHDAY_SPECIAL_VOUCHER = os.environ.get('BIRTHDAY_SPECIAL_VOUCHER', '')

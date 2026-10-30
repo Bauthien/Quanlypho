@@ -1,0 +1,249 @@
+/* Adapted from ExpandedModules.tsx / index.css in the supplied Figma export.
+   Scoped to these modules so the existing restaurant workspace remains intact. */
+.figma-module { --commerce-gap: 20px; }
+.figma-account-page { background: var(--background); }
+.xp-stack > .commerce-section-head, .xp-stack > .commerce-tabbar { margin-bottom: 0; }
+.xp-side-card > .commerce-form { margin-top: 18px; }
+.xp-side-card > .commerce-form .form-group { margin-bottom: 12px; }
+.stock-holds-grid { margin-top: 20px; }
+.figma-module .commerce-tabbar { background: #efefec; border: 0; padding: 4px; gap: 4px; border-radius: 10px; margin: 0 0 20px; }
+.figma-module .commerce-tabbar [role=tab] { border: 0; border-radius: 8px; padding: 10px 16px; min-height: 42px; font-size: 12px; }
+.figma-module .commerce-tabbar [data-list-filter] { border: 0; border-radius: 8px; padding: 10px 14px; min-height: 42px; font-size: 12px; background: transparent; color: var(--muted); white-space: nowrap; }
+.figma-module .commerce-tabbar [data-list-filter].active { background: white; color: var(--brand); box-shadow: 0 1px 5px #29282412; }
+.figma-module .commerce-tabbar [aria-selected=true] { background: white; box-shadow: 0 1px 5px #29282412; color: var(--brand); }
+.figma-module .panel { padding: 24px; border-radius: 14px; box-shadow: none; }
+.figma-module .commerce-section-head h2, .figma-module .xp-card h2, .figma-module .xp-side-card h2 { font-size: 18px; font-weight: 650; }
+.figma-module .badge { border-radius: 999px; font-size: 11px; padding: 5px 9px; white-space: normal; }
+.figma-module .commerce-toolbar { margin-bottom: 18px; }
+.figma-module .commerce-toolbar .search-field { flex: 1; min-width: 180px; }
+.figma-module .filter-select { width: auto; min-width: 170px; max-width: 100%; font-size: 12px; }
+.figma-module .commerce-table th { background: #fafaf8; padding: 14px 16px; font-size: 11px; }
+.figma-module .commerce-table td { padding: 17px 16px; font-size: 12px; }
+.figma-module .commerce-table td small { font-size: 11px; }
+.figma-module .commerce-table-wrap { margin: 0; }
+.figma-module .commerce-empty { padding: 40px 20px; }
+.xp-stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.xp-card, .xp-side-card { background: white; border: 1px solid var(--border); border-radius: 14px; padding: 24px; min-width: 0; }
+.xp-side-card { position: sticky; top: 24px; height: max-content; }
+.xp-two-column { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, .8fr); gap: 20px; align-items: start; }
+.xp-eyebrow { display: block; color: var(--brand); font-size: 10px; font-weight: 700; letter-spacing: 1.4px; margin-bottom: 8px; }
+.xp-back { margin-bottom: 20px; }
+.xp-customer-title { display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; margin-bottom: 26px; }
+.xp-customer-title h1 { font-size: 30px; margin: 5px 0 7px; }
+.xp-customer-title p { color: var(--muted); font-size: 12px; }
+.figma-account { padding-top: 40px; padding-bottom: 70px; }
+.xp-account-badge { display: flex; align-items: center; gap: 12px; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 12px 15px; }
+.xp-account-badge .avatar { background: var(--brand); color: white; border: 0; width: 44px; height: 44px; }
+.xp-account-badge strong { display: block; font-size: 12px; }
+.xp-account-badge small { display: block; font-size: 10px; color: var(--muted); margin-top: 4px; }
+.figma-module .profile-avatar-row { margin-bottom: 22px; padding-bottom: 22px; }
+.figma-module .profile-avatar-wrap, .figma-module .profile-avatar-wrap .avatar, .figma-module .profile-avatar-wrap img { width: 60px; height: 60px; }
+.figma-module .profile-avatar-wrap .avatar { background: var(--brand); color: white; border: 0; }
+.xp-profile-identity { flex: 1; min-width: 0; }
+.xp-profile-identity h2 { font-size: 18px; }
+.xp-profile-identity p { font-size: 12px; color: var(--muted); margin-top: 5px; }
+.figma-module .security-card .form-grid { grid-template-columns: 1fr; margin-top: 20px; }
+.figma-module .address-card { padding: 22px; }
+.figma-module .address-card-head { margin-bottom: 14px; }
+.figma-module .address-card-head h3 { color: var(--brand); font-size: 14px; }
+.figma-module .address-card .address-actions { justify-content: flex-start; border: 0; padding-top: 0; margin-top: 15px; }
+.figma-module .address-actions .text-button { background: #f4f1ec; color: #6d6257; border-radius: 7px; padding: 9px 12px; min-height: 38px; font-size: 11px; }
+.figma-module .address-actions form { gap: 8px; }
+.xp-summary-lines { margin-top: 18px; }
+.xp-summary-lines > div { display: flex; justify-content: space-between; gap: 16px; padding: 13px 0; border-bottom: 1px solid #eeeeea; font-size: 12px; color: var(--muted); }
+.xp-summary-lines strong { color: var(--ink); font-weight: 600; text-align: right; }
+.xp-summary-lines .total { border: 0; color: var(--ink); }
+.xp-summary-lines .total strong { font-size: 20px; color: var(--brand); }
+.xp-note { background: var(--blue-soft); border-radius: 9px; padding: 14px; color: var(--blue); font-size: 12px; line-height: 1.7; margin-top: 18px; }
+.xp-filter-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.xp-filter-row button { background: white; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 9px 12px; font-size: 12px; min-height: 40px; }
+.xp-filter-row button.active { border-color: #c99487; color: var(--brand); background: var(--brand-soft); }
+.figma-module .voucher-list { display: flex; flex-direction: column; gap: 14px; }
+.figma-voucher { display: grid; grid-template-columns: 112px minmax(0, 1fr); border: 1px solid var(--border); border-radius: 14px; background: white; overflow: hidden; min-height: 148px; }
+.figma-voucher.is-unavailable { background: #fcfcfa; }
+.figma-voucher .voucher-value { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--brand); color: white; border-right: 1px dashed #ffffff80; padding: 16px 10px; }
+.figma-voucher .voucher-value strong { font-size: 25px; letter-spacing: -.5px; text-align: center; }
+.figma-voucher .voucher-value span { font-size: 9px; letter-spacing: 1.2px; margin-top: 5px; }
+.figma-voucher.is-unavailable .voucher-value { background: #b7aaa2; }
+.figma-voucher .voucher-copy { padding: 20px; min-width: 0; }
+.voucher-copy-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.figma-voucher h3 { font-size: 14px; }
+.figma-voucher p { font-size: 12px; color: var(--muted); margin-top: 9px; }
+.figma-voucher small { display: block; font-size: 11px; color: var(--muted); margin-top: 6px; }
+.figma-voucher .text-button { padding: 9px 0 0; font-size: 12px; }
+.figma-member-pass { padding: 28px; border-radius: 14px; background: linear-gradient(135deg, #7d5a35, #b08455); color: white; display: flex; justify-content: space-between; gap: 30px; align-items: center; box-shadow: 0 14px 35px #6e48291c; }
+.figma-member-pass .xp-eyebrow { color: #f3ddc1; }
+.figma-member-pass h2 { font-size: 32px; }
+.figma-member-pass p { color: #fff4e5; font-size: 13px; margin-top: 8px; }
+.figma-points { display: flex; flex-direction: column; text-align: right; flex-shrink: 0; }
+.figma-points strong { font-size: 34px; line-height: 1.3; }
+.figma-points span { font-size: 12px; margin-top: 4px; }
+.figma-points small { color: #fff1df; font-size: 11px; margin-top: 8px; }
+.figma-progress-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; font-size: 12px; margin-top: 20px; }
+.figma-progress-row strong { text-align: right; }
+.figma-progress-row progress { grid-column: 1/-1; height: 8px; width: 100%; appearance: none; border: 0; border-radius: 99px; overflow: hidden; }
+.figma-progress-row progress::-webkit-progress-bar { background: #efefec; border-radius: 99px; }
+.figma-progress-row progress::-webkit-progress-value { background: var(--brand); border-radius: 99px; }
+.figma-progress-row progress::-moz-progress-bar { background: var(--brand); border-radius: 99px; }
+.figma-module .reward-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.figma-module .figma-reward { padding: 22px; }
+.figma-reward h3 { font-size: 16px; margin: 16px 0 8px; }
+.figma-reward p { min-height: 44px; font-size: 12px; color: var(--muted); }
+.figma-reward > strong { display: block; font-size: 21px; color: var(--brand); margin: 18px 0; }
+.figma-reward .primary-btn, .figma-reward .secondary-btn { width: 100%; }
+.figma-module .operation-case > summary { padding: 20px 22px; }
+.figma-module .operation-case > summary > .stat-icon { display: none; }
+.figma-module .operation-case-summary strong { font-size: 14px; }
+.figma-module .operation-case-summary p { font-size: 12px; margin-top: 7px; }
+.figma-module .operation-case-body { background: #fcfbf8; padding: 24px; }
+.figma-module .operation-action-box { background: white; }
+.figma-support-timeline { display: grid; gap: 0; padding: 6px 0 0; margin-top: 22px; }
+.figma-support-step { display: grid; grid-template-columns: 18px 90px minmax(0,1fr); gap: 0 12px; min-height: 78px; position: relative; }
+.figma-support-step::before { content: ''; position: absolute; left: 5px; top: 13px; bottom: -2px; width: 1px; background: #d9c5bc; }
+.figma-support-step:last-child::before { display: none; }
+.figma-support-step > i { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--brand); background: white; margin-top: 4px; z-index: 1; }
+.figma-support-step.is-done > i { border-color: var(--green); background: var(--green); }
+.figma-support-step time { font-size: 11px; color: var(--muted); }
+.figma-support-step strong { font-size: 13px; }
+.figma-support-step p { font-size: 12px; color: var(--muted); margin-top: 5px; padding-bottom: 18px; }
+.figma-module .delivery-record { padding: 24px; }
+.figma-module .delivery-update > summary { cursor: pointer; display: inline-flex; min-height: 42px; padding: 10px 14px; font-size: 12px; border-radius: 8px; background: #f4f1ec; color: #6d6257; list-style: none; }
+.figma-module .delivery-update[open] > summary { margin-bottom: 16px; }
+.figma-module .delivery-update .form-grid { margin-top: 0; }
+.figma-module .delivery-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.figma-module .delivery-recipient-title { font-size: 16px; }
+.figma-delivery-steps { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; margin: 22px 0; }
+.figma-delivery-steps > span { border-top: 3px solid #dfdfda; padding-top: 12px; font-size: 11px; color: var(--muted); }
+.figma-delivery-steps .is-done { color: var(--green); border-color: var(--green); }
+.figma-module .stats-grid { display: none; }
+.figma-module .stock-row-title .stat-icon { display: none; }
+.figma-module .page-heading { margin-bottom: 24px; }
+@media (max-width:1100px) { .xp-two-column { grid-template-columns: minmax(0,1fr); } .xp-side-card { position: static; } .figma-module .reward-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width:767px) {
+  .figma-account { padding-bottom: 90px; }
+  .xp-customer-title { align-items: flex-start; flex-direction: column; gap: 18px; }
+  .xp-customer-title h1 { font-size: 26px; }
+  .xp-account-badge { width: 100%; }
+  .figma-module .panel, .xp-card, .xp-side-card { padding: 20px; }
+  .figma-module .commerce-tabbar [role=tab] { min-height: 44px; }
+  .figma-module .reward-grid { grid-template-columns: minmax(0,1fr); }
+  .figma-module .commerce-toolbar { flex-direction: column; align-items: stretch; }
+  .figma-module .filter-select { width: 100%; }
+  .figma-member-pass { align-items: flex-start; flex-direction: column; gap: 20px; padding: 24px; }
+  .figma-points { text-align: left; }
+  .figma-progress-row { grid-template-columns: minmax(0,1fr); }
+  .figma-progress-row strong { text-align: left; }
+  .voucher-copy-head { flex-direction: column; gap: 7px; }
+  .figma-voucher { grid-template-columns: 90px minmax(0,1fr); }
+  .figma-voucher .voucher-copy { padding: 16px; }
+  .figma-support-step { grid-template-columns: 16px minmax(0,1fr); gap: 5px 10px; }
+  .figma-support-step > div { grid-column: 2; }
+  .figma-module .operation-case-body { padding: 18px; }
+  .figma-delivery-steps { grid-template-columns: minmax(0,1fr); gap: 14px; }
+  .figma-module .profile-avatar-row { flex-wrap: wrap; }
+  .figma-module .profile-avatar-actions { width: 100%; }
+}
+@media (prefers-reduced-motion:reduce) { .figma-module * { scroll-behavior: auto; } }
+\n
+/* Enhanced Delivery Queue Card Styling */
+.delivery-orders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.delivery-record {
+  background: #ffffff;
+  border: 1px solid var(--border, #e4dfd7);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.delivery-record:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
+}
+.delivery-record-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eeebe5;
+}
+.delivery-head-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.order-code-tag {
+  font-size: 13px;
+  color: var(--brand-dark, #8b2319);
+  background: var(--brand-soft, #fdf5f4);
+  border: 1px solid #f9dedc;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.phone-link {
+  color: #1e40af;
+  font-weight: 600;
+  text-decoration: none;
+}
+.phone-link:hover {
+  text-decoration: underline;
+}
+.delivery-address-box {
+  margin: 12px 0 10px;
+}
+.delivery-dest {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink, #2d2621);
+  margin-bottom: 8px;
+}
+.delivery-chips-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-soft, #f8f5f1);
+  border: 1px solid var(--border, #e4dfd7);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink, #2d2621);
+}
+.delivery-customer-note {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #92400e;
+  margin: 10px 0;
+}
+.delivery-customer-note .note-label {
+  font-weight: 600;
+  color: #78350f;
+}
+.attempt-log {
+  padding: 6px 10px;
+  background: #fcfaf7;
+  border-radius: 6px;
+  border: 1px solid #eeebe5;
+  margin-bottom: 6px;
+}
+.attempt-log strong {
+  display: block;
+  font-size: 12px;
+  color: var(--ink, #2d2621);
+}
+.attempt-log small {
+  font-size: 11px;
+  color: var(--muted, #70685f);
+}

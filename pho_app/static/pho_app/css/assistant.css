@@ -1,0 +1,48 @@
+/* Panel and recommendation cards follow the supplied Figma AiAssistant. */
+.ai-fab { position: fixed; right: 22px; bottom: 22px; z-index: 60; min-height: 48px; display: flex; align-items: center; gap: 9px; padding: 0 18px; border-radius: 999px; background: var(--brand); color: white; font-size: 13px; font-weight: 600; box-shadow: 0 10px 28px #73352a42; }
+body:has(dialog[open]) .ai-fab { visibility: hidden; }
+.ai-panel { position: fixed; inset: auto 20px 80px auto; margin: 0; width: 420px; max-width: calc(100vw - 32px); height: min(720px,calc(100dvh - 110px)); max-height: calc(100dvh - 110px); border: 1px solid #deded8; border-radius: 16px; padding: 0; background: #fcfbf8; box-shadow: 0 24px 70px #29282430; overflow: hidden; }
+.ai-panel[open] { display: grid; grid-template-rows: auto minmax(0,1fr) auto auto; }
+.ai-panel::backdrop { background: #29282420; backdrop-filter: none; }
+.ai-panel > header { display: flex; align-items: center; justify-content: space-between; padding: 15px 17px; background: var(--brand); color: white; }
+.ai-panel > header > div { display: flex; align-items: center; gap: 10px; }
+.ai-brand-mark { width: 35px; height: 35px; display: grid; place-items: center; border-radius: 10px; background: #ffffff20; }
+.ai-panel > header strong { font-size: 14px; display: block; }
+.ai-panel > header small { font-size: 11px; color: #ffe4dd; display: block; margin-top: 3px; }
+.ai-panel > header .icon-button { color: white; }
+.ai-chat { padding: 16px; overflow-y: auto; overscroll-behavior: contain; min-width: 0; }
+.ai-message { width: fit-content; max-width: 92%; padding: 12px 13px; border-radius: 12px; font-size: 13px; line-height: 1.7; margin-bottom: 12px; overflow-wrap: anywhere; white-space: pre-line; }
+.ai-message.bot { background: #f0ebe4; color: #554b43; border-bottom-left-radius: 4px; }
+.ai-message.user { margin-left: auto; background: var(--brand); color: white; border-bottom-right-radius: 4px; }
+.ai-starters { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0 16px; }
+.ai-starters button { min-height: 38px; padding: 9px 11px; border: 1px solid #ddc7bd; border-radius: 999px; color: var(--brand); background: white; font-size: 11px; }
+.ai-products { display: grid; gap: 9px; margin: 12px 0; }
+.ai-products article { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 11px; padding: 11px; border: 1px solid #e7e1da; border-radius: 10px; background: white; }
+.ai-products img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+.ai-products strong { display: block; font-size: 13px; }
+.ai-products small { display: block; font-size: 11px; color: var(--green); margin-top: 4px; }
+.ai-products p { font-size: 11px; color: var(--muted); margin: 5px 0; }
+.ai-product-action { padding: 8px 0; min-height: 38px; background: transparent; color: var(--brand); font-size: 12px; font-weight: 600; }
+.ai-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.ai-source { color: var(--muted); font-size: 10px; line-height: 1.7; margin: 12px 0 18px; }
+.ai-panel > footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 15px; border-top: 1px solid var(--border); background: white; }
+.ai-panel > footer button, .ai-panel > footer a { min-height: 40px; padding: 8px 4px; font-size: 11px; color: var(--muted); background: transparent; }
+.ai-composer { padding: 12px 15px; background: white; border-top: 1px solid var(--border); min-width: 0; }
+.ai-preferences { margin-bottom: 10px; font-size: 11px; }
+.ai-preferences summary { cursor: pointer; color: var(--muted); }
+.ai-preferences > div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+.ai-preferences label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; }
+.ai-preferences input:not([type=checkbox]), .ai-preferences select { width: 100%; min-height: 40px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: white; }
+.ai-preferences .ai-consent { flex-direction: row; align-items: center; gap: 7px; padding: 4px 0; }
+.ai-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.ai-input-row textarea { flex: 1; min-width: 0; max-height: 100px; min-height: 44px; border: 1px solid #dcdcd7; border-radius: 10px; padding: 11px 12px; resize: vertical; font-size: 13px; }
+.ai-send { width: 44px; height: 44px; flex-shrink: 0; border-radius: 10px; background: var(--brand); color: white; }
+.ai-error { color: var(--brand); font-size: 12px; margin-top: 9px; }
+body.assistant-open { overflow: hidden; }
+@media(max-height:600px) { .ai-panel { inset: 0 0 0 auto; width: min(480px,100vw); height: 100dvh; max-height: 100dvh; border-radius: 0; } }
+@media(max-width:700px) {
+  .ai-panel { inset: 0; width: 100vw; height: 100dvh; max-width: 100vw; max-height: 100dvh; border: 0; border-radius: 0; }
+  .ai-panel > footer { padding-bottom: max(10px,env(safe-area-inset-bottom)); }
+  .ai-fab { right: 14px; bottom: 16px; font-size: 12px; }
+  .ai-input-row textarea, .ai-preferences input:not([type=checkbox]), .ai-preferences select { font-size: 16px; }
+}

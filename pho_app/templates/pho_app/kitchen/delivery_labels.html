@@ -4,19 +4,24 @@
 <main class="workspace label-page">
     <div class="label-actions"><p>Hai tem được in tách riêng: hộp khô và túi nước lèo. Chọn máy in nhiệt trong hộp thoại in.</p><button class="ghost-btn primary" type="button" onclick="window.print()">In lại 2 tem</button><a class="nav-link" href="{% url 'home' %}">Quay lại</a></div>
     <section class="shipping-label">
-        <small>PHỞ GIA TRUYỀN · {{ order.order_code }} · {{ order.shipping_code }}</small>
+        <small>PHỞ NHÀ · {{ order.order_code }} · {{ order.shipping_code }}</small>
         <h1>HỘP KHÔ</h1>
         <h2>BÁNH PHỞ & THỊT</h2>
-        <p><strong>Khách:</strong> {% if order.customer %}{{ order.customer.display_name }}{% elif order.guest_name %}{{ order.guest_name }}{% else %}Khách{% endif %}</p>
-        {% for item in order.items.all %}<p class="label-item">{{ item.quantity }} × {{ item.menu_item.name }}{% for topping in item.toppings.all %} · {{ topping.topping.name }}{% endfor %}</p>{% endfor %}
+        <p><strong>Người nhận:</strong> {{ order.delivery_snapshot.recipient_name|default:order.guest_name|default:'Khách' }}</p>
+        <p><strong>Điện thoại:</strong> {{ order.delivery_snapshot.phone|default:'Chưa lưu' }}</p>
+        <p><strong>Địa chỉ giao:</strong> {{ order.delivery_address }}</p>
+        {% if order.delivery_snapshot.note %}<p><strong>Ghi chú giao:</strong> {{ order.delivery_snapshot.note }}</p>{% endif %}
+        {% for item in order.items.all %}<p class="label-item">{{ item.quantity }} × {{ item.menu_item.name }}{% if item.menu_item.category == 'PHO' %} · {{ item.get_bowl_size_display }}{% endif %}{% for topping in item.toppings.all %} · {{ topping.topping.name }}{% endfor %}</p>{% endfor %}
         <p class="label-note">Không cho nước lèo vào hộp này.</p>
     </section>
     <section class="shipping-label">
-        <small>PHỞ GIA TRUYỀN · {{ order.order_code }} · {{ order.shipping_code }}</small>
+        <small>PHỞ NHÀ · {{ order.order_code }} · {{ order.shipping_code }}</small>
         <h1>TÚI NƯỚC LÈO</h1>
         <h2>NƯỚC DÙNG RIÊNG</h2>
-        {% for item in order.items.all %}<p class="label-item">{{ item.quantity }} × Nước dùng cho {{ item.menu_item.name }}</p>{% endfor %}
+        {% for item in order.items.all %}<p class="label-item">{{ item.quantity }} × Nước dùng cho {{ item.menu_item.name }}{% if item.menu_item.category == 'PHO' %} · {{ item.get_bowl_size_display }}{% endif %}</p>{% endfor %}
         <p><strong>Địa chỉ giao:</strong> {{ order.delivery_address }}</p>
+        <p><strong>Người nhận:</strong> {{ order.delivery_snapshot.recipient_name|default:order.guest_name|default:'Khách' }} · {{ order.delivery_snapshot.phone }}</p>
+        {% if order.delivery_snapshot.note %}<p><strong>Ghi chú giao:</strong> {{ order.delivery_snapshot.note }}</p>{% endif %}
     </section>
 </main>
 {% endblock %}

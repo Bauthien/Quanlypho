@@ -1,0 +1,45 @@
+<dialog class="commerce-dialog recipe-editor" id="recipeEditor" aria-labelledby="recipeEditorTitle" data-recipe-editor>
+  <header class="commerce-dialog-head"><div><h2 id="recipeEditorTitle">Thiết lập định lượng</h2><p>Chọn sản phẩm, thêm nguyên liệu và lưu cùng lúc.</p></div><button class="icon-button" type="button" data-dialog-close aria-label="Đóng">{% include 'pho_app/includes/icon.html' with name='close' %}</button></header>
+  <form class="commerce-form" method="post" action="{% url 'admin_recipe_create' %}" data-recipe-form>
+    {% csrf_token %}
+    <div class="commerce-dialog-body">
+      <fieldset class="recipe-kind"><legend>Loại sản phẩm</legend><div class="recipe-segments">
+        <label><input type="radio" name="recipe_target" value="MENU" checked><span>Món chính</span></label>
+        <label><input type="radio" name="recipe_target" value="DRINK"><span>Nước uống</span></label>
+        <label><input type="radio" name="recipe_target" value="TOPPING"><span>Topping</span></label>
+      </div></fieldset>
+      <p class="field-help">Chọn loại sản phẩm để lọc nguyên liệu đúng nhóm. Bản nháp được giữ khi chuyển món.</p>
+      <fieldset class="recipe-scope" data-topping-scope hidden><legend>Topping dùng cho</legend><div class="recipe-inline-choices"><label class="check-row"><input type="radio" name="topping_scope" value="PHO" checked>Món chính</label><label class="check-row"><input type="radio" name="topping_scope" value="DRINK">Nước uống</label></div></fieldset>
+      <div class="recipe-product-fields has-bowl-size" data-product-fields>
+        <div class="form-group" data-menu-field><label for="menuItemSelect" data-menu-label>Chọn món chính</label><select id="menuItemSelect" name="menu_item_id" class="form-input" required></select></div>
+        <div class="form-group" data-bowl-size-field><label for="recipeBowlSize">Cỡ tô</label><select id="recipeBowlSize" name="bowl_size" class="form-input" data-bowl-size><option value="S">Tô nhỏ</option><option value="M" selected>Tô vừa</option><option value="L">Tô lớn</option></select></div>
+      </div>
+      <div class="form-group" data-topping-field hidden><label for="toppingSelect">Chọn topping</label><select id="toppingSelect" name="topping_id" class="form-input" disabled></select></div>
+      <fieldset class="recipe-scope" data-drink-mode hidden><legend>Cách bán nước uống</legend><div class="recipe-inline-choices"><label class="check-row"><input type="radio" name="inventory_mode" value="BOM" checked>Pha chế</label><label class="check-row"><input type="radio" name="inventory_mode" value="DIRECT">Đóng chai / lon</label></div></fieldset>
+      <fieldset class="recipe-scope" data-topping-eligibility hidden><legend>Món được gọi kèm topping này</legend><label class="check-row"><input type="checkbox" name="applies_to_all" value="1" data-all-menu>Tất cả món trong nhóm</label><div class="recipe-menu-choices" data-menu-choices></div><p class="field-help">Chỉ trừ định lượng của một phần gọi thêm; công thức món gốc được tính riêng.</p></fieldset>
+      <div class="recipe-section-heading"><h3 data-recipe-heading>Danh sách nguyên liệu</h3><span class="field-help" data-recipe-portion>Lượng tiêu hao cho 1 tô</span></div>
+      <div class="recipe-inventory-scope" role="status" aria-live="polite"><strong data-inventory-scope>Nguyên liệu: Món chính + Dùng chung</strong><span class="field-help" data-inventory-label></span></div>
+      <div class="recipe-column-head" aria-hidden="true"><span>Nguyên liệu</span><span>Số lượng</span><span>Đơn vị nhập</span><span></span></div>
+      <div class="recipe-rows" data-recipe-rows></div>
+      <p class="recipe-empty" data-recipe-empty hidden>Chưa có nguyên liệu. Thêm dòng hoặc chọn nhiều nguyên liệu để bắt đầu.</p>
+      <div class="recipe-auto-banner" data-recipe-auto-banner hidden>
+        <div class="auto-banner-content">
+          <span class="auto-banner-icon">✨</span>
+          <div class="auto-banner-text">
+            <strong data-auto-banner-title>Đã tự động tính toán định lượng chuẩn</strong>
+            <p data-auto-banner-desc></p>
+          </div>
+          <button type="button" class="icon-button auto-banner-close" data-auto-banner-close aria-label="Đóng thông báo">✕</button>
+        </div>
+      </div>
+      <div class="recipe-row-actions" data-row-actions><button class="primary-btn recipe-auto-btn" type="button" data-recipe-auto title="Tự động tính toán định lượng bằng thuật toán Domain Semantic NLP & Heuristic"><span class="auto-sparkle">✨</span> Tự động tạo định lượng</button><button class="secondary-btn" type="button" data-recipe-add>+ Thêm dòng</button><button class="secondary-btn" type="button" data-recipe-pick aria-expanded="false" aria-controls="recipeBatchPicker">Chọn nhiều nguyên liệu</button><button class="secondary-btn recipe-clear" type="button" data-recipe-clear aria-expanded="false" aria-controls="recipeClearConfirm">Xóa tất cả</button></div>
+      <div class="recipe-picker" id="recipeBatchPicker" hidden><strong>Chọn nguyên liệu cần thêm</strong><div class="recipe-picker-options" data-picker-options></div><div class="recipe-picker-actions"><button type="button" class="secondary-btn" data-picker-cancel>Hủy chọn</button><button type="button" class="primary-btn" data-picker-apply disabled>Thêm đã chọn</button></div></div>
+      <div class="recipe-picker" id="recipeClearConfirm" role="group" aria-labelledby="recipeClearTitle" hidden><strong id="recipeClearTitle"></strong><p class="field-help">Xóa các dòng trong bản nháp của sản phẩm đang chọn. Công thức đã lưu chỉ thay đổi khi bạn lưu lại.</p><div class="recipe-picker-actions"><button type="button" class="secondary-btn" data-clear-cancel>Hủy</button><button type="button" class="primary-btn" data-clear-confirm>Xác nhận xóa tất cả</button></div></div>
+      <p class="field-help">Có thể nhập g / ml và quy đổi về đơn vị kho. Kho dùng kg / lít có bước nhỏ nhất 10 g / 10 ml; dùng đơn vị kho gram / ml nếu cần lượng nhỏ hơn.</p>
+      <p class="field-help" data-recipe-status aria-live="polite"></p>
+      <div class="notice notice-error recipe-errors" data-recipe-errors role="alert" hidden></div>
+    </div>
+    <footer class="commerce-dialog-actions"><span class="field-help recipe-count" data-recipe-count></span><button class="secondary-btn" type="button" data-dialog-close>Để sau</button><button class="primary-btn" type="submit" data-recipe-save>Lưu định lượng</button></footer>
+  </form>
+</dialog>
+{{ recipe_editor_data|json_script:'recipe-editor-data' }}

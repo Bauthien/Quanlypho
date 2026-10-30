@@ -17,13 +17,15 @@
    - `DJANGO_SECRET_KEY` (chuỗi ngẫu nhiên riêng), `DJANGO_DEBUG` và `DJANGO_ALLOWED_HOSTS`.
    - `VIETQR_BANK_ID`, `VIETQR_ACCOUNT_NO`, `VIETQR_ACCOUNT_NAME` để tạo ảnh QR theo định dạng VietQR.
    - `PAYMENT_WEBHOOK_SECRET` để xác thực callback thanh toán.
-   - `DELIVERY_FLAT_FEE` (mặc định 30000 VNĐ).
+   - `RESTAURANT_LAT`, `RESTAURANT_LNG`, `DELIVERY_MAX_KM`, `DELIVERY_BASE_FEE`, `DELIVERY_FEE_PER_KM` để xác định vị trí quán, phạm vi và phí giao.
 4. Áp dụng migration bằng `manage.py migrate`, tạo quản lý và khởi động bằng `manage.py runserver`.
 5. Trong giao diện Quản lý, thêm món, topping, bàn và đảm bảo các tùy chọn tùy biến mặc định đã có (được tạo bởi migration 0002).
 
 > Cấu hình database, secret key và GIS DLL hiện có giá trị mặc định phục vụ môi trường phát triển Windows. Không đưa các giá trị mặc định này lên môi trường public/production. Production phải dùng HTTPS, DEBUG=False, secret riêng, ALLOWED_HOSTS chính xác và PostGIS/GDAL tương thích.
 
 ## Tích hợp VietQR / webhook
+
+Khi `DJANGO_DEBUG=true` và chưa điền đủ `VIETQR_BANK_ID`/`VIETQR_ACCOUNT_NO`, trang thanh toán hiển thị **QR thử nghiệm** chứa mã đơn và số tiền, không chứa thông tin chuyển khoản ngân hàng. Khách tạo đơn có thể bấm trực tiếp **Mô phỏng thanh toán thành công** để ghi chứng từ `SIMULATED`, chuyển đơn xuống bếp và xuất kho đúng một lần. Mô phỏng vẫn kiểm tra tồn kho và hạn giữ đơn. Khi đã cấu hình tài khoản, trang dùng VietQR chuyển khoản thật; nút mô phỏng chỉ xuất hiện trong chế độ phát triển. Đặt `DJANGO_DEBUG=false` để tắt cả QR thử nghiệm lẫn mô phỏng. Ảnh QR cần kết nối Internet; nếu ảnh tải lỗi, nút mô phỏng vẫn dùng được trong chế độ phát triển.
 
 Trang đơn tạo ảnh QR VietQR với số tiền chính xác (tiền món + phí giao hàng), nội dung chuyển khoản là mã đơn. Việc tạo ảnh QR **không chứng minh đã nhận tiền**; đơn luôn ở trạng thái chờ cho đến callback hợp lệ.
 
@@ -35,13 +37,20 @@ VietQR chỉ là chuẩn sinh mã chuyển khoản; ảnh QR không tự cung c�
 
 - Tại bàn: menu QR có thể mở bằng `?table=<id>`; chỉ bàn trống hoặc bàn đang ở QR tương ứng nhận đơn. Tiền mặt chờ thu ngân xác nhận; VietQR chờ callback. Sau khi khách hoàn tất phục vụ, bàn chuyển qua trạng thái cần dọn rồi thu ngân giải phóng.
 - Hàng đợi: vé FIFO; thu ngân phải gắn vé kế tiếp với bàn đang trống. Trình duyệt khách đang mở menu kiểm tra vé mỗi 8 giây, rung thiết bị khi được gọi và chuyển giỏ sang luồng vào bàn.
-- Giao hàng: yêu cầu địa chỉ, bắt buộc VietQR, tính phí ship cấu hình dạng phí cố định. Bếp hoàn tất sẽ mở trang in hai tem tách biệt; thu ngân bàn giao và xác nhận giao xong.
+- Giao hàng: yêu cầu tên, điện thoại, địa chỉ và vị trí nhận món hợp lệ; bắt buộc VietQR. Khách dùng GPS, chọn ghim trên bản đồ hoặc nhập vĩ độ/kinh độ. Phí giao bằng `DELIVERY_BASE_FEE + DELIVERY_FEE_PER_KM × max(1, ceil(khoảng cách đường thẳng))`; phạm vi được kiểm tra trước khi làm tròn. Không cho đặt bằng phí dự phòng khi thiếu vị trí. Bếp hoàn tất mở trang in hai tem có thông tin người nhận; thu ngân xem tọa độ, mở chỉ đường, gọi người nhận, bàn giao và xác nhận kết quả giao.
 - Admin: báo cáo, vai trò tài khoản, món và topping. Xóa món sẽ ẩn khỏi menu để giữ lịch sử đơn.
 
 ## Phần cần tích hợp ngoài trước khi vận hành thật
 
-- Phí ship theo khoảng cách/PostGIS: hiện dùng phí cố định, chưa định tuyến địa chỉ/tọa độ.
+- Khoảng cách tính phí là đường thẳng giữa quán và điểm nhận. Chỉ đường mở Google Maps; ứng dụng chưa tính phí theo quãng đường ô tô/xe máy hoặc theo dõi GPS trực tiếp của người giao.
 - Thông báo hàng đợi chạy khi khách còn mở trang; chưa có push notification nền/SMS.
 - In tem dùng hộp thoại in trình duyệt; cần cấu hình driver/kích cỡ giấy và máy in nhiệt tại quán.
 - Bàn giao đơn giao hàng được ghi nhận trong hệ thống; chưa có API điều phối Grab/ShopeeFood/đơn vị vận chuyển.
 - VietQR cần adapter webhook thực tế như mô tả trên; không đánh dấu đã trả chỉ dựa vào việc khách tải trang/ảnh QR.
+
+## GPS, bản đồ và sổ địa chỉ
+
+- Vị trí quán đang giữ theo cấu hình `10.7769, 106.7009`. Bản đồ Leaflet/OpenStreetMap được tải khi khách mở bản đồ; không cần API key. Có thể nhập tọa độ khi bản đồ không tải được.
+- GPS cần quyền truy cập vị trí và HTTPS (localhost được trình duyệt hỗ trợ khi phát triển). Từ chối quyền, không hỗ trợ hoặc hết thời gian chờ đều có hướng dẫn chọn bản đồ/nhập tọa độ thay thế. GPS chỉ phù hợp khi khách đang ở nơi nhận món.
+- Địa chỉ đã lưu có tọa độ dùng vị trí đã lưu. Địa chỉ chưa có tọa độ cho phép chọn vị trí cho riêng đơn đang đặt và có liên kết cập nhật sổ địa chỉ. Sửa nội dung địa chỉ nhập tay sẽ xóa vị trí cũ để tránh tính nhầm phí.
+- Mỗi đơn lưu riêng người nhận, điện thoại, ghi chú, tọa độ nhận món và vị trí quán. Đổi cấu hình quán hoặc sửa sổ địa chỉ không đổi điểm nhận trên đơn cũ. Khi thay đổi vị trí, phải tính lại báo giá; máy chủ kiểm tra lại tọa độ/phạm vi và chữ ký báo giá trước khi tạo đơn.
